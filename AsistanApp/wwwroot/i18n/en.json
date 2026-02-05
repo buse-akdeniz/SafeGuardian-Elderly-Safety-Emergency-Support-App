@@ -1,0 +1,71 @@
+{
+  "app_name": "Elderly Care Assistant",
+  "greeting": "Hello",
+  "good_morning": "Good Morning",
+  "good_afternoon": "Good Afternoon",
+  "good_evening": "Good Evening",
+  
+  "medication": "MEDICATION TIME!",
+  "medication_desc": "Time to take your medication",
+  "health_check": "HEALTH CHECK",
+  "health_check_desc": "Time for your health measurement",
+  "no_task": "No tasks right now",
+  "rest_time": "You can rest comfortably",
+  
+  "btn_confirm": "TOOK IT",
+  "btn_skip": "LATER",
+  "btn_help": "HELP",
+  
+  "voice_command_help": "Voice commands:",
+  "voice_cmd_yes": "\"Yes\" or \"Okay\" - I took it",
+  "voice_cmd_later": "\"Later\" or \"Wait\" - Remind me later",
+  "voice_cmd_help": "\"Help\" - Emergency call",
+  
+  "status_online": "Online",
+  "status_offline": "Offline",
+  "battery_status": "Battery",
+  "connection_status": "Connection",
+  
+  "family_panel": "Family Monitoring Panel",
+  "elderly_name": "Elderly User",
+  "monitoring": "Monitoring",
+  "last_update": "Last Update",
+  "pending_tasks": "Pending Tasks",
+  "active_alerts": "Active Alerts",
+  
+  "critical_alert": "CRITICAL ALERT",
+  "fall_detected": "Fall detected",
+  "no_voice_response": "No voice response received!",
+  "health_critical": "CRITICAL HEALTH DATA",
+  "blood_pressure": "Blood Pressure",
+  "heart_rate": "Heart Rate",
+  "blood_glucose": "Blood Glucose",
+  "inform_emergency": "INFORM EMERGENCY",
+  "view_location": "VIEW LOCATION",
+  "voice_call": "VOICE CALL",
+  
+  "emergency_check": "Are you okay? Is there a problem?",
+  "help_coming": "Help is coming!",
+  "confirm_ok": "Okay, are you alright?",
+  "sending_emergency": "Sending emergency notification...",
+  
+  "ai_listening": "Listening...",
+  "ai_processing": "Processing...",
+  "ai_timeout": "No response received. Activating emergency mode.",
+  
+  "subscription_premium": "Premium Plan",
+  "subscription_standard": "Standard Plan",
+  "feature_ai_voice": "AI Voice Analysis",
+  "feature_fall_detection": "Fall Detection",
+  "feature_location": "Live Location Sharing",
+  "feature_emergency_integration": "Health Facility Integration",
+  
+  "onboarding_welcome": "Welcome!",
+  "onboarding_setup": "Please Ask a Family Member to Help Set Up the System",
+  "family_setup_guide": "Family Setup Guide",
+  
+  "emotion_calm": "Calm",
+  "emotion_worried": "Worried",
+  "emotion_distressed": "Distressed",
+  "emotion_panicked": "Panicked"
+}

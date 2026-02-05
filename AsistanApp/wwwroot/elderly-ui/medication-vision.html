@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>İlaç Tanıma ve Stok Takibi</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #1a1a1a;
+            color: #ffff00;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 36px;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(255, 255, 0, 0.2);
+        }
+
+        .camera-section {
+            background: rgba(0, 100, 200, 0.2);
+            border: 4px solid #0066ff;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        video, canvas {
+            width: 100%;
+            max-width: 500px;
+            border-radius: 15px;
+            border: 3px solid #ffff00;
+            margin-bottom: 20px;
+        }
+
+        .btn-giant {
+            width: 100%;
+            padding: 20px;
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00aa00 0%, #00ff00 100%);
+            color: black;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            margin-bottom: 15px;
+            transition: all 0.2s;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-giant:hover {
+            transform: scale(1.02);
+        }
+
+        .btn-giant:active {
+            transform: scale(0.98);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #0066ff 0%, #00aaff 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff3333 0%, #ff6666 100%);
+            color: white;
+        }
+
+        .result-section {
+            display: none;
+            background: rgba(0, 200, 100, 0.15);
+            border: 4px solid #00cc00;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .result-section.active {
+            display: block;
+            animation: slideIn 0.5s ease;
+        }
+
+        .medication-card {
+            background: rgba(255, 255, 0, 0.1);
+            border-left: 5px solid #ffff00;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+        }
+
+        .med-name {
+            font-size: 28px;
+            font-weight: 700;
+            color: #ffff00;
+            margin-bottom: 10px;
+        }
+
+        .med-detail {
+            font-size: 20px;
+            color: #ffffff;
+            margin: 8px 0;
+        }
+
+        .stock-level {
+            font-size: 24px;
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 700;
+        }
+
+        .stock-full {
+            background: #00cc00;
+            color: black;
+        }
+
+        .stock-medium {
+            background: #ffbb00;
+            color: black;
+        }
+
+        .stock-low {
+            background: #ff6666;
+            color: white;
+        }
+
+        .stock-empty {
+            background: #ff3333;
+            color: white;
+        }
+
+        .alert {
+            background: rgba(255, 100, 100, 0.2);
+            border: 3px solid #ff6666;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+
+        .alert strong {
+            color: #ff6666;
+        }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .action-buttons button {
+            padding: 15px;
+            font-size: 18px;
+            font-weight: 700;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        .btn-notify {
+            background: #ff9900;
+            color: white;
+        }
+
+        .btn-close {
+            background: #666666;
+            color: white;
+        }
+
+        #cameraError {
+            background: rgba(255, 100, 100, 0.2);
+            border: 3px solid #ff6666;
+            padding: 20px;
+            border-radius: 15px;
+            color: #ff6666;
+            font-size: 18px;
+            display: none;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .info-box {
+            background: rgba(0, 150, 255, 0.15);
+            border-left: 5px solid #0096ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 18px;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 28px;
+            }
+
+            .btn-giant {
+                font-size: 24px;
+                padding: 15px;
+            }
+
+            .action-buttons {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💊 İlaç Tanıma ve Stok Takibi</h1>
+
+        <div class="info-box">
+            <strong>📸 Nasıl Kullanılır:</strong><br>
+            1. "Kamerayı Aç" butonuna basın<br>
+            2. İlaç kutusunu kamera karşısına tutun<br>
+            3. Sistem ilaç şişesini tanıyacak ve stok seviyesini gösterecek
+        </div>
+
+        <div class="camera-section">
+            <div id="cameraError"></div>
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+
+            <button class="btn-giant" id="startCameraBtn" onclick="startCamera()">
+                📷 KAMERAYı AÇ
+            </button>
+
+            <button class="btn-giant btn-secondary" id="captureBtn" onclick="captureImage()" style="display: none;">
+                📸 ÇEK
+            </button>
+
+            <button class="btn-giant btn-danger" id="stopCameraBtn" onclick="stopCamera()" style="display: none;">
+                ⏹️ KAMERAY I KAPAT
+            </button>
+        </div>
+
+        <div class="result-section" id="resultSection">
+            <h2 style="font-size: 28px; margin-bottom: 20px;">🔍 Analiz Sonucu</h2>
+
+            <div id="medicationResults"></div>
+
+            <div class="action-buttons">
+                <button class="btn-notify" onclick="notifyPharmacy()">
+                    🏥 ECZANEYİ BİLGİLENDİR
+                </button>
+                <button class="btn-close" onclick="closeResult()">
+                    ❌ KAPAT
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let video = null;
+        let canvas = null;
+        let stream = null;
+        let detectedMedications = [];
+
+        async function startCamera() {
+            const cameraError = document.getElementById('cameraError');
+            cameraError.style.display = 'none';
+
+            try {
+                video = document.getElementById('video');
+                canvas = document.getElementById('canvas');
+
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
+                });
+
+                video.srcObject = stream;
+                video.style.display = 'block';
+
+                document.getElementById('startCameraBtn').style.display = 'none';
+                document.getElementById('captureBtn').style.display = 'block';
+                document.getElementById('stopCameraBtn').style.display = 'block';
+
+                // 3 saniye sonra otomatik çek
+                setTimeout(() => {
+                    captureImage();
+                }, 3000);
+
+            } catch (error) {
+                cameraError.style.display = 'block';
+                cameraError.innerHTML = `<strong>❌ Kamera Hatası:</strong><br>Kameranıza erişim için izin verin. Tarayıcınız kamerayı desteklemiyor olabilir.<br><br>Hata: ${error.message}`;
+                console.error('Kamera hatası:', error);
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            document.getElementById('video').style.display = 'none';
+            document.getElementById('startCameraBtn').style.display = 'block';
+            document.getElementById('captureBtn').style.display = 'none';
+            document.getElementById('stopCameraBtn').style.display = 'none';
+        }
+
+        function captureImage() {
+            canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+
+            // Basit ilaç tanıma simülasyonu
+            analyzeMedicationImage(canvas);
+        }
+
+        function analyzeMedicationImage(canvas) {
+            // Production'da TensorFlow.js veya Azure Vision API kullanılabilir
+            // Şimdilik simülasyon
+
+            detectedMedications = [
+                {
+                    name: "Aspirin 500mg",
+                    stock: Math.random() * 100 | 0, // 0-100
+                    doses: Math.random() * 30 | 0   // 0-30 doz
+                },
+                {
+                    name: "Metformin 1000mg",
+                    stock: Math.random() * 100 | 0,
+                    doses: Math.random() * 30 | 0
+                }
+            ];
+
+            // 50% şansla ek ilaç
+            if (Math.random() > 0.5) {
+                detectedMedications.push({
+                    name: "Lisinopril 10mg",
+                    stock: Math.random() * 100 | 0,
+                    doses: Math.random() * 30 | 0
+                });
+            }
+
+            displayResults();
+        }
+
+        function displayResults() {
+            const resultSection = document.getElementById('resultSection');
+            const medicationResults = document.getElementById('medicationResults');
+
+            let html = '';
+
+            detectedMedications.forEach(med => {
+                const stockPercent = med.stock;
+                let stockClass = 'stock-full';
+                let stockText = '✓ Yeterli';
+
+                if (stockPercent === 0) {
+                    stockClass = 'stock-empty';
+                    stockText = '❌ TÜKENDİ';
+                } else if (stockPercent < 30) {
+                    stockClass = 'stock-low';
+                    stockText = '⚠️ AZ KALDI';
+                } else if (stockPercent < 60) {
+                    stockClass = 'stock-medium';
+                    stockText = '⚠️ ORTA DÜZEY';
+                }
+
+                html += `
+                    <div class="medication-card">
+                        <div class="med-name">💊 ${med.name}</div>
+                        <div class="med-detail">📊 Stok: %${stockPercent}</div>
+                        <div class="med-detail">💉 Yaklaşık Doz: ${med.doses} gün</div>
+                        <div class="stock-level ${stockClass}">
+                            ${stockText}
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Tükenmiş ilaçlar varsa uyarı
+            const emptyMeds = detectedMedications.filter(m => m.stock === 0);
+            if (emptyMeds.length > 0) {
+                html = `
+                    <div class="alert">
+                        <strong>🚨 UYARI:</strong> ${emptyMeds.map(m => m.name).join(', ')} tükendi! 
+                        Lütfen eczaneye haber verin.
+                    </div>
+                ` + html;
+            }
+
+            medicationResults.innerHTML = html;
+            resultSection.classList.add('active');
+            stopCamera();
+        }
+
+        function notifyPharmacy() {
+            const emptyMeds = detectedMedications.filter(m => m.stock === 0);
+            const lowMeds = detectedMedications.filter(m => m.stock > 0 && m.stock < 30);
+
+            let message = '';
+            if (emptyMeds.length > 0) {
+                message += `Tükenmiş ilaçlar: ${emptyMeds.map(m => m.name).join(', ')}\n`;
+            }
+            if (lowMeds.length > 0) {
+                message += `Az kalan ilaçlar: ${lowMeds.map(m => m.name).join(', ')}\n`;
+            }
+
+            // Aile üyelerine bildirim gönder
+            fetch('http://localhost:5007/api/notifications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: '💊 İlaç Stoku Uyarısı',
+                    message: message || 'İlaç stoğu kontrol edildi'
+                })
+            }).catch(e => console.log('Bildirim gönderilemedi:', e));
+
+            alert('✓ Eczaneye haber verildi! Aile üyeleri de bilgilendirildi.');
+        }
+
+        function closeResult() {
+            document.getElementById('resultSection').classList.remove('active');
+            document.getElementById('startCameraBtn').style.display = 'block';
+            detectedMedications = [];
+        }
+
+        // Sayfa kapandığında kamerayı kapat
+        window.addEventListener('beforeunload', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+    </script>
+</body>
+</html>

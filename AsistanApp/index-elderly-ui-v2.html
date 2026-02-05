@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="true">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>SafeGuardian AI - Yaşlı Bakım</title>
+    <style>
+        /* ============= RESET & TYPOGRAPHY ============= */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #0f0f1e;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* ============= GLOBAL STYLES ============= */
+        ::-webkit-scrollbar { display: none; }
+        
+        button {
+            border: none;
+            outline: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        /* ============= STATUS BAR (Online/Offline + Battery) ============= */
+        #statusBar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            font-size: 12px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        #connectionStatus {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        #connectionStatus.online { color: #00ff00; }
+        #connectionStatus.offline { color: #ff6b35; }
+
+        #batteryStatus {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        #batteryStatus.critical { color: #ff0000; animation: pulse 0.5s infinite; }
+        #batteryStatus.low { color: #ff6b35; }
+        #batteryStatus.normal { color: #00ff00; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* ============= DISCLAIMER MODAL ============= */
+        #disclaimerModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        #disclaimerModal.hidden {
+            display: none;
+        }
+
+        .disclaimer-box {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .disclaimer-box h2 {
+            color: #0f0f1e;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .disclaimer-text {
+            color: #333;
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .disclaimer-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .disclaimer-btn {
+            flex: 1;
+            padding: 16px;
+            font-size: 18px;
+            border-radius: 12px;
+            cursor: pointer;
+            border: none;
+            font-weight: bold;
+        }
+
+        .disclaimer-accept {
+            background: #00d084;
+            color: white;
+        }
+
+        /* ============= LOGIN SCREEN ============= */
+        #loginScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a3a 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1500;
+        }
+
+        #loginScreen.hidden {
+            display: none;
+        }
+
+        .login-box {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .login-box h1 {
+            color: #0f0f1e;
+            font-size: 32px;
+            margin-bottom: 30px;
+        }
+
+        .login-status {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .login-input {
+            width: 100%;
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            font-size: 18px;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 18px;
+            font-size: 20px;
+            background: #1e90ff;
+            color: white;
+            border-radius: 12px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+
+        /* ============= MAIN APP ============= */
+        #mainApp {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            z-index: 1;
+        }
+
+        #mainApp.hidden {
+            display: none;
+        }
+
+        /* ============= 3-ZONE LAYOUT ============= */
+        .elderly-zone-top {
+            flex: 0 0 auto;
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(180deg, #1a1a3a 0%, #0f0f1e 100%);
+            border-bottom: 3px solid #ffd700;
+            border-radius: 12px;
+        }
+
+        .elderly-clock {
+            font-size: 64px;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .elderly-greeting {
+            font-size: 36px;
+            color: white;
+            margin-bottom: 5px;
+        }
+
+        .elderly-subtitle {
+            font-size: 18px;
+            color: #ffd700;
+            opacity: 0.8;
+        }
+
+        .elderly-zone-middle {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+        }
+
+        .empty-state {
+            text-align: center;
+            opacity: 0.5;
+        }
+
+        .microphone-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: pulse-mic 1s infinite;
+        }
+
+        @keyframes pulse-mic {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .empty-text {
+            font-size: 28px;
+            color: #ffd700;
+        }
+
+        .task-container {
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            width: 100%;
+        }
+
+        .task-container.active {
+            display: flex;
+        }
+
+        .task-title {
+            font-size: 60px;
+            color: #ffd700;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+            font-weight: bold;
+        }
+
+        .task-description {
+            font-size: 32px;
+            color: white;
+            line-height: 1.4;
+        }
+
+        /* ============= BOTTOM ZONE ============= */
+        .elderly-zone-bottom {
+            flex: 0 0 auto;
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .elderly-button {
+            flex: 1;
+            padding: 30px;
+            font-size: 28px;
+            border-radius: 16px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .elderly-button.hidden {
+            display: none;
+        }
+
+        #actionButton {
+            background: linear-gradient(135deg, #00d084 0%, #009966 100%);
+            color: white;
+        }
+
+        #skipButton {
+            background: linear-gradient(135deg, #ff6b35 0%, #ff4500 100%);
+            color: white;
+        }
+
+        /* ============= DOUBLE-CHECK CONFIRMATION ============= */
+        #confirmationModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1200;
+        }
+
+        #confirmationModal.hidden {
+            display: none;
+        }
+
+        .confirmation-box {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 450px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .confirmation-box h2 {
+            color: #0f0f1e;
+            font-size: 28px;
+            margin-bottom: 30px;
+        }
+
+        .confirmation-text {
+            color: #333;
+            font-size: 20px;
+            margin-bottom: 30px;
+        }
+
+        .confirmation-buttons {
+            display: flex;
+            gap: 15px;
+        }
+
+        .conf-btn {
+            flex: 1;
+            padding: 18px;
+            font-size: 20px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .conf-yes {
+            background: #00d084;
+            color: white;
+        }
+
+        .conf-no {
+            background: #ff6b35;
+            color: white;
+        }
+
+        /* ============= EMERGENCY SCREEN ============= */
+        #emergencyScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #ff0000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1400;
+            animation: emergency-flash 0.5s infinite;
+        }
+
+        #emergencyScreen.active {
+            display: flex;
+        }
+
+        @keyframes emergency-flash {
+            0%, 100% { background: #ff0000; }
+            50% { background: #cc0000; }
+        }
+
+        .emergency-question {
+            font-size: 72px;
+            margin-bottom: 60px;
+            color: white;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+            animation: bounce 0.6s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .emergency-buttons {
+            display: flex;
+            gap: 30px;
+            width: 90%;
+        }
+
+        .emergency-btn {
+            flex: 1;
+            padding: 40px;
+            font-size: 40px;
+            border-radius: 16px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+        }
+
+        .emergency-btn-help {
+            background: white;
+            color: #ff0000;
+        }
+
+        .emergency-btn-ok {
+            background: rgba(0, 200, 0, 0.9);
+            color: white;
+        }
+
+        /* ============= SETTINGS PANEL ============= */
+        #settingsPanel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 70px;
+            height: 70px;
+            background: rgba(100, 150, 200, 0.3);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 40px;
+            transition: all 0.3s ease;
+            opacity: 0.3;
+            z-index: 50;
+        }
+
+        #settingsPanel:hover {
+            opacity: 1;
+            transform: scale(1.2);
+            background: rgba(100, 150, 200, 0.6);
+        }
+
+        /* ============= TEST BUTTON (HIDDEN) ============= */
+        #testButton {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 60px;
+            height: 60px;
+            background: rgba(150, 100, 200, 0.3);
+            border-radius: 50%;
+            border: 2px dashed #ffd700;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 30px;
+            opacity: 0.2;
+            transition: all 0.3s ease;
+            z-index: 50;
+        }
+
+        #testButton:hover {
+            opacity: 0.8;
+            background: rgba(150, 100, 200, 0.6);
+        }
+
+        #testButton:active {
+            transform: scale(0.9);
+        }
+
+        /* ============= VOICE INDICATOR ============= */
+        .voice-indicator {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background: rgba(255, 215, 0, 0.2);
+            border-radius: 20px;
+            font-size: 14px;
+            color: #ffd700;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 60;
+        }
+
+        .voice-indicator.active {
+            opacity: 1;
+        }
+
+        /* ============= RESPONSIVE ============= */
+        @media (max-width: 768px) {
+            .elderly-clock { font-size: 48px; }
+            .elderly-greeting { font-size: 28px; }
+            .task-title { font-size: 44px; }
+            .task-description { font-size: 24px; }
+            .elderly-button { padding: 20px; font-size: 22px; }
+            .emergency-btn { padding: 30px; font-size: 32px; }
+        }
+
+        @media (max-width: 480px) {
+            .elderly-clock { font-size: 36px; }
+            .elderly-greeting { font-size: 22px; }
+            .task-title { font-size: 32px; }
+            .task-description { font-size: 18px; }
+            .elderly-button { padding: 16px; font-size: 18px; }
+            .emergency-btn { padding: 20px; font-size: 24px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- ============= DISCLAIMER MODAL ============= -->
+    <div id="disclaimerModal">
+        <div class="disclaimer-box">
+            <h2>⚠️ Önemli Bilgi</h2>
+            <div class="disclaimer-text">
+                <strong>SafeGuardian AI Sorumluluk Reddi:</strong><br><br>
+                Bu uygulama <strong>tıbbi bir cihaz değildir</strong> ve tıbbi tanı, tedavi veya ilaç tavsiyesi vermez. 
+                Bu uygulama yalnızca kişisel destek ve hatırlatıcı amaçlıdır.<br><br>
+                Acil tıbbi durumlarda derhal 112'yi arayınız veya hastaneye başvurunuz.<br><br>
+                Uygulama kullanım koşullarını kabul etmek için lütfen "Kabul Ediyor" butonuna tıklayınız.
+            </div>
+            <div class="disclaimer-buttons">
+                <button class="disclaimer-btn disclaimer-accept" onclick="acceptDisclaimer()">Kabul Ediyor</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============= STATUS BAR ============= -->
+    <div id="statusBar">
+        <div id="connectionStatus" class="online">
+            <span>🌐 Online</span>
+        </div>
+        <div id="batteryStatus" class="normal">
+            <span>🔋 100%</span>
+        </div>
+    </div>
+
+    <!-- ============= LOGIN SCREEN ============= -->
+    <div id="loginScreen">
+        <div class="login-box">
+            <h1>🏥 SafeGuardian</h1>
+            <div class="login-status" id="loginStatus">Otomatik giriş yapılıyor...</div>
+            <div style="display: none;" id="manualLoginBox">
+                <input type="email" id="emailInput" class="login-input" placeholder="E-posta" autocomplete="username">
+                <input type="password" id="passwordInput" class="login-input" placeholder="Şifre" autocomplete="current-password">
+                <button class="login-btn" onclick="handleLogin()">Giriş Yap</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============= CONFIRMATION MODAL ============= -->
+    <div id="confirmationModal" class="hidden">
+        <div class="confirmation-box">
+            <h2 id="confirmationTitle">Onayı Lütfen</h2>
+            <div class="confirmation-text" id="confirmationText">Emin misiniz?</div>
+            <div class="confirmation-buttons">
+                <button class="conf-btn conf-yes" onclick="confirmDoubleCheck()">Evet</button>
+                <button class="conf-btn conf-no" onclick="cancelDoubleCheck()">Hayır</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============= EMERGENCY SCREEN ============= -->
+    <div id="emergencyScreen">
+        <div class="emergency-question">İYİ MİSİN?</div>
+        <div class="emergency-buttons">
+            <button class="emergency-btn emergency-btn-help" onclick="requestHelp()">🆘 YARDIM İSTE</button>
+            <button class="emergency-btn emergency-btn-ok" onclick="dismissEmergency()">✓ İYİYİM</button>
+        </div>
+    </div>
+
+    <!-- ============= MAIN APP ============= -->
+    <div id="mainApp" class="hidden">
+        <!-- TOP ZONE -->
+        <div class="elderly-zone-top">
+            <div class="elderly-clock" id="clockDisplay">12:00</div>
+            <div class="elderly-greeting" id="greetingText">Merhaba Yaşlı Arkadaş</div>
+            <div class="elderly-subtitle">Bugün ne yapabilirim?</div>
+        </div>
+
+        <!-- MIDDLE ZONE -->
+        <div class="elderly-zone-middle">
+            <div class="empty-state" id="emptyState">
+                <div class="microphone-icon">🎤</div>
+                <div class="empty-text">Sesli komut için konuş</div>
+            </div>
+
+            <!-- Task Containers -->
+            <div id="taskMedicine" class="task-container">
+                <div class="task-title">💊 İLAÇ VAKTİ</div>
+                <div class="task-description">Aspirin 500mg - Su ile al</div>
+            </div>
+
+            <div id="taskWater" class="task-container">
+                <div class="task-title">💧 SU İÇTİN Mİ?</div>
+                <div class="task-description">Sağlığın için bir bardak su içmelisin</div>
+            </div>
+
+            <div id="taskMeal" class="task-container">
+                <div class="task-title">🍽️ YEMEK VAKTİ</div>
+                <div class="task-description">Öğle yemeğini almayı unutma</div>
+            </div>
+
+            <div id="taskShower" class="task-container">
+                <div class="task-title">🚿 DUŞA GİRME VAKTİ</div>
+                <div class="task-description">Temizlik ve tazelenme zamanı</div>
+            </div>
+        </div>
+
+        <!-- BOTTOM ZONE -->
+        <div class="elderly-zone-bottom">
+            <button class="elderly-button" id="actionButton" onclick="initiateDoubleCheck('confirm')">TAMAM</button>
+            <button class="elderly-button" id="skipButton" onclick="initiateDoubleCheck('skip')">SONRA</button>
+        </div>
+    </div>
+
+    <!-- ============= SETTINGS PANEL ============= -->
+    <div id="settingsPanel" onclick="handleSettingsClick()">⚙️</div>
+
+    <!-- ============= TEST BUTTON ============= -->
+    <div id="testButton" onclick="triggerTestMedicationTime()" title="Test: 10 saniye sonra ilaç vakti">🧪</div>
+
+    <!-- ============= VOICE INDICATOR ============= -->
+    <div class="voice-indicator" id="voiceIndicator">Dinliyorum...</div>
+
+    <script>
+        // ============= GLOBAL VARIABLES =============
+        let currentUser = null;
+        let currentTask = null;
+        let isDoubleCheckPending = false;
+        let doubleCheckAction = null;
+        let testMedicationTimer = null;
+        let pendingConfirmation = false;
+
+        // ============= LOGGER SYSTEM =============
+        class DebugLogger {
+            constructor() {
+                this.logs = JSON.parse(localStorage.getItem('debugLogs')) || [];
+                this.maxLogs = 1000; // Hafıza tasarrufu
+            }
+
+            log(action, details = {}) {
+                const logEntry = {
+                    timestamp: new Date().toISOString(),
+                    action: action,
+                    details: details,
+                    userId: currentUser?.id || 'guest',
+                    online: navigator.onLine
+                };
+
+                this.logs.push(logEntry);
+
+                // Eski logları sil (hafızayı koru)
+                if (this.logs.length > this.maxLogs) {
+                    this.logs = this.logs.slice(-this.maxLogs);
+                }
+
+                localStorage.setItem('debugLogs', JSON.stringify(this.logs));
+
+                // Sunucuya her 50 olaydan sonra gönder
+                if (this.logs.length % 50 === 0 && navigator.onLine) {
+                    this.syncToServer();
+                }
+
+                console.log(`[${action}]`, details);
+            }
+
+            syncToServer() {
+                if (!navigator.onLine || this.logs.length === 0) return;
+
+                fetch('/api/debug-logs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: currentUser?.id,
+                        logs: this.logs.slice(-100) // Son 100 logu gönder
+                    })
+                }).catch(err => console.warn('Log sync başarısız:', err));
+            }
+
+            getLogs() {
+                return this.logs;
+            }
+
+            export() {
+                const csv = [
+                    'Zaman,Eylem,Detay,Kullanıcı,İnternet',
+                    ...this.logs.map(l => 
+                        `"${l.timestamp}","${l.action}","${JSON.stringify(l.details)}","${l.userId}","${l.online}"`
+                    )
+                ].join('\n');
+
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `debug-logs-${Date.now()}.csv`;
+                a.click();
+            }
+        }
+
+        const logger = new DebugLogger();
+
+        // ============= UUID & AUTO-LOGIN =============
+        function initializeOrGetUUID() {
+            let uuid = localStorage.getItem('deviceUUID');
+            
+            if (!uuid) {
+                uuid = 'device-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('deviceUUID', uuid);
+                logger.log('UUID_CREATED', { uuid: uuid });
+            }
+
+            return uuid;
+        }
+
+        function autoLoginWithUUID() {
+            const uuid = initializeOrGetUUID();
+            const savedUser = localStorage.getItem('currentUser');
+
+            if (savedUser) {
+                try {
+                    currentUser = JSON.parse(savedUser);
+                    logger.log('AUTO_LOGIN_SUCCESS', { userId: currentUser.id, uuid: uuid });
+                    showMainApp();
+                    return;
+                } catch (err) {
+                    logger.log('AUTO_LOGIN_FAILED', { error: err.message });
+                }
+            }
+
+            // Test kullanıcısı
+            currentUser = {
+                id: uuid,
+                email: 'elderly@test.com',
+                name: 'Ayşe Hanım'
+            };
+
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            logger.log('DEFAULT_USER_SET', { userId: currentUser.id });
+            showMainApp();
+        }
+
+        // ============= DISCLAIMER HANDLING =============
+        function acceptDisclaimer() {
+            localStorage.setItem('disclaimerAccepted', 'true');
+            logger.log('DISCLAIMER_ACCEPTED', {});
+            document.getElementById('disclaimerModal').classList.add('hidden');
+            autoLoginWithUUID();
+        }
+
+        function showDisclaimer() {
+            const accepted = localStorage.getItem('disclaimerAccepted');
+            if (!accepted) {
+                document.getElementById('disclaimerModal').classList.remove('hidden');
+            } else {
+                autoLoginWithUUID();
+            }
+        }
+
+        // ============= ONLINE/OFFLINE DETECTION =============
+        function updateConnectionStatus() {
+            const isOnline = navigator.onLine;
+            const status = document.getElementById('connectionStatus');
+
+            if (isOnline) {
+                status.className = 'online';
+                status.innerHTML = '🌐 <span>Online</span>';
+                logger.log('CONNECTION_ONLINE', {});
+                logger.syncToServer(); // Çevrimdışı logları sunucuya gönder
+            } else {
+                status.className = 'offline';
+                status.innerHTML = '📡 <span>Offline (Yerel Mod)</span>';
+                logger.log('CONNECTION_OFFLINE', {});
+                speak("İnternet bağlantısı kaybedildi. Yerel modda çalışıyorum.");
+            }
+        }
+
+        window.addEventListener('online', updateConnectionStatus);
+        window.addEventListener('offline', updateConnectionStatus);
+
+        // ============= BATTERY MONITORING =============
+        function initBatteryMonitoring() {
+            if ('getBattery' in navigator) {
+                navigator.getBattery().then(battery => {
+                    function updateBatteryStatus() {
+                        const level = Math.round(battery.level * 100);
+                        const charging = battery.charging;
+                        const chargingTime = battery.chargingTime;
+
+                        const status = document.getElementById('batteryStatus');
+                        status.innerHTML = `🔋 <span>${level}%</span>`;
+
+                        if (level <= 15) {
+                            status.className = 'critical';
+                            logger.log('BATTERY_CRITICAL', { level: level });
+                            
+                            if (currentUser && navigator.onLine) {
+                                fetch('/api/send-notification', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        userId: currentUser.id,
+                                        type: 'battery_critical',
+                                        message: `Yaşlı kişinin telefonunun şarjı ${level}%`,
+                                        severity: 'high'
+                                    })
+                                }).catch(err => logger.log('BATTERY_NOTIFICATION_FAILED', { error: err.message }));
+                            }
+                        } else if (level <= 25) {
+                            status.className = 'low';
+                            logger.log('BATTERY_LOW', { level: level });
+                        } else {
+                            status.className = 'normal';
+                        }
+                    }
+
+                    battery.addEventListener('levelchange', updateBatteryStatus);
+                    battery.addEventListener('chargingchange', updateBatteryStatus);
+                    battery.addEventListener('chargingtimechange', updateBatteryStatus);
+                    battery.addEventListener('dischargingtimechange', updateBatteryStatus);
+
+                    updateBatteryStatus();
+                });
+            } else {
+                // Fallback: Battery API desteklenmiyor (modern cihazlarda)
+                logger.log('BATTERY_API_NOT_SUPPORTED', {});
+            }
+        }
+
+        // ============= OFFLINE-SYNC SYSTEM =============
+        class OfflineSyncManager {
+            constructor() {
+                this.pendingActions = JSON.parse(localStorage.getItem('pendingActions')) || [];
+            }
+
+            addPendingAction(action, data) {
+                const pending = {
+                    id: Date.now(),
+                    action: action,
+                    data: data,
+                    timestamp: new Date().toISOString(),
+                    synced: false
+                };
+
+                this.pendingActions.push(pending);
+                localStorage.setItem('pendingActions', JSON.stringify(this.pendingActions));
+
+                logger.log('OFFLINE_ACTION_QUEUED', { action: action });
+            }
+
+            async syncToServer() {
+                if (!navigator.onLine || this.pendingActions.length === 0) return;
+
+                logger.log('OFFLINE_SYNC_START', { count: this.pendingActions.length });
+
+                for (let action of this.pendingActions) {
+                    try {
+                        const response = await fetch(`/api/${action.action}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(action.data)
+                        });
+
+                        if (response.ok) {
+                            action.synced = true;
+                            logger.log('OFFLINE_ACTION_SYNCED', { action: action.action });
+                        }
+                    } catch (err) {
+                        logger.log('OFFLINE_SYNC_ERROR', { action: action.action, error: err.message });
+                    }
+                }
+
+                // Senkronize edilen işlemleri sil
+                this.pendingActions = this.pendingActions.filter(a => !a.synced);
+                localStorage.setItem('pendingActions', JSON.stringify(this.pendingActions));
+            }
+
+            getPendingActions() {
+                return this.pendingActions;
+            }
+        }
+
+        const offlineSync = new OfflineSyncManager();
+
+        // Her 30 saniyede bir senkronizasyon deneyin
+        setInterval(() => offlineSync.syncToServer(), 30000);
+
+        // ============= DOUBLE-CHECK CONFIRMATION =============
+        function initiateDoubleCheck(action) {
+            logger.log('DOUBLE_CHECK_INITIATED', { action: action });
+
+            isDoubleCheckPending = true;
+            doubleCheckAction = action;
+
+            const modal = document.getElementById('confirmationModal');
+            const titleEl = document.getElementById('confirmationTitle');
+            const textEl = document.getElementById('confirmationText');
+
+            if (action === 'confirm') {
+                titleEl.textContent = 'Onayı Lütfen';
+                textEl.textContent = currentTask ? 
+                    `${currentTask} görevini tamamlıyor musun?` : 
+                    'Bunu onaylamak istediğinize emin misiniz?';
+            } else if (action === 'skip') {
+                titleEl.textContent = 'Erteleme Onayı';
+                textEl.textContent = 'Hatırlatıyı sonra almak istediğine emin misin?';
+            }
+
+            modal.classList.remove('hidden');
+            speak(textEl.textContent);
+
+            // Long-press: 2 saniye sonra otomatik onay
+            setTimeout(() => {
+                if (isDoubleCheckPending && doubleCheckAction === action) {
+                    logger.log('DOUBLE_CHECK_AUTO_CONFIRMED', { action: action });
+                    confirmDoubleCheck();
+                }
+            }, 2000);
+        }
+
+        function confirmDoubleCheck() {
+            if (!isDoubleCheckPending) return;
+
+            logger.log('DOUBLE_CHECK_CONFIRMED', { action: doubleCheckAction });
+
+            if (doubleCheckAction === 'confirm') {
+                completeTask();
+            } else if (doubleCheckAction === 'skip') {
+                skipTask();
+            }
+
+            isDoubleCheckPending = false;
+            doubleCheckAction = null;
+            document.getElementById('confirmationModal').classList.add('hidden');
+        }
+
+        function cancelDoubleCheck() {
+            logger.log('DOUBLE_CHECK_CANCELLED', {});
+            isDoubleCheckPending = false;
+            doubleCheckAction = null;
+            document.getElementById('confirmationModal').classList.add('hidden');
+        }
+
+        // ============= TASK SYSTEM =============
+        function completeTask() {
+            if (!currentTask) {
+                logger.log('COMPLETE_TASK_NO_TASK', {});
+                return;
+            }
+
+            logger.log('TASK_COMPLETED', { taskType: currentTask });
+            speak('Tamamlandı. İyi yapıyorsun!');
+
+            const taskData = {
+                userId: currentUser?.id,
+                taskType: currentTask,
+                completedAt: new Date().toISOString()
+            };
+
+            if (navigator.onLine) {
+                fetch('/api/complete-task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(taskData)
+                }).catch(err => {
+                    logger.log('COMPLETE_TASK_FAILED', { error: err.message });
+                    offlineSync.addPendingAction('complete-task', taskData);
+                });
+            } else {
+                offlineSync.addPendingAction('complete-task', taskData);
+            }
+
+            currentTask = null;
+            checkAndDisplayTask();
+        }
+
+        function skipTask() {
+            logger.log('TASK_SKIPPED', { taskType: currentTask });
+            speak('Tamam, sonra hatırlatırım.');
+            currentTask = null;
+            checkAndDisplayTask();
+        }
+
+        // ============= TASK SCHEDULER =============
+        function checkAndDisplayTask() {
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const currentTime = hours * 100 + minutes;
+            const dayOfWeek = now.getDay();
+
+            // Tüm task containerlarını gizle
+            document.querySelectorAll('.task-container').forEach(t => t.classList.remove('active'));
+
+            // Testin etkinleşip etkinleşmediğini kontrol et
+            if (localStorage.getItem('testMedicationActive') === 'true') {
+                document.getElementById('taskMedicine').classList.add('active');
+                currentTask = 'medicine';
+                speak('Test: İlaç vakti simülasyonu yapılıyor.');
+                logger.log('TEST_MEDICATION_TRIGGERED', {});
+                localStorage.removeItem('testMedicationActive');
+                return;
+            }
+
+            // 09:00 - 09:30: İlaç Vakti
+            if (currentTime >= 900 && currentTime < 930) {
+                document.getElementById('taskMedicine').classList.add('active');
+                currentTask = 'medicine';
+                speak('İlaç vakti. Aspirin ilaçlarını su ile almayı unutma.');
+                logger.log('SCHEDULED_TASK_TRIGGERED', { taskType: 'medicine', time: `${hours}:${String(minutes).padStart(2, '0')}` });
+            }
+            // 12:00 - 12:30: Yemek Vakti
+            else if (currentTime >= 1200 && currentTime < 1230) {
+                document.getElementById('taskMeal').classList.add('active');
+                currentTask = 'meal';
+                speak('Öğle yemeğini almayı unutma.');
+                logger.log('SCHEDULED_TASK_TRIGGERED', { taskType: 'meal', time: `${hours}:${String(minutes).padStart(2, '0')}` });
+            }
+            // 15:00 - 15:30: Su İçme
+            else if (currentTime >= 1500 && currentTime < 1530) {
+                document.getElementById('taskWater').classList.add('active');
+                currentTask = 'water';
+                speak('Su içmeyi unutma. Günde sekiz bardak su içmelisin.');
+                logger.log('SCHEDULED_TASK_TRIGGERED', { taskType: 'water', time: `${hours}:${String(minutes).padStart(2, '0')}` });
+            }
+            // 20:00 - 20:30: Akşam İlaçları
+            else if (currentTime >= 2000 && currentTime < 2030) {
+                document.getElementById('taskMedicine').classList.add('active');
+                currentTask = 'medicine_evening';
+                speak('Akşam ilaç vakti.');
+                logger.log('SCHEDULED_TASK_TRIGGERED', { taskType: 'medicine_evening', time: `${hours}:${String(minutes).padStart(2, '0')}` });
+            }
+            // 21:00 - 21:30: Duş (Pazartesi, Çarşamba, Cuma)
+            else if (currentTime >= 2100 && currentTime < 2130 && [1, 3, 5].includes(dayOfWeek)) {
+                document.getElementById('taskShower').classList.add('active');
+                currentTask = 'shower';
+                speak('Duşa gitmek ister misin? Seni çok iyi hissettirecek.');
+                logger.log('SCHEDULED_TASK_TRIGGERED', { taskType: 'shower', time: `${hours}:${String(minutes).padStart(2, '0')}` });
+            }
+            else {
+                // Görev yok
+                document.getElementById('emptyState').style.display = 'flex';
+            }
+
+            if (currentTask) {
+                document.getElementById('emptyState').style.display = 'none';
+            }
+        }
+
+        // ============= CLOCK UPDATE =============
+        function updateClock() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('clockDisplay').textContent = `${hours}:${minutes}`;
+
+            // Her dakika task kontrol et
+            if (minutes === '00' || minutes === '30') {
+                checkAndDisplayTask();
+            }
+        }
+
+        // ============= TTS (TEXT TO SPEECH) =============
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                // Eski uttarances temizle
+                window.speechSynthesis.cancel();
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'tr-TR';
+                utterance.rate = 1;
+                utterance.pitch = 1;
+                utterance.volume = 1;
+
+                window.speechSynthesis.speak(utterance);
+                logger.log('TTS_SPEAK', { text: text.substring(0, 50) });
+            }
+        }
+
+        // ============= VOICE RECOGNITION =============
+        function startVoiceRecognition() {
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'tr-TR';
+            recognition.continuous = true;
+            recognition.interimResults = false;
+
+            recognition.onstart = () => {
+                document.getElementById('voiceIndicator').classList.add('active');
+                logger.log('VOICE_RECOGNITION_START', {});
+            };
+
+            recognition.onend = () => {
+                document.getElementById('voiceIndicator').classList.remove('active');
+                setTimeout(() => {
+                    recognition.start();
+                    logger.log('VOICE_RECOGNITION_RESTART', {});
+                }, 1000);
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+
+                logger.log('VOICE_INPUT_DETECTED', { transcript: transcript });
+
+                const confirmWords = ['evet', 'tamam', 'aldım', 'içtim', 'hazır', 'ok'];
+                const skipWords = ['sonra', 'bekle', 'iptal', 'bekleteceğim'];
+                const helpWords = ['yardım', 'İmdad', 'acil', 'asistan'];
+
+                if (confirmWords.some(word => transcript.includes(word))) {
+                    logger.log('VOICE_CONFIRM_RECOGNIZED', { word: transcript });
+                    initiateDoubleCheck('confirm');
+                } else if (skipWords.some(word => transcript.includes(word))) {
+                    logger.log('VOICE_SKIP_RECOGNIZED', { word: transcript });
+                    skipTask();
+                } else if (helpWords.some(word => transcript.includes(word))) {
+                    logger.log('VOICE_HELP_RECOGNIZED', { word: transcript });
+                    triggerEmergency();
+                }
+            };
+
+            recognition.onerror = (event) => {
+                logger.log('VOICE_RECOGNITION_ERROR', { error: event.error });
+            };
+
+            try {
+                recognition.start();
+            } catch (err) {
+                logger.log('VOICE_START_ERROR', { error: err.message });
+            }
+        }
+
+        // ============= EMERGENCY HANDLING =============
+        function triggerEmergency() {
+            logger.log('EMERGENCY_TRIGGERED', { via: 'voice' });
+            document.getElementById('emergencyScreen').classList.add('active');
+            speak('Yardıma ihtiyacın var mı?');
+        }
+
+        function requestHelp() {
+            logger.log('HELP_REQUESTED', {});
+            speak('Ailene haber veriyorum. Yardım geliyor.');
+
+            if (navigator.onLine) {
+                fetch('/api/emergency-alert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: currentUser?.id,
+                        location: 'Home',
+                        severity: 'high',
+                        timestamp: new Date().toISOString()
+                    })
+                }).catch(err => logger.log('EMERGENCY_ALERT_FAILED', { error: err.message }));
+            } else {
+                offlineSync.addPendingAction('emergency-alert', {
+                    userId: currentUser?.id,
+                    location: 'Home',
+                    severity: 'high',
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            setTimeout(() => {
+                document.getElementById('emergencyScreen').classList.remove('active');
+                speak('Yardım şekilde yolunda. Merak etme.');
+            }, 3000);
+        }
+
+        function dismissEmergency() {
+            logger.log('EMERGENCY_DISMISSED', {});
+            document.getElementById('emergencyScreen').classList.remove('active');
+            speak('İyi o zaman. Dikkatini kesmeyeceğim.');
+        }
+
+        // ============= FALL DETECTION =============
+        if ('DeviceMotionEvent' in window) {
+            window.addEventListener('devicemotion', (event) => {
+                const acceleration = event.accelerationIncludingGravity;
+                const x = acceleration.x || 0;
+                const y = acceleration.y || 0;
+                const z = acceleration.z || 0;
+
+                const totalAccel = Math.sqrt(x * x + y * y + z * z);
+
+                // Düşme algılama (threshold: 50)
+                if (totalAccel > 50) {
+                    logger.log('FALL_DETECTED', { acceleration: totalAccel });
+                    triggerEmergency();
+                    speak('Düştün mü? Yardım çağrayım mı?');
+                }
+            });
+        }
+
+        // ============= TEST BUTTON FUNCTIONALITY =============
+        function triggerTestMedicationTime() {
+            logger.log('TEST_BUTTON_PRESSED', {});
+            speak('Test: 10 saniye sonra ilaç vakti gelecek.');
+
+            // 10 saniye sonra ilaç vakti tetikle
+            testMedicationTimer = setTimeout(() => {
+                localStorage.setItem('testMedicationActive', 'true');
+                checkAndDisplayTask();
+            }, 10000);
+
+            // UI göstergesi
+            const testBtn = document.getElementById('testButton');
+            testBtn.style.opacity = '0.8';
+            testBtn.textContent = '⏱️';
+
+            setTimeout(() => {
+                testBtn.style.opacity = '0.2';
+                testBtn.textContent = '🧪';
+            }, 10000);
+        }
+
+        // ============= SETTINGS PANEL =============
+        let settingsClickCount = 0;
+        let settingsClickTimeout;
+
+        function handleSettingsClick() {
+            settingsClickCount++;
+            logger.log('SETTINGS_CLICKED', { clickCount: settingsClickCount });
+
+            // 3 saniye içinde 3 kez tıklamak gerekli
+            if (settingsClickTimeout) clearTimeout(settingsClickTimeout);
+
+            settingsClickTimeout = setTimeout(() => {
+                settingsClickCount = 0;
+            }, 3000);
+
+            if (settingsClickCount >= 3) {
+                settingsClickCount = 0;
+                const password = prompt('Aile paneli şifresi:');
+                if (password === 'aile123') {
+                    logger.log('SETTINGS_UNLOCKED', {});
+                    alert('Aile Paneline hoş geldiniz!\n\n(Bu ekran demo amaçlı)');
+                } else {
+                    logger.log('SETTINGS_UNLOCK_FAILED', { attempt: 'wrong_password' });
+                    alert('Şifre yanlış!');
+                }
+            }
+        }
+
+        // ============= SHOW MAIN APP =============
+        function showMainApp() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('greetingText').textContent = `Merhaba ${currentUser.name}`;
+            speak(`Merhaba ${currentUser.name}. Sana nasıl yardımcı olabilirim?`);
+
+            logger.log('MAIN_APP_SHOWN', { userId: currentUser.id });
+
+            // Sistemleri başlat
+            checkAndDisplayTask();
+            startVoiceRecognition();
+            updateConnectionStatus();
+            initBatteryMonitoring();
+
+            // Saat güncelleme
+            updateClock();
+            setInterval(updateClock, 1000);
+
+            // Task kontrolü
+            setInterval(checkAndDisplayTask, 30000);
+
+            // Offline-Sync
+            setInterval(() => offlineSync.syncToServer(), 30000);
+        }
+
+        // ============= INITIALIZATION =============
+        document.addEventListener('DOMContentLoaded', () => {
+            logger.log('PAGE_LOADED', { timestamp: new Date().toISOString() });
+            showDisclaimer();
+        });
+
+        // Service Worker kaydı (Offline desteği)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').then(() => {
+                logger.log('SERVICE_WORKER_REGISTERED', {});
+            }).catch(err => {
+                logger.log('SERVICE_WORKER_REGISTRATION_FAILED', { error: err.message });
+            });
+        }
+
+        // Sayfa kapatılırken debug logları kaydet
+        window.addEventListener('beforeunload', () => {
+            logger.log('PAGE_UNLOAD', { timestamp: new Date().toISOString() });
+            logger.syncToServer();
+        });
+
+        // Ayşı kontrol: logları dışa aktarma (developer mode)
+        window.exportDebugLogs = () => {
+            logger.export();
+        };
+
+        window.getDebugLogs = () => {
+            return logger.getLogs();
+        };
+
+        window.getPendingActions = () => {
+            return offlineSync.getPendingActions();
+        };
+    </script>
+</body>
+</html>

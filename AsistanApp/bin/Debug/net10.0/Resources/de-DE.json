@@ -1,0 +1,49 @@
+{
+  "ui": {
+    "medication_time": "💊 MEDIKAMENTEN ZEIT",
+    "medication_prompt": "Hast du deine Medikamente genommen?",
+    "medication_button": "Ja, ich habe meine Medikamente genommen",
+    "meal_time": "🍽️ ESSENSZEIT",
+    "meal_prompt": "Hast du gegessen?",
+    "meal_button": "Ja, ich habe gegessen",
+    "water_time": "💧 WASSER ZEIT",
+    "water_prompt": "Hast du Wasser getrunken?",
+    "water_button": "Ja, ich habe Wasser getrunken",
+    "emergency": "🚨 NOTFALL",
+    "greeting": "👋 Willkommen",
+    "listen_button": "🎤 Anhören"
+  },
+  "alerts": {
+    "critical_bp": "🚨 BLUTDRUCK NOTFALL",
+    "critical_bp_message": "{name}s Blutdruck ist {value} mmHg (NORMAL: <140). Rufen Sie sofort einen Arzt!",
+    "critical_sugar": "🚨 BLUTZUCKER NOTFALL",
+    "critical_sugar_message": "{name}s Blutzucker ist {value} mg/dL (NORMAL: <100). Notfallmedizinische Versorgung erforderlich!",
+    "fall_detected": "🚨 STURZ ERKANNT - NOTFALL",
+    "fall_message": "{name} ist gefallen! Wartet auf Bestätigung... (innerhalb von 10 Sekunden antworten)",
+    "chills_detected": "⚠️ SCHÜTTELFROST ERKANNT",
+    "dizziness_detected": "⚠️ SCHWINDEL GEMELDET",
+    "medication_reminder": "💊 Medikamentenzeit! Sie müssen Ihre Medikamente nehmen."
+  },
+  "prompts": {
+    "confirm_emergency": "Soll ich Hilfe rufen?",
+    "yes_help": "Ja, Hilfe rufen",
+    "no_false_alarm": "Nein, falscher Alarm",
+    "waiting_confirmation": "Warte auf Bestätigung...",
+    "false_alarm_cancelled": "Falscher Alarm storniert",
+    "emergency_confirmed": "Notfall bestätigt - Familie wird benachrichtigt!",
+    "medication_taken": "Gut gemacht! Du hast deine Medikamente genommen.",
+    "meal_completed": "Guten Appetit!",
+    "water_consumed": "Wasser trinken ist wichtig für Ihre Gesundheit!"
+  },
+  "errors": {
+    "unauthorized": "Unbefugter Zugriff",
+    "invalid_token": "Token ist ungültig oder abgelaufen",
+    "user_not_found": "Benutzer nicht gefunden",
+    "unknown_error": "Ein unbekannter Fehler ist aufgetreten. Bitte versuchen Sie es erneut."
+  },
+  "accessibility": {
+    "screen_announced": "Bildschirm geändert: {context}. {description}",
+    "proximity_detected": "Nähe erkannt. Assistent aktiviert.",
+    "button_accessible": "Große Schaltfläche mit Touchscreen. Zum Ausführen der Aktion drücken."
+  }
+}

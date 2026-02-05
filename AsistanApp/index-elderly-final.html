@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yaşlı Asistanı - Temiz Arayüz</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a237e;
+            color: white;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        /* ========== EN ÜSTTE: SAATİ GÖSTER ========== */
+        .clock-zone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 30px 20px;
+            background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+            min-height: 150px;
+        }
+
+        .time {
+            font-size: 80px;
+            font-weight: bold;
+            color: #ffffff;
+            text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            font-family: 'Courier New', monospace;
+            letter-spacing: 5px;
+        }
+
+        .greeting {
+            font-size: 40px;
+            color: #ffd700;
+            font-weight: bold;
+            margin-top: 20px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        /* ========== ORTA BÖLGE: DİNAMİK GÖREV ========== */
+        .middle-zone {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            background-color: #1a237e;
+        }
+
+        .task-card {
+            background: white;
+            border-radius: 30px;
+            padding: 60px 40px;
+            text-align: center;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            display: none;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        .task-card.active {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .task-card.medication {
+            background: linear-gradient(135deg, #fff8e1 0%, #ffe082 100%);
+        }
+
+        .task-card.health-check {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        }
+
+        .task-title {
+            font-size: 60px;
+            color: #d32f2f;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .task-description {
+            font-size: 45px;
+            color: #1a237e;
+            font-weight: bold;
+            margin-bottom: 30px;
+        }
+
+        .task-icon {
+            font-size: 100px;
+            margin-bottom: 30px;
+        }
+
+        .hidden-status {
+            font-size: 35px;
+            color: #1a237e;
+            opacity: 0.7;
+            font-weight: 600;
+        }
+
+        /* ========== EN ALTTA: DEV BUTONLAR ========== */
+        .button-zone {
+            display: flex;
+            gap: 15px;
+            padding: 20px;
+            background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+            min-height: 180px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-main {
+            flex: 1;
+            min-width: 250px;
+            padding: 40px 30px;
+            font-size: 50px;
+            font-weight: bold;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            min-height: 140px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-main:active {
+            transform: scale(0.95);
+        }
+
+        .btn-confirm {
+            background-color: #4caf50;
+            color: white;
+        }
+
+        .btn-confirm:hover {
+            background-color: #45a049;
+            box-shadow: 0 15px 40px rgba(76, 175, 80, 0.4);
+        }
+
+        .btn-skip {
+            background-color: #ff9800;
+            color: white;
+            font-size: 35px;
+        }
+
+        .btn-skip:hover {
+            background-color: #fb8c00;
+            box-shadow: 0 15px 40px rgba(255, 152, 0, 0.4);
+        }
+
+        .btn-help {
+            background-color: #f44336;
+            color: white;
+            font-size: 35px;
+        }
+
+        .btn-help:hover {
+            background-color: #da190b;
+            box-shadow: 0 15px 40px rgba(244, 67, 54, 0.4);
+        }
+
+        /* ========== DÜŞ ALGILAMA (ACİL EKRAN) ========== */
+        .emergency-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #d32f2f;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            animation: pulse 0.5s infinite;
+        }
+
+        .emergency-screen.active {
+            display: flex;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                background-color: #d32f2f;
+            }
+            50% {
+                background-color: #ff1744;
+            }
+        }
+
+        .emergency-text {
+            font-size: 80px;
+            font-weight: bold;
+            color: white;
+            text-align: center;
+            margin-bottom: 40px;
+            animation: bounce 0.6s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        .emergency-button {
+            padding: 60px 80px;
+            font-size: 50px;
+            background-color: white;
+            color: #d32f2f;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        /* ========== MOBİL REZPONSİVLİK ========== */
+        @media (max-width: 600px) {
+            .time {
+                font-size: 60px;
+            }
+
+            .greeting {
+                font-size: 30px;
+            }
+
+            .task-title {
+                font-size: 45px;
+            }
+
+            .task-description {
+                font-size: 32px;
+            }
+
+            .btn-main {
+                font-size: 35px;
+                padding: 30px 20px;
+                min-height: 120px;
+            }
+
+            .task-card {
+                padding: 40px 25px;
+            }
+        }
+
+        /* ========== DURUM ÇUBUĞU ========== */
+        .status-bar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            padding: 15px 20px;
+            background-color: rgba(26, 35, 126, 0.9);
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            z-index: 100;
+            border-radius: 0 0 0 15px;
+        }
+
+        .status-online {
+            color: #4caf50;
+        }
+
+        .status-offline {
+            color: #ff9800;
+        }
+
+        .status-battery {
+            margin-left: 20px;
+        }
+
+        .status-battery.critical {
+            color: #d32f2f;
+            animation: blink 0.7s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- DURUM ÇUBUĞU -->
+<div class="status-bar">
+    <span id="connectionStatus" class="status-online">🌐 Online</span>
+    <span id="batteryStatus" class="status-battery">🔋 100%</span>
+</div>
+
+<!-- SAATİ GÖSTER BÖLGESI -->
+<div class="clock-zone">
+    <div class="time" id="clock">14:30</div>
+    <div class="greeting">👋 Merhaba Ahmet Amca</div>
+</div>
+
+<!-- DİNAMİK GÖREV BÖLGESI -->
+<div class="middle-zone">
+    <div class="task-card medication active">
+        <div class="task-icon">💊</div>
+        <div class="task-title">İLAÇ VAKTİ!</div>
+        <div class="task-description">Tansiyon İlacı</div>
+        <div class="hidden-status">Şimdi almanız gerekiyor</div>
+    </div>
+
+    <div class="task-card health-check">
+        <div class="task-icon">🩺</div>
+        <div class="task-title">SAĞLIK KONTROLÜ</div>
+        <div class="task-description">Şeker Ölçümü</div>
+        <div class="hidden-status">Lütfen şekerinizi ölçün</div>
+    </div>
+
+    <div style="text-align: center; color: #ffd700; font-size: 40px; font-weight: bold;">
+        💤 Şu an görev yok<br>
+        <span style="font-size: 30px; opacity: 0.8;">Rahatça bekleyebilirsiniz</span>
+    </div>
+</div>
+
+<!-- BUTONLAR BÖLGESI -->
+<div class="button-zone">
+    <button class="btn-main btn-confirm" id="confirmBtn" onclick="completeTask()">✅ İÇTİM</button>
+    <button class="btn-main btn-skip" id="skipBtn" onclick="skipTask()">⏭️ SONRA</button>
+    <button class="btn-main btn-help" id="helpBtn" onclick="triggerEmergency()">🆘 YARDIM</button>
+</div>
+
+<!-- ACİL DURUM EKRANI -->
+<div class="emergency-screen" id="emergencyScreen">
+    <div class="emergency-text">YARDIM GELİYOR!</div>
+    <button class="emergency-button" onclick="closeEmergency()">✓</button>
+</div>
+
+<!-- SignalR & Voice Recognition -->
+<script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@latest/signalr.js"></script>
+<script>
+    let currentTaskIndex = 0;
+    let isListening = false;
+    let connection = null;
+
+    // ========== SAATİ GÜNCELLE ==========
+    function updateClock() {
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        document.getElementById('clock').textContent = `${hours}:${minutes}`;
+    }
+
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // ========== GÖREV TAMAMLA ==========
+    function completeTask() {
+        console.log('✅ Görev tamamlandı');
+        speak('Aferin Ahmet Amca, ilacını not aldım. Sağlıklı kalın.');
+        rotateTask();
+        
+        // Sunucuya gönder
+        fetch('/api/complete-task', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                taskId: 't1',
+                method: 'button',
+                elderlyId: 'elderly-001'
+            })
+        });
+    }
+
+    // ========== GÖREVI ATLA ==========
+    function skipTask() {
+        console.log('⏭️ Görev atlandı');
+        speak('Tamam, daha sonra hatırlatırım.');
+        rotateTask();
+    }
+
+    // ========== ACİL DURUM ==========
+    function triggerEmergency() {
+        console.log('🆘 Acil durum tetiklendi');
+        const emergency = document.getElementById('emergencyScreen');
+        emergency.classList.add('active');
+        speak('Aileni aradığımızı duydu. Yardım geliyor!', true);
+
+        fetch('/api/emergency-alert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                elderlyId: 'elderly-001',
+                alertType: 'emergency_call'
+            })
+        });
+
+        // 30 saniye sonra otomatik kapat
+        setTimeout(() => {
+            closeEmergency();
+        }, 30000);
+    }
+
+    function closeEmergency() {
+        document.getElementById('emergencyScreen').classList.remove('active');
+    }
+
+    // ========== GÖREV DÖNGÜSÜ ==========
+    function rotateTask() {
+        const tasks = document.querySelectorAll('.task-card');
+        tasks.forEach(t => t.classList.remove('active'));
+
+        currentTaskIndex = (currentTaskIndex + 1) % tasks.length;
+        if (currentTaskIndex < tasks.length - 1) {
+            tasks[currentTaskIndex].classList.add('active');
+        }
+    }
+
+    // ========== SES SİNTEZİ (TTS) ==========
+    function speak(text, isUrgent = false) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'tr-TR';
+        utterance.rate = 0.9;
+        utterance.pitch = isUrgent ? 1.3 : 1.0;
+        speechSynthesis.speak(utterance);
+    }
+
+    // ========== SES TANIMA (SPEECH RECOGNITION) ==========
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'tr-TR';
+        recognition.continuous = true;
+        recognition.interimResults = false;
+
+        recognition.onstart = () => {
+            isListening = true;
+            console.log('🎤 Dinleme başladı');
+        };
+
+        recognition.onresult = (event) => {
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript.toLowerCase();
+                console.log('Söylenen:', transcript);
+
+                if (transcript.includes('evet') || transcript.includes('tamam') || transcript.includes('aldım') || transcript.includes('içtim')) {
+                    completeTask();
+                } else if (transcript.includes('sonra') || transcript.includes('bekle')) {
+                    skipTask();
+                } else if (transcript.includes('yardım') || transcript.includes('imdad') || transcript.includes('acil')) {
+                    triggerEmergency();
+                }
+            }
+        };
+
+        recognition.onerror = (event) => {
+            console.error('Ses tanıma hatası:', event.error);
+        };
+
+        recognition.start();
+    }
+
+    // ========== BAĞLANTI DURUMU ==========
+    window.addEventListener('online', () => {
+        document.getElementById('connectionStatus').textContent = '🌐 Online';
+        document.getElementById('connectionStatus').className = 'status-online';
+        speak('İnternet bağlantınız sağlandı.');
+    });
+
+    window.addEventListener('offline', () => {
+        document.getElementById('connectionStatus').textContent = '📡 Offline';
+        document.getElementById('connectionStatus').className = 'status-offline';
+        speak('İnternet bağlantınız kesildi. Verileri yerel olarak kaydediyorum.', true);
+    });
+
+    // ========== SIGNALR BAĞ LANTISI ==========
+    connection = new signalR.HubConnectionBuilder()
+        .withUrl('/health-hub')
+        .withAutomaticReconnect()
+        .build();
+
+    connection.on('ReceiveTaskUpdate', (data) => {
+        console.log('📝 Görev güncellemesi:', data);
+        speak(`Yeni görev: ${data.taskId}`);
+    });
+
+    connection.on('ReceiveHealthUpdate', (data) => {
+        console.log('💓 Sağlık güncellemesi:', data);
+    });
+
+    connection.on('ReceiveEmergencyAlert', (data) => {
+        console.log('🚨 Acil uyarı:', data);
+        triggerEmergency();
+    });
+
+    connection.start().catch(err => {
+        console.error('SignalR bağlantı hatası:', err);
+    });
+
+    // ========== PĠLĠ TAKĠP ET ==========
+    if ('getBattery' in navigator) {
+        navigator.getBattery().then(battery => {
+            function updateBattery() {
+                const level = Math.round(battery.level * 100);
+                const status = document.getElementById('batteryStatus');
+                status.textContent = `🔋 ${level}%`;
+
+                if (level <= 15) {
+                    status.classList.add('critical');
+                    speak(`Telefonunun şarjı ${level} yüzde. Lütfen şarj edin.`, true);
+                } else {
+                    status.classList.remove('critical');
+                }
+            }
+
+            battery.addEventListener('levelchange', updateBattery);
+            updateBattery();
+        });
+    }
+
+    // ========== DÜŞME ALGILAMA ==========
+    if ('DeviceMotionEvent' in window) {
+        window.addEventListener('devicemotion', (event) => {
+            const acc = event.accelerationIncludingGravity;
+            const total = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+
+            if (total > 25) {
+                console.log('🚨 Olası düşme algılandı!');
+                triggerEmergency();
+            }
+        });
+    }
+
+    console.log('✅ Yaşlı Asistanı başladı - Temiz Arayüz');
+    speak('Merhaba Ahmet Amca. Asistanınız aktif. Size nasıl yardımcı olabilirim?');
+</script>
+
+</body>
+</html>

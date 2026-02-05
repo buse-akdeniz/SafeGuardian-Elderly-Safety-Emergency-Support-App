@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <title>Yaşlı Asistanı</title>
+    <link rel="stylesheet" href="elderly.css">
+</head>
+<body>
+    <!-- =================== GİRİŞ EKRANI =================== -->
+    <div id="loginScreen" class="screen active">
+        <div class="logo-area">
+            <div class="logo">👴</div>
+            <h1>YAŞLI ASISTANI</h1>
+        </div>
+
+        <form id="loginForm" class="form-container">
+            <div class="input-group">
+                <label for="email">E-POSTA</label>
+                <input type="email" id="email" placeholder="test@mail.com" required>
+            </div>
+
+            <div class="input-group">
+                <label for="password">ŞİFRE</label>
+                <input type="password" id="password" placeholder="1234" required>
+            </div>
+
+            <button type="submit" class="btn-giant btn-blue">
+                GİRİŞ YAP
+            </button>
+
+            <p class="hint-text">Test: elderly@test.com / 1234</p>
+        </form>
+    </div>
+
+    <!-- =================== ANA SAYFA - 3 BUTON =================== -->
+    <div id="homeScreen" class="screen">
+        <div class="top-bar">
+            <h1 id="greeting">Hoş Geldiniz</h1>
+            <button class="btn-small btn-red" onclick="logout()">ÇIKIŞ</button>
+        </div>
+
+        <div class="main-area">
+            <!-- SESLİ REHBERLİK -->
+            <div id="voiceGuidance" class="voice-guidance"></div>
+
+            <!-- 3 ANA BUTON -->
+            <div class="three-button-layout">
+                <!-- BUTON 1: İLAÇLAR -->
+                <button class="btn-mega btn-medicine" onclick="goToMedications()" aria-label="İlaçlarım">
+                    <span class="btn-icon">💊</span>
+                    <span class="btn-text">İLAÇLARIM</span>
+                </button>
+
+                <!-- BUTON 2: AİLE -->
+                <button class="btn-mega btn-family" onclick="goToFamily()" aria-label="Aile üyeleri">
+                    <span class="btn-icon">👨‍👩‍👧</span>
+                    <span class="btn-text">AİLE</span>
+                </button>
+
+                <!-- BUTON 3: YARDIM -->
+                <button class="btn-mega btn-help" onclick="showHelp()" aria-label="Yardım">
+                    <span class="btn-icon">🆘</span>
+                    <span class="btn-text">YARDIM</span>
+                </button>
+            </div>
+
+            <!-- EKLENTI BUTONLARI -->
+            <div class="three-button-layout" style="margin-top: 20px;">
+                <!-- Ruh Hali Dashboard -->
+                <button class="btn-mega btn-mood" onclick="goToMoodDashboard()" aria-label="Ruh Hali Takibi">
+                    <span class="btn-icon">😊</span>
+                    <span class="btn-text">RUH HALİ</span>
+                </button>
+
+                <!-- Kamera (İlaç Tanıma) -->
+                <button class="btn-mega btn-camera" onclick="goToMedicationVision()" aria-label="Kamera ile İlaç Tanıma">
+                    <span class="btn-icon">📷</span>
+                    <span class="btn-text">KAMERA</span>
+                </button>
+
+                <button class="btn-mega" style="background: linear-gradient(135deg, #f093fb, #f5576c);" onclick="goToHealthRecords()" aria-label="Sağlık Kayıtları">
+                    <span class="btn-icon">📊</span>
+                    <span class="btn-text">SAĞLIK</span>
+                </button>
+            </div>
+
+            <!-- SES DURUMU -->
+            <div id="voiceStatus" class="voice-indicator"></div>
+        </div>
+    </div>
+
+    <!-- =================== RUH HALİ DASHBOARD =================== -->
+    <div id="moodScreen" class="screen">
+        <div class="top-bar">
+            <button class="btn-small btn-gray" onclick="goHome()">← GERİ</button>
+            <h1>RUH HALİ TAKIBI</h1>
+        </div>
+
+        <div class="main-area">
+            <div id="moodDashboard" style="padding: 20px; color: #ffff00;">
+                <div style="text-align: center; padding: 30px;">
+                    <div style="font-size: 64px; margin-bottom: 20px;">📊</div>
+                    <div style="font-size: 24px; font-weight: bold;">Yükleniyor...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================== SAĞLIK KAYITLARI =================== -->
+    <div id="healthRecordsScreen" class="screen">
+        <div class="top-bar">
+            <button class="btn-small btn-gray" onclick="goHome()">← GERİ</button>
+            <h1>SAĞLIK KAYITLARI</h1>
+        </div>
+
+        <div class="main-area">
+            <div id="healthRecordsContent" style="padding: 20px; color: #ffff00;">
+                <div style="text-align: center; padding: 30px;">
+                    <div style="font-size: 64px; margin-bottom: 20px;">📊</div>
+                    <div style="font-size: 24px; font-weight: bold;">Yükleniyor...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================== İLAÇ YÖNETIMI =================== -->
+    <div id="medicationScreen" class="screen">
+        <div class="top-bar">
+            <button class="btn-small btn-gray" onclick="goHome()">← GERİ</button>
+            <h1>İLAÇLARIM</h1>
+        </div>
+
+        <div class="main-area">
+            <div id="medicationsList" class="medications-container">
+                <!-- Dinamik yükleme -->
+            </div>
+
+            <button class="btn-giant btn-green" onclick="goToAddMedication()" style="margin-top: 20px;">
+                ➕ YENİ İLAÇ EKLE
+            </button>
+        </div>
+    </div>
+
+    <!-- =================== İLAÇ EKLEME =================== -->
+    <div id="addMedicationScreen" class="screen">
+        <div class="top-bar">
+            <button class="btn-small btn-gray" onclick="goHome()">← GERİ</button>
+            <h1>YENİ İLAÇ EKLE</h1>
+        </div>
+
+        <form id="addMedicationForm" class="form-container">
+            <div class="input-group">
+                <label for="medName">İLAÇ ADI</label>
+                <input type="text" id="medName" placeholder="Örn: Aspirin" required>
+            </div>
+
+            <div class="input-group">
+                <label for="medNotes">NOTLAR</label>
+                <input type="text" id="medNotes" placeholder="Yemekten sonra alınız">
+            </div>
+
+            <div class="input-group">
+                <label>SAATLER</label>
+                <div class="time-grid">
+                    <input type="time" class="med-time" placeholder="09:00">
+                    <input type="time" class="med-time" placeholder="14:00">
+                    <input type="time" class="med-time" placeholder="21:00">
+                </div>
+            </div>
+
+            <button type="submit" class="btn-giant btn-green">KAYDET</button>
+        </form>
+    </div>
+
+    <!-- =================== AİLE ÜYELERİ =================== -->
+    <div id="familyScreen" class="screen">
+        <div class="top-bar">
+            <button class="btn-small btn-gray" onclick="goHome()">← GERİ</button>
+            <h1>AİLE ÜYELERİ</h1>
+        </div>
+
+        <div class="main-area">
+            <div id="familyList" class="family-container">
+                <!-- Dinamik yükleme -->
+            </div>
+
+            <button class="btn-giant btn-green" onclick="goToAddFamily()" style="margin-top: 20px;">
+                ➕ AILE ÜYESİ EKLE
+            </button>
+        </div>
+    </div>
+
+    <!-- =================== AILE ÜYESİ EKLEME =================== -->
+    <div id="addFamilyScreen" class="screen">
+        <div class="top-bar">
+            <button class="btn-small btn-gray" onclick="goFamily()">← GERİ</button>
+            <h1>AILE ÜYESİ EKLE</h1>
+        </div>
+
+        <form id="addFamilyForm" class="form-container">
+            <div class="input-group">
+                <label for="familyName">AD</label>
+                <input type="text" id="familyName" placeholder="Örn: Ali" required>
+            </div>
+
+            <div class="input-group">
+                <label for="familyEmail">E-POSTA</label>
+                <input type="email" id="familyEmail" placeholder="ali@example.com" required>
+            </div>
+
+            <div class="input-group">
+                <label for="familyRelation">İLİŞKİ</label>
+                <select id="familyRelation" required>
+                    <option value="">Seçin...</option>
+                    <option value="Çocuk">Çocuk</option>
+                    <option value="Torun">Torun</option>
+                    <option value="Eş">Eş</option>
+                    <option value="Kardeş">Kardeş</option>
+                    <option value="Diğer">Diğer</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn-giant btn-green">KAYDET</button>
+        </form>
+    </div>
+
+    <!-- =================== YARDIM SAYFASI =================== -->
+
+    <div id="helpScreen" class="screen">
+        <div class="top-bar">
+            <button class="btn-small btn-gray" onclick="goHome()">← GERİ</button>
+            <h1>YARDIM</h1>
+        </div>
+
+        <div class="main-area">
+            <div class="help-content">
+                <div class="help-section">
+                    <h2>💊 İLAÇLARIM</h2>
+                    <p>Günlük ilacınızı alıp almadığınızı takip etmek için bu sayfayı kullanın. İlacınızı aldığınız zaman "ALDI" butonuna basın.</p>
+                </div>
+
+                <div class="help-section">
+                    <h2>👨‍👩‍👧 AİLE</h2>
+                    <p>Çocuklarınız ve torununuz uzaktan bilgi almak için bu sayfada sizinle bağlanabilir.</p>
+                </div>
+
+                <div class="help-section">
+                    <h2>🎤 SES KOMUTU</h2>
+                    <p>Mikrofona konuşarak "İlaç ekle" veya "Ana sayfa" diyerek komut verebilirsiniz.</p>
+                </div>
+
+                <div class="help-section">
+                    <h2>📞 ACİL DURUMDA</h2>
+                    <p>Yardım almak için YARDIM butonuna basın ve aile üyeleriniz bilgilendirilecektir.</p>
+                </div>
+
+                <button class="btn-giant btn-blue" onclick="goHome()" style="margin-top: 30px;">ANLADIM</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="voice-assistant.js"></script>
+    <script src="elderly.js"></script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+{
+  "app_name": "Altenbetreuungs-Assistent",
+  "greeting": "Hallo",
+  "good_morning": "Guten Morgen",
+  "good_afternoon": "Guten Nachmittag",
+  "good_evening": "Guten Abend",
+  
+  "medication": "MEDIKAMENTENZEIT!",
+  "medication_desc": "Zeit, Ihre Medikamente zu nehmen",
+  "health_check": "GESUNDHEITSKONTROLLE",
+  "health_check_desc": "Zeit für Ihre Gesundheitsmessung",
+  "no_task": "Im Moment keine Aufgaben",
+  "rest_time": "Sie können sich gemütlich ausruhen",
+  
+  "btn_confirm": "GENOMMEN",
+  "btn_skip": "SPÄTER",
+  "btn_help": "HILFE",
+  
+  "voice_command_help": "Sprachbefehle:",
+  "voice_cmd_yes": "\"Ja\" oder \"Okay\" - Ich habe es genommen",
+  "voice_cmd_later": "\"Später\" oder \"Warten\" - Erinnern Sie mich später",
+  "voice_cmd_help": "\"Hilfe\" - Notfall",
+  
+  "status_online": "Online",
+  "status_offline": "Offline",
+  "battery_status": "Akku",
+  "connection_status": "Verbindung",
+  
+  "family_panel": "Familien-Überwachungs-Panel",
+  "elderly_name": "Benutzer",
+  "monitoring": "Überwachung",
+  "last_update": "Letzte Aktualisierung",
+  "pending_tasks": "Ausstehende Aufgaben",
+  "active_alerts": "Aktive Warnungen",
+  
+  "critical_alert": "KRITISCHE WARNUNG",
+  "fall_detected": "Sturz erkannt",
+  "no_voice_response": "Keine Sprachantwort erhalten!",
+  "health_critical": "KRITISCHE GESUNDHEITSDATEN",
+  "blood_pressure": "Blutdruck",
+  "heart_rate": "Herzfrequenz",
+  "blood_glucose": "Blutzucker",
+  "inform_emergency": "NOTFALLDIENSTE BENACHRICHTIGEN",
+  "view_location": "ORT ANZEIGEN",
+  "voice_call": "SPRACHANRUF",
+  
+  "emergency_check": "Geht es dir gut? Gibt es ein Problem?",
+  "help_coming": "Hilfe kommt!",
+  "confirm_ok": "Okay, geht es dir gut?",
+  "sending_emergency": "Notfallmitteilung wird gesendet...",
+  
+  "ai_listening": "Höre zu...",
+  "ai_processing": "Wird verarbeitet...",
+  "ai_timeout": "Keine Antwort erhalten. Notfallmodus wird aktiviert.",
+  
+  "subscription_premium": "Premium-Plan",
+  "subscription_standard": "Standard-Plan",
+  "feature_ai_voice": "KI-Sprachanalyse",
+  "feature_fall_detection": "Sturzerkennung",
+  "feature_location": "Live-Standortfreigabe",
+  "feature_emergency_integration": "Integrationen mit Gesundheitseinrichtungen",
+  
+  "onboarding_welcome": "Willkommen!",
+  "onboarding_setup": "Bitten Sie ein Familienmitglied um Hilfe beim Einrichten des Systems",
+  "family_setup_guide": "Anleitung zur Familieneinrichtung",
+  
+  "emotion_calm": "Ruhig",
+  "emotion_worried": "Besorgt",
+  "emotion_distressed": "Bedrängnis",
+  "emotion_panicked": "Panik"
+}

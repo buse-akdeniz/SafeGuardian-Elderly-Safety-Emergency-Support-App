@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>SafeGuardian AI - Yaşlı Bakım</title>
+    <style>
+        /* ============= RESET & TYPOGRAPHY ============= */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #0f0f1e;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* ============= GLOBAL STYLES ============= */
+        ::-webkit-scrollbar { display: none; }
+        
+        button {
+            border: none;
+            outline: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        /* ============= LOGIN SCREEN ============= */
+        #loginScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a3a 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        #loginScreen.hidden {
+            display: none;
+        }
+
+        .login-box {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .login-box h1 {
+            color: #0f0f1e;
+            font-size: 32px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .login-input {
+            width: 100%;
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            font-size: 18px;
+            font-family: inherit;
+        }
+
+        .login-input:focus {
+            outline: none;
+            border-color: #1e90ff;
+            background: #f0f8ff;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #1e90ff 0%, #0047ab 100%);
+            color: white;
+            font-size: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+
+        .login-btn:hover {
+            box-shadow: 0 10px 25px rgba(30, 144, 255, 0.4);
+        }
+
+        /* ============= MAIN ELDERLY UI ============= */
+        #mainApp {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: #0f0f1e;
+        }
+
+        #mainApp.hidden {
+            display: none;
+        }
+
+        /* ============= 3-ZONE LAYOUT ============= */
+        .elderly-zone-top {
+            flex: 0 0 auto;
+            padding: 30px 20px;
+            text-align: center;
+            background: linear-gradient(135deg, #1a1a3a 0%, #2d2d5f 100%);
+            border-bottom: 3px solid #ffd700;
+        }
+
+        .elderly-clock {
+            font-size: 64px;
+            font-weight: bold;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            margin-bottom: 15px;
+        }
+
+        .elderly-greeting {
+            font-size: 36px;
+            font-weight: bold;
+            color: #ffffff;
+        }
+
+        /* ============= MIDDLE ZONE (MAIN TASK) ============= */
+        .elderly-zone-middle {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+            background: #0f0f1e;
+        }
+
+        .task-container {
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+            display: none;
+        }
+
+        .task-container.active {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .task-title {
+            font-size: 60px;
+            font-weight: bold;
+            color: #ffd700;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        .task-description {
+            font-size: 32px;
+            color: #ffffff;
+        }
+
+        /* ============= EMPTY STATE ============= */
+        .empty-state {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 40px;
+        }
+
+        .empty-state.hidden {
+            display: none;
+        }
+
+        .microphone-icon {
+            font-size: 120px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+        }
+
+        .empty-text {
+            font-size: 40px;
+            color: #ffffff;
+        }
+
+        /* ============= EMERGENCY MODE ============= */
+        #emergencyScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #ff0000;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            animation: emergency-flash 0.5s infinite;
+        }
+
+        #emergencyScreen.active {
+            display: flex;
+        }
+
+        @keyframes emergency-flash {
+            0%, 100% { background: #ff0000; }
+            50% { background: #cc0000; }
+        }
+
+        .emergency-question {
+            font-size: 72px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 3px 3px 12px rgba(0, 0, 0, 0.7);
+            margin-bottom: 80px;
+            text-align: center;
+        }
+
+        .emergency-buttons {
+            display: flex;
+            gap: 20px;
+            width: 90%;
+            max-width: 800px;
+        }
+
+        .emergency-btn {
+            flex: 1;
+            padding: 40px;
+            font-size: 40px;
+            font-weight: bold;
+            border-radius: 20px;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .emergency-btn-help {
+            background: white;
+            color: #ff0000;
+        }
+
+        .emergency-btn-help:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .emergency-btn-ok {
+            background: rgba(0, 200, 0, 0.9);
+        }
+
+        .emergency-btn-ok:hover {
+            background: rgba(0, 255, 0, 1);
+            transform: scale(1.05);
+        }
+
+        /* ============= BOTTOM ZONE (ACTION BUTTON) ============= */
+        .elderly-zone-bottom {
+            flex: 0 0 auto;
+            padding: 30px 20px;
+            background: #1a1a3a;
+            border-top: 3px solid #ffd700;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .elderly-button {
+            flex: 1;
+            max-width: 200px;
+            padding: 30px;
+            font-size: 28px;
+            font-weight: bold;
+            border-radius: 16px;
+            color: white;
+            background: linear-gradient(135deg, #00d084 0%, #009966 100%);
+            transition: all 0.3s;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .elderly-button:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 208, 132, 0.4);
+        }
+
+        .elderly-button.hidden {
+            display: none;
+        }
+
+        /* ============= VOICE INDICATOR ============= */
+        .voice-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            font-size: 24px;
+            padding: 12px 20px;
+            background: rgba(255, 215, 0, 0.2);
+            border: 2px solid #ffd700;
+            border-radius: 12px;
+            display: none;
+        }
+
+        .voice-indicator.active {
+            display: block;
+            animation: voice-pulse 0.5s infinite;
+        }
+
+        @keyframes voice-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* ============= ACCESSIBLE SETTINGS PANEL (HIDDEN FROM ELDERLY) ============= */
+        #settingsPanel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 100px;
+            height: 100px;
+            background: rgba(30, 144, 255, 0.1);
+            border: 2px solid #1e90ff;
+            border-radius: 16px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            opacity: 0.3;
+            transition: all 0.3s;
+        }
+
+        #settingsPanel:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        #settingsPanelIcon {
+            font-size: 48px;
+        }
+
+        .settings-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+        }
+
+        .settings-modal.active {
+            display: flex;
+        }
+
+        .settings-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            max-width: 500px;
+            color: #0f0f1e;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .settings-content h2 {
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+
+        .settings-content input,
+        .settings-content button {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .settings-content button {
+            background: #1e90ff;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+
+        .settings-content button:hover {
+            background: #0047ab;
+        }
+
+        @media (max-width: 768px) {
+            .task-title {
+                font-size: 48px;
+            }
+            
+            .task-description {
+                font-size: 28px;
+            }
+
+            .elderly-clock {
+                font-size: 56px;
+            }
+
+            .elderly-greeting {
+                font-size: 32px;
+            }
+
+            .microphone-icon {
+                font-size: 80px;
+            }
+
+            .empty-text {
+                font-size: 32px;
+            }
+
+            .elderly-button {
+                padding: 20px;
+                font-size: 24px;
+            }
+
+            .emergency-question {
+                font-size: 56px;
+                margin-bottom: 60px;
+            }
+
+            .emergency-btn {
+                padding: 30px;
+                font-size: 32px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- ============= LOGIN SCREEN ============= -->
+    <div id="loginScreen">
+        <div class="login-box">
+            <h1>🛡️ SafeGuardian AI</h1>
+            <input type="email" id="emailInput" class="login-input" placeholder="E-posta">
+            <input type="password" id="passwordInput" class="login-input" placeholder="Şifre">
+            <button class="login-btn" onclick="handleLogin()">Giriş Yap</button>
+        </div>
+    </div>
+
+    <!-- ============= MAIN APP ============= -->
+    <div id="mainApp" class="hidden">
+        <!-- TOP ZONE: Clock & Greeting -->
+        <div class="elderly-zone-top">
+            <div class="elderly-clock" id="clockDisplay">12:00</div>
+            <div class="elderly-greeting" id="greetingText">Merhaba Ahmet Amca</div>
+        </div>
+
+        <!-- MIDDLE ZONE: Active Task or Empty State -->
+        <div class="elderly-zone-middle">
+            <!-- Empty State (Görevi yok) -->
+            <div class="empty-state">
+                <div class="microphone-icon">🎤</div>
+                <div class="empty-text">Sesli komut için konuş</div>
+            </div>
+
+            <!-- Medicine Task -->
+            <div id="taskMedicine" class="task-container">
+                <div class="task-title">💊 İLAÇ VAKTİ</div>
+                <div class="task-description">Aspirin 500mg - Su ile al</div>
+            </div>
+
+            <!-- Water Task -->
+            <div id="taskWater" class="task-container">
+                <div class="task-title">💧 SU İÇTİN Mİ?</div>
+                <div class="task-description">Sağlığın için bir bardak su içmelisin</div>
+            </div>
+
+            <!-- Meal Task -->
+            <div id="taskMeal" class="task-container">
+                <div class="task-title">🍽️ YEMEK VAKTİ</div>
+                <div class="task-description">Öğle yemeğini almayı unutma</div>
+            </div>
+
+            <!-- Shower Task -->
+            <div id="taskShower" class="task-container">
+                <div class="task-title">🚿 DUŞA GİRME VAKTİ</div>
+                <div class="task-description">Haftada iki kez duş almak önemlidir</div>
+            </div>
+        </div>
+
+        <!-- BOTTOM ZONE: Action Button -->
+        <div class="elderly-zone-bottom">
+            <button class="elderly-button" id="actionButton" onclick="confirmTask()">TAMAM</button>
+            <button class="elderly-button hidden" id="skipButton" onclick="skipTask()" style="background: linear-gradient(135deg, #ff6b35 0%, #cc5528 100%);">SONRA</button>
+        </div>
+
+        <!-- Voice Indicator -->
+        <div class="voice-indicator" id="voiceIndicator">
+            🎤 Dinliyorum...
+        </div>
+    </div>
+
+    <!-- ============= EMERGENCY SCREEN ============= -->
+    <div id="emergencyScreen">
+        <div class="emergency-question">İYİ MİSİN?</div>
+        <div class="emergency-buttons">
+            <button class="emergency-btn emergency-btn-help" onclick="requestHelp()">
+                🆘 YARDIM İSTE
+            </button>
+            <button class="emergency-btn emergency-btn-ok" onclick="dismissEmergency()">
+                ✓ İYİYİM
+            </button>
+        </div>
+    </div>
+
+    <!-- ============= SETTINGS PANEL (FAMILY ONLY) ============= -->
+    <div id="settingsPanel" onclick="openSettings()">
+        <div id="settingsPanelIcon">⚙️</div>
+    </div>
+
+    <div id="settingsModal" class="settings-modal">
+        <div class="settings-content">
+            <h2>👨‍👩‍👧‍👦 Aile Paneli</h2>
+            <p style="margin-bottom: 20px; color: #666;">Yaşlı kullanıcının görevlerini yönetin</p>
+            
+            <label style="display: block; margin-bottom: 10px; color: #0f0f1e; font-weight: bold;">
+                Kullanıcı Adı:
+            </label>
+            <input type="text" id="elderlyNameInput" placeholder="Ad Soyad">
+            
+            <label style="display: block; margin-bottom: 10px; color: #0f0f1e; font-weight: bold;">
+                Mevcut Görev:
+            </label>
+            <select id="currentTaskSelect" style="width: 100%; padding: 12px; margin-bottom: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;">
+                <option value="">Görev yok</option>
+                <option value="medicine">💊 İlaç vakti</option>
+                <option value="water">💧 Su içme</option>
+                <option value="meal">🍽️ Yemek vakti</option>
+                <option value="shower">🚿 Duş alma</option>
+            </select>
+            
+            <label style="display: block; margin-bottom: 10px; color: #0f0f1e; font-weight: bold;">
+                Aile Üyesi Ekle (Email):
+            </label>
+            <input type="email" id="familyEmailInput" placeholder="Aile üyesinin e-postası">
+            
+            <button style="background: #27ae60;" onclick="addFamilyMember()">➕ Üye Ekle</button>
+            <button style="background: #e74c3c;" onclick="closeSettings()">Kapat</button>
+        </div>
+    </div>
+
+    <script>
+        // ============= GLOBAL STATE ============= 
+        let currentUser = null;
+        let currentTask = null;
+        let isVoiceActive = false;
+
+        // ============= CLOCK UPDATE ============= 
+        function updateClock() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('clockDisplay').innerHTML = `${hours}:${minutes}`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // ============= TASK SCHEDULER ============= 
+        function checkAndDisplayTask() {
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const currentTime = hours * 100 + minutes;
+
+            const emptyState = document.querySelector('.empty-state');
+            document.querySelectorAll('.task-container').forEach(t => t.classList.remove('active'));
+
+            // Schedule tasks by time
+            if (currentTime >= 900 && currentTime < 930) {
+                // 09:00-09:30: Medicine
+                document.getElementById('taskMedicine').classList.add('active');
+                currentTask = 'medicine';
+                emptyState.classList.add('hidden');
+                speak("İlaç vakti. Aspirin ilaçlarını su ile almayı unutma.");
+            } else if (currentTime >= 1200 && currentTime < 1230) {
+                // 12:00-12:30: Meal
+                document.getElementById('taskMeal').classList.add('active');
+                currentTask = 'meal';
+                emptyState.classList.add('hidden');
+                speak("Öğle yemeğini almayı unutma. Sağlığın için dengeli beslen.");
+            } else if (currentTime >= 1500 && currentTime < 1530) {
+                // 15:00-15:30: Water
+                document.getElementById('taskWater').classList.add('active');
+                currentTask = 'water';
+                emptyState.classList.add('hidden');
+                speak("Su içmeyi unutma. Günde sekiz bardak su içmelisin.");
+            } else if (currentTime >= 2000 && currentTime < 2030) {
+                // 20:00-20:30: Medicine (evening)
+                document.getElementById('taskMedicine').classList.add('active');
+                currentTask = 'medicine';
+                emptyState.classList.add('hidden');
+                speak("Akşam ilaç vakti. İlaçlarını almayı unutma.");
+            } else if (currentTime >= 2100 && currentTime < 2130) {
+                // 21:00-21:30: Shower suggestion (3x per week)
+                const day = now.getDay();
+                if ([1, 3, 5].includes(day)) { // Mon, Wed, Fri
+                    document.getElementById('taskShower').classList.add('active');
+                    currentTask = 'shower';
+                    emptyState.classList.add('hidden');
+                    speak("Duş almaya ne dersin? Seni çok iyi hissettirecek.");
+                }
+            } else {
+                // No active task
+                emptyState.classList.remove('hidden');
+                currentTask = null;
+            }
+        }
+
+        setInterval(checkAndDisplayTask, 30000); // Check every 30 seconds
+        checkAndDisplayTask();
+
+        // ============= SPEECH SYNTHESIS ============= 
+        function speak(text) {
+            const synth = window.speechSynthesis;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'tr-TR';
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            synth.cancel();
+            synth.speak(utterance);
+        }
+
+        // ============= SPEECH RECOGNITION ============= 
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'tr-TR';
+        recognition.continuous = true;
+        recognition.interimResults = false;
+
+        function startListening() {
+            isVoiceActive = true;
+            document.getElementById('voiceIndicator').classList.add('active');
+            recognition.start();
+        }
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+            console.log('Recognized:', transcript);
+
+            // Flexible voice commands
+            if (transcript.includes('evet') || transcript.includes('tamam') || 
+                transcript.includes('aldım') || transcript.includes('içtim') ||
+                transcript.includes('hazır') || transcript.includes('ok')) {
+                confirmTask();
+            } else if (transcript.includes('sonra') || transcript.includes('iptal') ||
+                       transcript.includes('bekleteceğim') || transcript.includes('bekle')) {
+                skipTask();
+            } else if (transcript.includes('yardım') || transcript.includes('İmdad') ||
+                       transcript.includes('acil') || transcript.includes('asistan')) {
+                triggerEmergency();
+            } else if (transcript.includes('ayarlar') || transcript.includes('panel')) {
+                openSettings();
+            }
+        };
+
+        recognition.onend = () => {
+            document.getElementById('voiceIndicator').classList.remove('active');
+            isVoiceActive = false;
+            setTimeout(() => startListening(), 2000); // Re-enable after 2s
+        };
+
+        // Start listening on app load
+        setTimeout(() => {
+            startListening();
+        }, 500);
+
+        // ============= TASK ACTIONS ============= 
+        function confirmTask() {
+            if (!currentTask) return;
+
+            speak("Tamamlandı. İyi yapıyorsun!");
+
+            // Log to backend
+            fetch('/api/complete-task', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: currentUser?.id,
+                    taskType: currentTask,
+                    completedAt: new Date().toISOString()
+                })
+            }).catch(err => console.log('Task logged'));
+
+            currentTask = null;
+            checkAndDisplayTask();
+        }
+
+        function skipTask() {
+            speak("Tamam, sonra hatırlatacağım.");
+            currentTask = null;
+            checkAndDisplayTask();
+        }
+
+        function triggerEmergency() {
+            document.getElementById('emergencyScreen').classList.add('active');
+            speak("Yardıma ihtiyacın var mı?");
+        }
+
+        function requestHelp() {
+            speak("Ailene haber veriyorum. Yardım geliyor.");
+
+            // Send alert to family
+            fetch('/api/emergency-alert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: currentUser?.id,
+                    location: 'Home',
+                    severity: 'high',
+                    timestamp: new Date().toISOString()
+                })
+            }).catch(err => console.log('Emergency sent'));
+
+            setTimeout(() => {
+                document.getElementById('emergencyScreen').classList.remove('active');
+                speak("Yardım şekilde yolunda. Merak etme.");
+            }, 3000);
+        }
+
+        function dismissEmergency() {
+            speak("İyi o zaman. Dikkatini kesmeyeceğim.");
+            document.getElementById('emergencyScreen').classList.remove('active');
+        }
+
+        // ============= SETTINGS PANEL ============= 
+        function openSettings() {
+            document.getElementById('settingsModal').classList.add('active');
+        }
+
+        function closeSettings() {
+            document.getElementById('settingsModal').classList.remove('active');
+        }
+
+        function addFamilyMember() {
+            const email = document.getElementById('familyEmailInput').value;
+            if (!email) return alert("E-posta girin");
+
+            fetch('/api/add-family-member', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: currentUser?.id,
+                    familyEmail: email
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✓ Aile üyesi eklendi');
+                    document.getElementById('familyEmailInput').value = '';
+                } else {
+                    alert('Hata: ' + data.message);
+                }
+            });
+        }
+
+        // ============= LOGIN ============= 
+        function handleLogin() {
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+
+            if (!email || !password) {
+                alert('E-posta ve şifreyi girin');
+                return;
+            }
+
+            fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    currentUser = data.user;
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('mainApp').classList.remove('hidden');
+                    document.getElementById('greetingText').innerText = `Merhaba ${data.user.name}`;
+                    
+                    speak(`Merhaba ${data.user.name}. Sana nasıl yardımcı olabilirim?`);
+                    checkAndDisplayTask();
+                } else {
+                    alert('Giriş başarısız: ' + data.message);
+                }
+            })
+            .catch(err => alert('Hata: ' + err.message));
+        }
+
+        // Prevent Settings access without password
+        let settingsAttempts = 0;
+        document.getElementById('settingsPanel').addEventListener('click', function(e) {
+            if (!currentUser) {
+                settingsAttempts++;
+                if (settingsAttempts > 2) {
+                    const pwd = prompt('Şifre girin (Aile için):');
+                    if (pwd !== currentUser?.password) {
+                        alert('Yanlış şifre!');
+                        return;
+                    }
+                }
+            }
+        });
+
+        // Emergency on accelerometer (Fall Detection)
+        if ('DeviceMotionEvent' in window) {
+            window.addEventListener('devicemotion', (event) => {
+                const acceleration = event.accelerationIncludingGravity;
+                const x = acceleration.x || 0;
+                const y = acceleration.y || 0;
+                const z = acceleration.z || 0;
+
+                const totalAccel = Math.sqrt(x * x + y * y + z * z);
+
+                // Detect sudden impact (fall)
+                if (totalAccel > 50) {
+                    triggerEmergency();
+                    speak("Düştün mü? Yardım çağrayım mı?");
+                }
+            });
+        }
+    </script>
+</body>
+</html>

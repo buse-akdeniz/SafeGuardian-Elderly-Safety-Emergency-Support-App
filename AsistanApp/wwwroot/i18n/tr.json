@@ -1,0 +1,71 @@
+{
+  "app_name": "Yaşlı Bakım Asistanı",
+  "greeting": "Merhaba",
+  "good_morning": "Günaydın",
+  "good_afternoon": "İyi öğlenler",
+  "good_evening": "İyi akşamlar",
+  
+  "medication": "İLAÇ VAKTİ!",
+  "medication_desc": "İlacınızı almak zamanı",
+  "health_check": "SAĞLIK KONTROLÜ",
+  "health_check_desc": "Sağlık ölçümü yapmak zamanı",
+  "no_task": "Şu an görev yok",
+  "rest_time": "Rahatça bekleyebilirsiniz",
+  
+  "btn_confirm": "İÇTİM",
+  "btn_skip": "SONRA",
+  "btn_help": "YARDIM",
+  
+  "voice_command_help": "Sesli komutlar:",
+  "voice_cmd_yes": "\"Evet\" - İlaç aldım",
+  "voice_cmd_later": "\"Sonra\" - Daha sonra",
+  "voice_cmd_help": "\"Yardım\" - Acil çağrı",
+  
+  "status_online": "Online",
+  "status_offline": "Offline",
+  "battery_status": "Pil",
+  "connection_status": "Bağlantı",
+  
+  "family_panel": "Aile Takip Paneli",
+  "elderly_name": "Yaşlı Kullanıcı",
+  "monitoring": "İzleme",
+  "last_update": "Son Güncelleme",
+  "pending_tasks": "Bekleyen Görevler",
+  "active_alerts": "Aktif Uyarılar",
+  
+  "critical_alert": "KRİTİK UYARI",
+  "fall_detected": "Düşme algılandı",
+  "no_voice_response": "Sesli yanıt alınamadı!",
+  "health_critical": "SAĞLIK VERİSİ KRİTİK",
+  "blood_pressure": "Tansiyon",
+  "heart_rate": "Nabız",
+  "blood_glucose": "Kan Şekeri",
+  "inform_emergency": "112'Yİ BİLGİLENDİR",
+  "view_location": "KONUMU GÖR",
+  "voice_call": "SESLİ BAĞLAN",
+  
+  "emergency_check": "İyi misin? Bir sorun mu var?",
+  "help_coming": "Yardım geliyor!",
+  "confirm_ok": "Tamam, iyi misin?",
+  "sending_emergency": "Acil durum bildirimi gönderiliyor...",
+  
+  "ai_listening": "Dinliyorum...",
+  "ai_processing": "İşleniyor...",
+  "ai_timeout": "Yanıt alınamadı. Acil durum modu aktive ediliyor.",
+  
+  "subscription_premium": "Premium Paket",
+  "subscription_standard": "Standart Paket",
+  "feature_ai_voice": "Yapay Zeka Ses Analizi",
+  "feature_fall_detection": "Düşme Algılama",
+  "feature_location": "Canlı Konum Paylaşımı",
+  "feature_emergency_integration": "Sağlık Kuruluşu Entegrasyonu",
+  
+  "onboarding_welcome": "Hoş Geldiniz!",
+  "onboarding_setup": "Sistemi Kurmak İçin Lütfen Aile Üyesi Yardımını İsteyin",
+  "family_setup_guide": "Aile Kurulum Rehberi",
+  
+  "emotion_calm": "Normal",
+  "emotion_worried": "Endişeli",
+  "emotion_distressed": "Sıkıntılı",
+  "emotion_panicked": "Panik"
+}

@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeGuardian AI - Yaşlı Bakım</title>
+    <style>
+        /* ===== RESET ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #1a1a2e;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .top-bar { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; padding: 12px 15px; display: flex; 
+            justify-content: space-between; align-items: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        
+        /* SOL KATEGORİ MENÜSÜ */
+        .sidebar { 
+            width: 300px; background: white; border-right: 1px solid #ddd;
+            padding: 20px; display: flex; flex-direction: column; gap: 10px;
+        }
+        body.dark-mode .sidebar { background: #1a1a2e; border-color: #333; }
+        
+        .category-item { 
+            padding: 15px; border-radius: 12px; cursor: pointer;
+            background: #f8f9fb; border-left: 5px solid #667eea;
+            font-weight: bold; transition: 0.3s;
+        }
+        .category-item:hover { transform: translateX(5px); background: #eceef1; }
+        
+        /* İÇERİK ALANI */
+        .content-area { flex: 1; padding: 30px; overflow-y: auto; display: none; }
+        .content-area.active { display: block; }
+
+        .card { 
+            background: white; padding: 25px; border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05); border-top: 5px solid #667eea;
+        }
+        body.dark-mode .card { background: #2d3561; }
+
+        /* BUTONLAR */
+        .btn { 
+            padding: 12px 20px; border-radius: 10px; border: none;
+            cursor: pointer; font-weight: bold; transition: 0.3s;
+            background: #667eea; color: white;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4); }
+        .btn-voice { background: #ff4757; animation: pulse 2s infinite; display: none; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* GİRİŞ VE ŞİFRE */
+        .forgot-link { font-size: 13px; color: #667eea; cursor: pointer; text-decoration: underline; }
+        .input-field { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; }
+
+        @media (max-width: 768px) { .sidebar { width: 100px; } .cat-text { display: none; } }
+    </style>
+</head>
+<body>
+
+    <div id="loginPage" style="display: flex; justify-content: center; align-items: center; height: 100vh; padding: 20px;">
+        <div class="card" style="width: 100%; max-width: 400px;">
+            <h2 id="loginTitle" style="text-align: center; margin-bottom: 20px;">Akıllı Asistan</h2>
+            
+            <!-- GİRİŞ FORMU -->
+            <div id="loginForm">
+                <input type="email" id="emailInput" class="input-field" placeholder="E-posta">
+                <input type="password" id="passInput" class="input-field" placeholder="Şifre">
+                <button class="btn" style="width: 100%; margin-top: 10px;" onclick="handleLoginOrBiometric()">🚀 Giriş Yap</button>
+                <div style="margin-top: 15px; text-align: center; display: flex; gap: 10px; justify-content: center;">
+                    <a href="javascript:showForgot()" class="forgot-link">Şifremi Unuttum</a>
+                    <span>|</span>
+                    <a href="javascript:showRegister()" class="forgot-link">Kayıt Ol</a>
+                </div>
+            </div>
+            
+            <!-- KAYIT FORMU -->
+            <div id="registerForm" style="display: none;">
+                <h3 style="text-align: center; margin-bottom: 15px;">Yeni Hesap Oluştur</h3>
+                <input type="text" id="regName" class="input-field" placeholder="Adınız">
+                <input type="email" id="regEmail" class="input-field" placeholder="E-posta">
+                <input type="password" id="regPass" class="input-field" placeholder="Şifre">
+                <input type="password" id="regPassConfirm" class="input-field" placeholder="Şifreyi Onayla">
+                <input type="number" id="regAge" class="input-field" placeholder="Yaş" min="1" max="120">
+                <button class="btn" style="width: 100%;" onclick="handleRegister()">Hesap Oluştur</button>
+                <p class="forgot-link" style="margin-top: 10px;" onclick="hideRegister()">Geri Dön</p>
+            </div>
+            
+            <!-- ŞİFRE SIFIRLAMA FORMU -->
+            <div id="forgotForm" style="display: none;">
+                <h3 style="text-align: center; margin-bottom: 15px;">Şifreyi Sıfırla</h3>
+                <input type="email" id="forgotEmail" class="input-field" placeholder="E-posta Adresinizi Girin">
+                <button class="btn" style="width: 100%; margin-bottom: 10px;" onclick="sendResetCode()">Kod Gönder</button>
+                <div id="resetCodeSection" style="display: none;">
+                    <p style="font-size: 13px; margin-bottom: 10px; color: #27ae60;">✓ Doğrulama kodu gönderildi!</p>
+                    <div style="background: #f0f0f0; padding: 12px; border-radius: 8px; margin-bottom: 10px; text-align: center;">
+                        <p style="font-size: 12px; color: #666;">Kodunuz:</p>
+                        <p id="codeDisplay" style="font-size: 24px; font-weight: bold; color: #27ae60; letter-spacing: 2px;">------</p>
+                    </div>
+                    <input type="text" id="resetCode" class="input-field" placeholder="Doğrulama Kodu">
+                    <input type="password" id="newPass" class="input-field" placeholder="Yeni Şifre">
+                    <button class="btn" style="width: 100%;" onclick="resetPassword()">Şifreyi Güncelle</button>
+                </div>
+                <p class="forgot-link" style="margin-top: 10px;" onclick="hideForgot()">Geri Dön</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="mainApp" style="display: none; height: 100vh; flex-direction: column;">
+        <div class="top-bar">
+            <div>
+                <button class="btn" onclick="startVoice()">🎤 Sesli Komut</button>
+                <span id="voiceStatus" style="margin-left: 10px; font-weight: bold; color: #ffd700;"></span>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn" onclick="switchTab('tasks')">Görevler</button>
+                <button class="btn" onclick="switchTab('profile')">Hesabım</button>
+                <select class="btn" id="languageSelect" onchange="changeLanguage(this.value)" style="cursor: pointer; padding: 10px;">
+                    <option value="tr">🇹🇷 Türkçe</option>
+                    <option value="en">🇺🇸 English</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="main-container">
+            <!-- REKLAM BÖLÜMÜ -->
+            <div id="adBanner" style="display: none; position: fixed; top: 70px; left: 0; right: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 100;">
+                <p style="margin: 0; font-size: 14px;">
+                    <strong>📢 Sesli Komut Premium!</strong> Yapılacak işler ve saati sesli olarak kaydedin. 
+                    <a href="#" style="color: #ffd700; text-decoration: underline; font-weight: bold;">Yükselt</a>
+                </p>
+            </div>
+            
+            <div class="sidebar" id="mainSidebar">
+                <div class="category-item" onclick="selectCat('anne')">👩 <span class="cat-text">Anne</span></div>
+                <div class="category-item" onclick="selectCat('sporcu')">⚽ <span class="cat-text">Sporcu</span></div>
+                <div class="category-item" onclick="selectCat('evhanim')">🍳 <span class="cat-text">Ev Hanımı</span></div>
+                <div class="category-item" onclick="selectCat('yasli')">👴 <span class="cat-text">Yaşlı Hizmeti</span></div>
+                <div class="category-item" onclick="selectCat('is')">💼 <span class="cat-text">İş İnsanı</span></div>
+            </div>
+
+            <div id="tasksPage" class="content-area active">
+                <div class="card">
+                    <h2 id="currentCatTitle">Anne Kategorisi</h2>
+                    <input type="text" id="taskInput" class="input-field" placeholder="Yapılacak iş nedir?">
+                    <input type="time" id="timeInput" class="input-field">
+                    <button class="btn" style="width: 100%;" onclick="saveTask()">Kaydet</button>
+                    <div id="taskList" style="margin-top: 20px;"></div>
+                </div>
+            </div>
+
+            <div id="profilePage" class="content-area">
+                <div style="max-width: 900px; margin: 0 auto; padding: 20px;">
+                    <!-- Profil Başlığı -->
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; border-radius: 16px; text-align: center; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);">
+                        <img id="profilePhoto" src="https://via.placeholder.com/140" style="width: 140px; height: 140px; border-radius: 50%; object-fit: cover; border: 5px solid white; margin-bottom: 15px;">
+                        <h1 id="userFullName" style="margin: 10px 0; font-size: 28px;">Kullanıcı Adı</h1>
+                        <p id="userEmailDisplay" style="font-size: 14px; opacity: 0.9; margin-bottom: 15px;">email@example.com</p>
+                        <button class="btn" style="background: rgba(255,255,255,0.2); border: 2px solid white; margin-top: 10px;" onclick="changeProfilePhoto()">📷 Fotoğraf Değiştir</button>
+                    </div>
+
+                    <!-- Bilgi Kartları -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px;">
+                        <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <p style="color: #666; font-size: 12px; margin-bottom: 8px;">AD</p>
+                            <p style="font-size: 16px; font-weight: bold; color: #2c3e50;" id="userFirstName">-</p>
+                        </div>
+                        <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <p style="color: #666; font-size: 12px; margin-bottom: 8px;">SOYAD</p>
+                            <p style="font-size: 16px; font-weight: bold; color: #2c3e50;" id="userLastName">-</p>
+                        </div>
+                        <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <p style="color: #666; font-size: 12px; margin-bottom: 8px;">TELEFON</p>
+                            <p style="font-size: 16px; font-weight: bold; color: #2c3e50;" id="userPhone">-</p>
+                        </div>
+                        <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <p style="color: #666; font-size: 12px; margin-bottom: 8px;">YAŞ</p>
+                            <p style="font-size: 16px; font-weight: bold; color: #2c3e50;"><span id="userAge">-</span> <span id="ageCategory" style="font-size: 12px;"></span></p>
+                        </div>
+                        <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <p style="color: #666; font-size: 12px; margin-bottom: 8px;">DURUM</p>
+                            <p style="font-size: 16px; font-weight: bold;" id="premiumStatus">Ücretsiz</p>
+                        </div>
+                    </div>
+
+                    <!-- Seçenekler -->
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 30px;">
+                        <!-- Profili Düzenle -->
+                        <div style="background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <h3 style="margin-bottom: 15px; color: #2c3e50;">✏️ Profil Bilgileri</h3>
+                            <button class="btn" style="width: 100%; background: #3498db;" onclick="toggleEditProfile()">Düzenle</button>
+                            
+                            <!-- Düzenleme Formu -->
+                            <div id="editProfileSection" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 2px solid #ecf0f1;">
+                                <input type="text" id="editFirstName" class="input-field" placeholder="Ad">
+                                <input type="text" id="editLastName" class="input-field" placeholder="Soyad">
+                                <input type="tel" id="editPhone" class="input-field" placeholder="Telefon">
+                                <input type="number" id="editAge" class="input-field" placeholder="Yaş" min="1" max="120">
+                                <input type="text" id="editPhotoUrl" class="input-field" placeholder="Profil Resmi URL">
+                                <button class="btn" style="width: 100%; background: #27ae60; margin-top: 10px;" onclick="saveProfileChanges()">Kaydet</button>
+                                <button class="btn" style="width: 100%; background: #95a5a6; margin-top: 5px;" onclick="cancelEditProfile()">İptal</button>
+                            </div>
+                        </div>
+
+                        <!-- Şifre Değiştir -->
+                        <div style="background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <h3 style="margin-bottom: 15px; color: #2c3e50;">🔐 Şifre Değiştir</h3>
+                            <input type="password" id="oldPassword" class="input-field" placeholder="Eski Şifre">
+                            <input type="password" id="newPasswordField" class="input-field" placeholder="Yeni Şifre">
+                            <input type="password" id="newPasswordConfirm" class="input-field" placeholder="Yeni Şifre (Tekrar)">
+                            <button class="btn" style="width: 100%; background: #f39c12;" onclick="changePassword()">Şifreyi Değiştir</button>
+                        </div>
+                    </div>
+
+                    <!-- Güvenlik Seçenekleri -->
+                    <div style="background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 30px;">
+                        <h3 style="margin-bottom: 15px; color: #2c3e50;">🔒 Güvenlik</h3>
+                        <button class="btn" style="width: 100%; background: #16a085; margin-bottom: 10px;" onclick="registerBiometric()">👆 Parmak İzi Ekle</button>
+                        <p style="font-size: 12px; color: #666; margin-top: 10px;">Parmak izinizi kaydederek daha hızlı giriş yapabilirsiniz.</p>
+                    </div>
+
+                    <!-- Tehlikeli İşlemler -->
+                    <div style="display: flex; gap: 15px;">
+                        <button class="btn" style="flex: 1; background: #3498db;" onclick="switchTab('tasks')">← Geri Dön</button>
+                        <button class="btn" style="flex: 1; background: #e74c3c;" onclick="deleteAccount()">🗑️ Hesabı Sil</button>
+                        <button class="btn" style="flex: 1; background: #e67e22;" onclick="logout()">↪️ Çıkış Yap</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DEĞİŞKENLER (Variables) ---
+        let user = JSON.parse(localStorage.getItem('user')) || { email: "test@test.com", pass: "123", name: "Kullanıcı" };
+        let currentCategory = 'anne';
+        const tasks = JSON.parse(localStorage.getItem('tasks')) || {};
+
+        // --- GİRİŞ SİSTEMİ (Authentication System) ---
+        function handleLoginOrBiometric() {
+            console.log('🔓 handleLoginOrBiometric() çağrıldı');
+            const email = document.getElementById('emailInput').value;
+            const pass = document.getElementById('passInput').value;
+            console.log('Email:', email, 'Pass:', pass ? '***' : '(boş)');
+            
+            // Parmak izi kaydı kontrol et
+            const hasBiometric = localStorage.getItem('biometricEnabled_' + email);
+            
+            if (hasBiometric && !pass) {
+                // Parmak izi kaydı varsa ve şifre boşsa -> parmak izi ile giriş yap
+                loginWithBiometric();
+            } else if (email && pass) {
+                // Şifre girildiyse -> normal giriş
+                handleLogin();
+            } else if (email && hasBiometric && !pass) {
+                // E-posta girdiyse ama şifre boş ve parmak izi varsa -> parmak izi oku
+                loginWithBiometric();
+            } else {
+                alert("E-posta ve şifreyi giriniz ya da parmak izinizi kaydettirin!");
+            }
+        }
+        
+        function handleLogin() {
+            const email = document.getElementById('emailInput').value;
+            const pass = document.getElementById('passInput').value;
+            
+            if(!email || !pass) {
+                alert("E-posta ve şifreyi giriniz!");
+                return;
+            }
+            
+            fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password: pass })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    user = data.user;
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    
+                    // Biometric şifreyi kaydet
+                    localStorage.setItem('biometricPassword_' + email, pass);
+                    
+                    document.getElementById('loginPage').style.display = 'none';
+                    document.getElementById('mainApp').style.display = 'flex';
+                    document.getElementById('userNameDisplay').innerText = "Hoş geldin, " + user.name;
+                    updateUI();
+                    renderTasks();
+                    speak("Hoş geldin " + user.name + ". Size nasıl yardımcı olabilirim?");
+                } else {
+                    alert(data.message || "Giriş başarısız!");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Bir hata oluştu!");
+            });
+        }
+
+        // GİRİŞ, KAYIT VE ŞİFRE SIFIRLAMA
+        function showRegister() { 
+            console.log('📝 showRegister() çağrıldı');
+            document.getElementById('loginForm').style.display = 'none'; 
+            document.getElementById('registerForm').style.display = 'block'; 
+        }
+        function hideRegister() { 
+            document.getElementById('loginForm').style.display = 'block'; 
+            document.getElementById('registerForm').style.display = 'none'; 
+            clearRegisterForm();
+        }
+        
+        function handleRegister() {
+            const name = document.getElementById('regName').value;
+            const email = document.getElementById('regEmail').value;
+            const pass = document.getElementById('regPass').value;
+            const passConfirm = document.getElementById('regPassConfirm').value;
+            const age = document.getElementById('regAge').value;
+            
+            if(!name || !email || !pass || !passConfirm || !age) {
+                alert("Tüm alanları doldurunuz!");
+                return;
+            }
+            if(pass !== passConfirm) {
+                alert("Şifreler eşleşmiyor!");
+                return;
+            }
+            if(pass.length < 4) {
+                alert("Şifre en az 4 karakter olmalıdır!");
+                return;
+            }
+            
+            // Sunucuya kayıt yaptır
+            fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, password: pass, age: age })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    alert("Hesap başarıyla oluşturuldu! Giriş yapabilirsiniz.");
+                    hideRegister();
+                    clearRegisterForm();
+                } else {
+                    alert(data.message || "Kayıt başarısız!");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Bir hata oluştu!");
+            });
+        }
+        
+        function clearRegisterForm() {
+            document.getElementById('regName').value = '';
+            document.getElementById('regEmail').value = '';
+            document.getElementById('regPass').value = '';
+            document.getElementById('regPassConfirm').value = '';
+            document.getElementById('regAge').value = '';
+        }
+        
+        function showForgot() { 
+            console.log('🔐 showForgot() çağrıldı');
+            document.getElementById('loginForm').style.display = 'none'; 
+            document.getElementById('forgotForm').style.display = 'block'; 
+        }
+        function hideForgot() { 
+            document.getElementById('loginForm').style.display = 'block'; 
+            document.getElementById('forgotForm').style.display = 'none'; 
+            document.getElementById('resetCodeSection').style.display = 'none';
+            document.getElementById('forgotEmail').value = '';
+            document.getElementById('resetCode').value = '';
+            document.getElementById('newPass').value = '';
+        }
+        
+        function sendResetCode() {
+            const email = document.getElementById('forgotEmail').value;
+            if(!email) {
+                alert("E-posta adresinizi giriniz!");
+                return;
+            }
+            
+            // Sunucuya şifre sıfırlama isteği yap
+            fetch('/api/forgot-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    document.getElementById('resetCodeSection').style.display = 'block';
+                    // Kodu ekranda göster
+                    const codeDisplay = document.getElementById('codeDisplay');
+                    if(codeDisplay) {
+                        codeDisplay.innerText = data.code;
+                    }
+                    alert("✓ Doğrulama kodu e-postanıza gönderildi!");
+                } else {
+                    alert(data.message || "E-posta bulunamadı!");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Bir hata oluştu!");
+            });
+        }
+        
+        function resetPassword() {
+            const code = document.getElementById('resetCode').value;
+            const newPass = document.getElementById('newPass').value;
+            const email = document.getElementById('forgotEmail').value;
+            
+            if(!code || !newPass) {
+                alert("Kodu ve yeni şifreyi giriniz!");
+                return;
+            }
+            
+            // Sunucuya şifre sıfırlama isteği yap
+            fetch('/api/reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, code, newPassword: newPass })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    alert("✓ Şifre başarıyla güncellendi!");
+                    hideForgot();
+                } else {
+                    alert(data.message || "Doğrulama başarısız!");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Bir hata oluştu!");
+            });
+        }
+
+        // --- NAVİGASYON (Navigation) ---
+        function switchTab(tab) {
+            document.querySelectorAll('.content-area').forEach(c => c.classList.remove('active'));
+            document.getElementById(tab + 'Page').classList.add('active');
+            document.getElementById('mainSidebar').style.display = (tab === 'tasks') ? 'flex' : 'none';
+            if(tab === 'profile') {
+                displayUserProfile();
+            }
+        }
+
+        function selectCat(cat) {
+            currentCategory = cat;
+            updateUI();
+            renderTasks();
+        }
+
+        // --- SESLİ ASİSTAN (Siri Style Voice Assistant) ---
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'tr-TR';
+        recognition.continuous = false;
+
+        function startVoice() {
+            // Sesli komut premium feature
+            if(!user.isPremium && user.age < 55) {
+                alert("❌ Sesli komut Premium üyeliğe aittir!\n\n💳 Premium'a yükseltmek için hesabınızı kontrol edin.");
+                return;
+            }
+            
+            recognition.start();
+            document.getElementById('voiceStatus').innerText = "🎤 Dinliyorum...";
+            speak("Dinliyorum, buyurun.");
+        }
+
+        recognition.onresult = (event) => {
+            const command = event.results[0][0].transcript.toLowerCase();
+            document.getElementById('voiceStatus').innerText = "✓ Anlaşıldı: " + command;
+            processVoice(command);
+        };
+
+        function processVoice(cmd) {
+            // Yapılacak iş ve saat sesli komutla giriş
+            if(cmd.includes("kaydet") || cmd.includes("ekle") || cmd.includes("görev")) {
+                const parts = cmd.split("saat") || cmd.split("saatte");
+                let task = cmd.replace("kaydet", "").replace("ekle", "").replace("görev", "").trim();
+                let time = "";
+                
+                if(parts.length > 1) {
+                    // Saat bilgisi varsa çıkar
+                    time = parts[1].trim().match(/\d{1,2}:\d{2}|\d{1,2}/)?.[0];
+                    task = parts[0].trim();
+                }
+                
+                if(task) {
+                    document.getElementById('taskInput').value = task;
+                    if(time) {
+                        document.getElementById('timeInput').value = time;
+                        speak("Görev ve saat hazırlandı. Kaydet butonuna basın.");
+                    } else {
+                        speak("Görevi hazırladım, lütfen saatini seçip kaydet butonuna basın.");
+                    }
+                }
+            } else if(cmd.includes("profil") || cmd.includes("hesabım")) {
+                switchTab('profile');
+                speak("Hesabım sayfası açıldı.");
+            } else if(cmd.includes("anne")) {
+                selectCat('anne');
+                speak("Anne kategorisine geçildi.");
+            } else if(cmd.includes("sporcu")) {
+                selectCat('sporcu');
+                speak("Sporcu kategorisine geçildi.");
+            } else if(cmd.includes("ev hanımı") || cmd.includes("evhanim")) {
+                selectCat('evhanim');
+                speak("Ev hanımı kategorisine geçildi.");
+            } else if(cmd.includes("yaşlı") || cmd.includes("yasli")) {
+                selectCat('yasli');
+                speak("Yaşlı hizmeti kategorisine geçildi.");
+            } else if(cmd.includes("iş")) {
+                selectCat('is');
+                speak("İş insanı kategorisine geçildi.");
+            }
+                speak("Anne kategorisine geçildi.");
+            }
+        }
+
+        function speak(text) {
+            const synth = window.speechSynthesis;
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'tr-TR';
+            synth.speak(utter);
+        }
+
+        // --- GÖREV YÖNETİMİ (Task Management) ---
+        function saveTask() {
+            const val = document.getElementById('taskInput').value;
+            const time = document.getElementById('timeInput').value;
+            if(!val || !time) return alert("Eksik bilgi!");
+            
+            if(!tasks[currentCategory]) tasks[currentCategory] = [];
+            tasks[currentCategory].push({ text: val, time: time });
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+            
+            document.getElementById('taskInput').value = "";
+            renderTasks();
+            speak("Görev başarıyla kaydedildi.");
+        }
+
+        function renderTasks() {
+            const list = document.getElementById('taskList');
+            list.innerHTML = "";
+            const currentTasks = tasks[currentCategory] || [];
+            currentTasks.forEach(t => {
+                list.innerHTML += `<div class="category-item" style="margin-bottom:5px">⏰ ${t.time} - ${t.text}</div>`;
+            });
+            updateUI();
+        }
+
+        function updateUI() {
+            // Reklam göster/gizle
+            const adBanner = document.getElementById('adBanner');
+            if(user && !user.isPremium && user.age < 55) {
+                // Premium değil ve 55 yaş altı -> reklam göster
+                adBanner.style.display = 'block';
+            } else {
+                adBanner.style.display = 'none';
+            }
+            
+            // Başlık güncelle
+            const catTitles = {
+                'anne': '👩 Anne Kategorisi',
+                'sporcu': '⚽ Sporcu Kategorisi',
+                'evhanim': '🍳 Ev Hanımı Kategorisi',
+                'yasli': '👴 Yaşlı Hizmeti Kategorisi',
+                'is': '💼 İş İnsanı Kategorisi'
+            };
+            
+            const titleElem = document.getElementById('currentCatTitle');
+            if(titleElem) {
+                titleElem.innerText = catTitles[currentCategory] || 'Kategoriler';
+            }
+        }
+
+        function logout() { 
+            localStorage.removeItem('user');
+            document.getElementById('loginPage').style.display = 'flex';
+            document.getElementById('mainApp').style.display = 'none';
+            document.getElementById('emailInput').value = '';
+            document.getElementById('passInput').value = '';
+        }
+
+        // DİL SİSTEMİ (Language System)
+        let currentLanguage = localStorage.getItem('language') || 'tr';
+        
+        const translations = {
+            tr: {
+                tasks: 'Görevler',
+                profile: 'Hesabım',
+                edit: '✏️ Profili Düzenle',
+                delete: '🗑️ Hesabı Sil',
+                logout: '↪️ Çıkış Yap',
+                changePassword: 'Şifreyi Değiştir',
+                profileInfo: 'Hesap Bilgileri',
+                firstName: 'Ad',
+                lastName: 'Soyad',
+                email: 'E-posta',
+                phone: 'Telefon',
+                oldPassword: 'Eski Şifre',
+                newPassword: 'Yeni Şifre',
+                passwordConfirm: 'Yeni Şifre (Tekrar)'
+            },
+            en: {
+                tasks: 'Tasks',
+                profile: 'Account',
+                edit: '✏️ Edit Profile',
+                delete: '🗑️ Delete Account',
+                logout: '↪️ Logout',
+                changePassword: 'Change Password',
+                profileInfo: 'Account Information',
+                firstName: 'First Name',
+                lastName: 'Last Name',
+                email: 'Email',
+                phone: 'Phone',
+                oldPassword: 'Old Password',
+                newPassword: 'New Password',
+                passwordConfirm: 'Confirm New Password'
+            }
+        };
+        
+        function changeLanguage(lang) {
+            currentLanguage = lang;
+            localStorage.setItem('language', lang);
+            updateLanguage();
+        }
+        
+        function updateLanguage() {
+            // Sayfa yenilenince dili güncelle
+            const t = translations[currentLanguage];
+            const tasksBtn = document.querySelector('button[onclick="switchTab(\'tasks\')"]');
+            const profileBtn = document.querySelector('button[onclick="switchTab(\'profile\')"]');
+            if(tasksBtn) tasksBtn.innerText = t.tasks;
+            if(profileBtn) profileBtn.innerText = t.profile;
+        }
+        
+        // --- PROFIL İŞLEMLERİ (Profile Functions) ---
+        function displayUserProfile() {
+            if(!user) return;
+            document.getElementById('profilePhoto').src = user.photoUrl || 'https://via.placeholder.com/140';
+            document.getElementById('userFullName').innerText = (user.name || '') + ' ' + (user.surname || '');
+            document.getElementById('userEmailDisplay').innerText = user.email || '-';
+            document.getElementById('userFirstName').innerText = user.name || '-';
+            document.getElementById('userLastName').innerText = user.surname || '-';
+            document.getElementById('userEmail').innerText = user.email || '-';
+            document.getElementById('userPhone').innerText = user.phone || '-';
+            document.getElementById('userAge').innerText = user.age || '-';
+            
+            const ageElem = document.getElementById('ageCategory');
+            if(user.age >= 55) {
+                ageElem.innerText = '👴 Yaşlı';
+                ageElem.style.background = '#fff3cd';
+                ageElem.style.color = '#856404';
+                ageElem.style.padding = '2px 6px';
+                ageElem.style.borderRadius = '4px';
+            } else {
+                ageElem.innerText = '';
+            }
+            
+            const statusElem = document.getElementById('premiumStatus');
+            if(user.isPremium) {
+                statusElem.innerText = '⭐ Premium Üyesi';
+                statusElem.style.color = '#ffd700';
+            } else {
+                statusElem.innerText = '✓ Ücretsiz Üyesi';
+                statusElem.style.color = '#3498db';
+            }
+        }
+        
+        function toggleEditProfile() {
+            const section = document.getElementById('editProfileSection');
+            if(section.style.display === 'none') {
+                section.style.display = 'block';
+                document.getElementById('editFirstName').value = user.name || '';
+                document.getElementById('editLastName').value = user.surname || '';
+                document.getElementById('editPhone').value = user.phone || '';
+                document.getElementById('editAge').value = user.age || '';
+                document.getElementById('editPhotoUrl').value = user.photoUrl || '';
+            } else {
+                section.style.display = 'none';
+            }
+        }
+        
+        function cancelEditProfile() {
+            document.getElementById('editProfileSection').style.display = 'none';
+        }
+        
+        function saveProfileChanges() {
+            const name = document.getElementById('editFirstName').value;
+            const surname = document.getElementById('editLastName').value;
+            const phone = document.getElementById('editPhone').value;
+            const age = document.getElementById('editAge').value;
+            const photoUrl = document.getElementById('editPhotoUrl').value;
+            
+            if(!name || !surname || !age) {
+                alert("Ad, soyad ve yaş zorunludur!");
+                return;
+            }
+            
+            fetch('/api/update-profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    email: user.email, 
+                    name, 
+                    surname, 
+                    phone: phone || '-',
+                    photoUrl: photoUrl || 'https://via.placeholder.com/150'
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    user = data.user;
+                    localStorage.setItem('user', JSON.stringify(user));
+                    displayUserProfile();
+                    cancelEditProfile();
+                    alert("✓ Profil başarıyla güncellendi!");
+                } else {
+                    alert(data.message || "Güncelleme başarısız!");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Bir hata oluştu!");
+            });
+        }
+        
+        function changePassword() {
+            const oldPass = document.getElementById('oldPassword').value;
+            const newPass = document.getElementById('newPasswordField').value;
+            const confirmPass = document.getElementById('newPasswordConfirm').value;
+            
+            if(!oldPass || !newPass || !confirmPass) {
+                alert("Tüm alanları doldurunuz!");
+                return;
+            }
+            
+            if(newPass !== confirmPass) {
+                alert("Yeni şifreler eşleşmiyor!");
+                return;
+            }
+            
+            if(newPass.length < 3) {
+                alert("Şifre en az 3 karakter olmalıdır!");
+                return;
+            }
+            
+            fetch('/api/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    email: user.email,
+                    oldPassword: oldPass,
+                    newPassword: newPass
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    document.getElementById('oldPassword').value = '';
+                    document.getElementById('newPasswordField').value = '';
+                    document.getElementById('newPasswordConfirm').value = '';
+                    alert("✓ Şifre başarıyla değiştirildi!");
+                } else {
+                    alert(data.message || "Şifre değişimi başarısız!");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Bir hata oluştu!");
+            });
+        }
+        
+        function changeProfilePhoto() {
+            const url = prompt("Profil resmi URL'sini girin:");
+            if(url) {
+                document.getElementById('editPhotoUrl').value = url;
+                document.getElementById('profilePhoto').src = url;
+            }
+        }
+        
+        function deleteAccount() {
+            if(!confirm("⚠️ UYARI: Hesabınız ve tüm verileriniz kalıcı olarak silinecektir. Devam etmek istediğinizden emin misiniz?")) {
+                return;
+            }
+            
+            const password = prompt("Hesabınızı silmek için şifrenizi girin:");
+            if(!password) return;
+            
+            fetch('/api/delete-account', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    email: user.email,
+                    password: password
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    alert("✓ Hesabınız başarıyla silinmiştir.");
+                    localStorage.clear();
+                    location.reload();
+                } else {
+                    alert(data.message || "Hesap silme başarısız!");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Bir hata oluştu!");
+            });
+        }
+
+        // --- BİYOMETRİK GİRİŞ (Biometric Login) ---
+        function registerBiometric() {
+            if (window.PublicKeyCredential === undefined) {
+                alert("Bu cihaz parmak izi desteği sunmuyor.");
+                return;
+            }
+            
+            // Şifreyi sor ve kaydet
+            const password = prompt("Parmak izi ile giriş yapabilmek için şifrenizi doğrulayın:");
+            if (!password) return;
+            
+            // Basit doğrulama (gerçek uygulamada backend'e gönderilmelidir)
+            fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: user.email, password: password })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    localStorage.setItem('biometricEnabled_' + user.email, 'true');
+                    localStorage.setItem('biometricPassword_' + user.email, password);
+                    alert("✓ Parmak iziniz başarıyla kaydedildi!");
+                } else {
+                    alert("Şifre hatalı!");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Bir hata oluştu!");
+            });
+        }
+        
+        function loginWithBiometric() {
+            const email = document.getElementById('emailInput').value;
+            
+            if (!email) {
+                alert("Lütfen e-posta adresinizi giriniz!");
+                return;
+            }
+            
+            // Parmak izi kaydı kontrol et
+            if (!localStorage.getItem('biometricEnabled_' + email)) {
+                alert("Bu e-posta adresinde parmak izi kaydı bulunmamaktadır.");
+                return;
+            }
+            
+            // Simülasyon - gerçek WebAuthn uygulaması daha karmaşıktır
+            alert("👆 Parmak iziniz taranıyor...");
+            
+            const password = localStorage.getItem('biometricPassword_' + email);
+            
+            if (!password) {
+                alert("Parmak izi kaydı bulunamadı!");
+                return;
+            }
+            
+            // Otomatik giriş yap
+            document.getElementById('passInput').value = password;
+            
+            // Biraz sonra giriş işlemi başlat
+            setTimeout(() => {
+                fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password: password })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if(data.success) {
+                        user = data.user;
+                        localStorage.setItem('user', JSON.stringify(data.user));
+                        
+                        document.getElementById('loginPage').style.display = 'none';
+                        document.getElementById('mainApp').style.display = 'flex';
+                        document.getElementById('userNameDisplay').innerText = "Hoş geldin, " + user.name;
+                        updateUI();
+                        renderTasks();
+                        document.getElementById('emailInput').value = '';
+                        document.getElementById('passInput').value = '';
+                        speak("Parmak izi ile hoş geldin " + user.name);
+                    } else {
+                        alert(data.message || "Giriş başarısız!");
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Bir hata oluştu!");
+                });
+            }, 1500);
+        }
+        
+        // Sözlük (Technical Glossary):
+        // 4. Validation (Doğrulama): Girilen verinin (kodun) doğruluğunu kontrol etme.
+
+    </script>
+</body>
+</html>

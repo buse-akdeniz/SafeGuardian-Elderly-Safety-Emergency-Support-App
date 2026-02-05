@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yaşlı Kaydı - Basit ve Güvenli</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+            animation: slideUp 0.5s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            font-size: 48px;
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 10px;
+            margin-top: 20px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+
+        .form-section {
+            margin-bottom: 30px;
+        }
+
+        .form-section h2 {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        label {
+            display: block;
+            font-size: 18px;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 10px;
+            margin-top: 20px;
+        }
+
+        label span {
+            color: #d32f2f;
+            font-size: 20px;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            transition: border-color 0.3s ease;
+            font-family: inherit;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .info-box {
+            background: #f0f4ff;
+            border-left: 5px solid #667eea;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .plan-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .plan-card {
+            border: 3px solid #ddd;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .plan-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .plan-card.selected {
+            border-color: #667eea;
+            background: #f0f4ff;
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.2);
+        }
+
+        .plan-price {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+
+        .plan-features {
+            font-size: 14px;
+            color: #666;
+            text-align: left;
+            margin-top: 10px;
+        }
+
+        .plan-features li {
+            margin: 5px 0;
+            padding-left: 20px;
+        }
+
+        .plan-features li:before {
+            content: "✅ ";
+            color: #4caf50;
+            font-weight: bold;
+        }
+
+        button {
+            width: 100%;
+            padding: 18px;
+            font-size: 20px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 30px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .button-secondary {
+            background: #f5f5f5;
+            color: #333;
+            margin-top: 15px;
+        }
+
+        .button-secondary:hover {
+            background: #e8e8e8;
+        }
+
+        .help-text {
+            font-size: 14px;
+            color: #999;
+            margin-top: 8px;
+        }
+
+        .emergency-notice {
+            background: #fff3cd;
+            border-left: 5px solid #ff9800;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .emergency-notice strong {
+            color: #ff6f00;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 36px;
+            }
+
+            .plan-selector {
+                grid-template-columns: 1fr;
+            }
+
+            label {
+                font-size: 16px;
+            }
+
+            input, select, textarea {
+                font-size: 16px;
+                padding: 12px;
+            }
+        }
+
+        .success-icon {
+            text-align: center;
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="success-icon" id="successIcon" style="display: none;">✅</div>
+    
+    <div id="formContent">
+        <h1>👵👴 Kaydı Başla</h1>
+        <p class="subtitle">Basit ve güvenli - 5 dakika sürüyor</p>
+
+        <div class="emergency-notice">
+            <strong>🚨 Acil Durum?</strong><br>
+            Kaydınızı tamamlamak yerine hemen yardım almak için <strong>112</strong>'yi arayın!
+        </div>
+
+        <form id="signupForm">
+            <!-- KİŞİSEL BİLGİLER -->
+            <div class="form-section">
+                <h2>👤 Kişisel Bilgiler</h2>
+
+                <label>Adınız <span>*</span></label>
+                <input type="text" id="fullName" placeholder="Örn: Ayşe Yıldız" required>
+                <div class="help-text">Tam adınızı yazın</div>
+
+                <label>Doğum Tarihi <span>*</span></label>
+                <input type="date" id="birthDate" required>
+                <div class="help-text">Yaşınızı doğru hesaplamak için</div>
+
+                <label>Telefon Numarası <span>*</span></label>
+                <input type="tel" id="phone" placeholder="Örn: 05551234567" required>
+                <div class="help-text">Acil durumlarda bu numarayı kullanacağız</div>
+
+                <label>E-posta (Opsiyonel)</label>
+                <input type="email" id="email" placeholder="Örn: ayse@gmail.com">
+                <div class="help-text">Raporlar ve güncellemeler için</div>
+            </div>
+
+            <!-- SAĞLIK BİLGİLERİ -->
+            <div class="form-section">
+                <h2>🏥 Temel Sağlık Bilgileri</h2>
+
+                <label>Kan Grubu</label>
+                <select id="bloodType">
+                    <option value="">-- Seçin --</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                </select>
+                <div class="help-text">Acil durumlarda önemli</div>
+
+                <label>Kronik Hastalıklar (varsa)</label>
+                <textarea id="medicalConditions" placeholder="Örn: Şeker hastalığı, Yüksek tansiyon..."></textarea>
+                <div class="help-text">Aldığınız ilaçlarla ilgili hastalıkları yazın</div>
+
+                <label>Alerjiler (varsa)</label>
+                <textarea id="allergies" placeholder="Örn: Penisilin, Yumurta..."></textarea>
+                <div class="help-text">İlaç veya gıda alerjileriniz</div>
+
+                <label>Doktor / Hastane Telefonu (Opsiyonel)</label>
+                <input type="tel" id="doctorPhone" placeholder="Örn: 02121234567">
+                <div class="help-text">Düzenli gördüğünüz doktor</div>
+            </div>
+
+            <!-- ACİL İRTİBATLAR -->
+            <div class="form-section">
+                <h2>📞 Acil İrtibat Kişileri</h2>
+
+                <label>Aile Üyesi 1 Adı <span>*</span></label>
+                <input type="text" id="emergencyContact1Name" placeholder="Örn: Ahmet Yıldız" required>
+
+                <label>Aile Üyesi 1 Telefonu <span>*</span></label>
+                <input type="tel" id="emergencyContact1Phone" placeholder="Örn: 05559876543" required>
+
+                <label>Aile Üyesi 2 Adı (Opsiyonel)</label>
+                <input type="text" id="emergencyContact2Name" placeholder="Örn: Fatma Yıldız">
+
+                <label>Aile Üyesi 2 Telefonu (Opsiyonel)</label>
+                <input type="tel" id="emergencyContact2Phone" placeholder="Örn: 05558765432">
+
+                <div class="info-box">
+                    💡 <strong>İpucu:</strong> Düşme algılama veya sağlık uyarısında bu kişilere anında bildirim gönderilecektir.
+                </div>
+            </div>
+
+            <!-- PLAN SEÇİMİ -->
+            <div class="form-section">
+                <h2>💳 Abonelik Planı Seçin</h2>
+
+                <div class="plan-selector">
+                    <div class="plan-card" id="planStandard" onclick="selectPlan('standard')">
+                        <div style="font-size: 24px;">📱</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #333;">STANDART</div>
+                        <div class="plan-price">ÜCRETSİZ</div>
+                        <ul class="plan-features">
+                            <li>İlaç hatırlatması</li>
+                            <li>Temel sağlık takibi</li>
+                            <li>Aile paneli</li>
+                        </ul>
+                    </div>
+
+                    <div class="plan-card" id="planPremium" onclick="selectPlan('premium')">
+                        <div style="font-size: 24px;">⭐</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #667eea;">PREMIUM</div>
+                        <div class="plan-price">₺9.99<span style="font-size: 16px;">/ay</span></div>
+                        <ul class="plan-features">
+                            <li>Düşme algılama</li>
+                            <li>AI sesli kontrol</li>
+                            <li>Gerçek zamanlı uyarı</li>
+                            <li>Canlı konum takibi</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <input type="hidden" id="selectedPlan" value="standard" required>
+            </div>
+
+            <!-- ONAY -->
+            <div class="form-section">
+                <label style="display: flex; align-items: center; margin-top: 20px;">
+                    <input type="checkbox" id="agreeTerms" required style="width: 24px; height: 24px; margin-right: 10px;">
+                    <span style="font-size: 16px;">Şartları ve gizlilik politikasını kabul ediyorum</span>
+                </label>
+            </div>
+
+            <button type="submit" id="submitBtn">📝 Kaydımı Tamamla</button>
+            <button type="button" class="button-secondary" onclick="window.history.back()">← Geri Dön</button>
+        </form>
+    </div>
+
+    <div class="loading" id="loadingContent">
+        <div class="spinner"></div>
+        <p style="margin-top: 20px; font-size: 18px; color: #667eea;">Kaydınız hazırlanıyor...</p>
+    </div>
+
+    <div id="successContent" style="display: none; text-align: center;">
+        <div class="success-icon">✅</div>
+        <h1 style="margin-bottom: 20px;">Hoşgeldiniz! 🎉</h1>
+        <p style="font-size: 18px; color: #666; margin-bottom: 20px;">
+            Kaydınız başarıyla tamamlandı. Sistem artık sizi takip etmeye hazır.
+        </p>
+        <div class="info-box" style="text-align: left;">
+            <strong>Cihaz Kimlik Numarası (Device ID):</strong><br>
+            <code id="deviceId" style="background: #f0f0f0; padding: 10px; border-radius: 5px; display: block; margin-top: 10px; font-family: monospace; word-break: break-all;"></code>
+            <div style="margin-top: 15px; color: #666; font-size: 14px;">
+                ℹ️ Bu numara otomatik olarak kaydedilmiştir. Şifresi olmayan güvenli giriş sağlar.
+            </div>
+        </div>
+        <button onclick="goToApp()" style="margin-top: 20px;">▶️ Uygulamaya Git</button>
+    </div>
+</div>
+
+<script>
+    const form = document.getElementById('signupForm');
+    const planStandard = document.getElementById('planStandard');
+    const planPremium = document.getElementById('planPremium');
+    const selectedPlanInput = document.getElementById('selectedPlan');
+
+    // Plan seçimi
+    function selectPlan(plan) {
+        selectedPlanInput.value = plan;
+        
+        if (plan === 'standard') {
+            planStandard.classList.add('selected');
+            planPremium.classList.remove('selected');
+        } else {
+            planPremium.classList.add('selected');
+            planStandard.classList.remove('selected');
+        }
+    }
+
+    // Form gönderme
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        // Form validasyonu
+        const fullName = document.getElementById('fullName').value.trim();
+        const phone = document.getElementById('phone').value.trim();
+        const birthDate = document.getElementById('birthDate').value;
+        const emergencyContact1Name = document.getElementById('emergencyContact1Name').value.trim();
+        const emergencyContact1Phone = document.getElementById('emergencyContact1Phone').value.trim();
+
+        if (!fullName || !phone || !birthDate || !emergencyContact1Name || !emergencyContact1Phone) {
+            alert('❌ Lütfen tüm zorunlu alanları doldurun (*)');
+            return;
+        }
+
+        // Telefon formatı kontrolü
+        const phoneRegex = /^(\+90|0)?[1-9]\d{9}$/;
+        if (!phoneRegex.test(phone.replace(/\s/g, ''))) {
+            alert('❌ Lütfen geçerli bir telefon numarası giriniz');
+            return;
+        }
+
+        // UUID oluştur (otomatik giriş için)
+        const deviceId = 'UUID-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+
+        // Kaydı hazırla
+        const userData = {
+            deviceId: deviceId,
+            fullName: fullName,
+            phone: phone,
+            email: document.getElementById('email').value.trim() || '',
+            birthDate: birthDate,
+            bloodType: document.getElementById('bloodType').value || '',
+            medicalConditions: document.getElementById('medicalConditions').value || '',
+            allergies: document.getElementById('allergies').value || '',
+            doctorPhone: document.getElementById('doctorPhone').value || '',
+            plan: selectedPlanInput.value
+        };
+
+        // UI güncelle
+        document.getElementById('formContent').style.display = 'none';
+        document.getElementById('loadingContent').style.display = 'block';
+
+        try {
+            // Backend API'ye gönder
+            const response = await fetch('/api/elderly-self-enroll', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(userData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Başarılı kayıt
+                setTimeout(() => {
+                    document.getElementById('loadingContent').style.display = 'none';
+                    document.getElementById('successContent').style.display = 'block';
+                    document.getElementById('deviceId').textContent = result.deviceId;
+                    
+                    // Otomatik giriş
+                    localStorage.setItem(`elderly_${result.deviceId}`, JSON.stringify(result.user));
+                    localStorage.setItem('lastDeviceId', result.deviceId);
+                    sessionStorage.setItem('auto_login_device', result.deviceId);
+                }, 1000);
+            } else {
+                // Hata mesajı
+                document.getElementById('loadingContent').style.display = 'none';
+                document.getElementById('formContent').style.display = 'block';
+                alert('❌ Kaydolma başarısız: ' + (result.message || 'Bilinmeyen hata'));
+            }
+        } catch (error) {
+            document.getElementById('loadingContent').style.display = 'none';
+            document.getElementById('formContent').style.display = 'block';
+            alert('❌ Ağ hatası: ' + error.message);
+        }
+    });
+
+    // Uygulamaya git
+    function goToApp() {
+        window.location.href = '/index.html';
+    }
+
+    // Sayfa yüklendiğinde standart plan seçili gelsin
+    window.addEventListener('load', () => {
+        selectPlan('standard');
+    });
+</script>
+
+</body>
+</html>

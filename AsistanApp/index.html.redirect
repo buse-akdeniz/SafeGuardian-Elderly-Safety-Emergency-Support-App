@@ -1,0 +1,10 @@
+<!-- Redirect elderly users to the new UI -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="refresh" content="0;url=/index-elderly-ui.html">
+</head>
+<body>
+    Yeni arayüze yönlendiriliyorsunuz...
+</body>
+</html>
