@@ -73,6 +73,24 @@
 
 ---
 
+## ⚙️ Scalability
+
+### ⚙️ **Configurable Resilience**
+- ✅ **Environment-Aware Limiting** - Dynamic rate limits per deployment stage (**Dev / Staging / Prod**)
+- ✅ **Zero-Downtime Tuning** - Security thresholds are adjustable via configuration (no code changes, no redeploy required for threshold updates)
+- ✅ **Config Sources** - `appsettings.Development.json`, `appsettings.Staging.json`, `appsettings.Production.json`
+
+### 🍎 **Store-Critical: Sign in with Apple**
+- ✅ **Mandatory Compliance Path** - Apple Sign In flow is active for App Store approval requirements
+- ✅ **Endpoint in Production Flow** - `POST /api/auth/apple-signin`
+
+### 📡 **Offline Sync Engine (sw.js)**
+- ✅ **Offline Capture** - Vital data/tasks are cached locally when internet is unavailable
+- ✅ **Auto Flush on Reconnect** - Background Sync pushes queued data to server after connectivity returns
+- ✅ **Smart Retry Logic** - Retry counters and failure metadata prevent silent data loss
+
+---
+
 ## 📊 Project Status
 
 ```
