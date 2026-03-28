@@ -559,6 +559,72 @@ function showNotification(title, message, type = 'success') {
     }, 3000);
 }
 
+function showGracefulOfflineState(message, type = 'offline') {
+    const existing = document.getElementById('gracefulOfflineState');
+    if (existing) existing.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'gracefulOfflineState';
+    const isSuccess = type === 'success';
+    banner.style.cssText = `
+        position: fixed;
+        left: 50%;
+        top: 22px;
+        transform: translateX(-50%);
+        z-index: 10001;
+        width: min(92vw, 920px);
+        background: ${isSuccess ? '#2e7d32' : '#ffeb3b'};
+        color: ${isSuccess ? '#ffffff' : '#222222'};
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+        padding: 18px 22px;
+        font-size: 30px;
+        line-height: 1.35;
+        font-weight: 800;
+        text-align: center;
+    `;
+    banner.textContent = message;
+    document.body.appendChild(banner);
+
+    if (navigator.vibrate) {
+        try { navigator.vibrate(isSuccess ? [50, 40, 50] : [120, 80, 120]); } catch {}
+    }
+
+    setTimeout(() => {
+        if (banner && banner.parentNode) banner.remove();
+    }, isSuccess ? 5000 : 8000);
+}
+
+function initOfflineResilienceBridge() {
+    if (!('serviceWorker' in navigator)) return;
+
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+        console.warn('Service Worker kaydı başarısız:', err);
+    });
+
+    navigator.serviceWorker.addEventListener('message', (event) => {
+        const data = event.data || {};
+        if (data.type === 'OFFLINE_DATA_QUEUED') {
+            const msg = data.message || 'İnternet yok ama merak etme, verini kaydettim. İnternet gelince otomatik göndereceğim.';
+            showGracefulOfflineState(msg, 'offline');
+            speak(msg);
+        }
+        if (data.type === 'OFFLINE_SYNC_COMPLETED') {
+            const msg = data.message || 'Çevrimdışı kaydedilen veriler başarıyla sunucuya gönderildi.';
+            showGracefulOfflineState(`✅ ${msg}`, 'success');
+            speak(msg);
+        }
+    });
+
+    window.addEventListener('offline', () => {
+        showGracefulOfflineState('📡 İnternet yok. Merak etme, ölçümlerini cihazda güvenle saklıyorum.', 'offline');
+    });
+
+    window.addEventListener('online', () => {
+        showGracefulOfflineState('✅ İnternet geri geldi. Kayıtlı verileri arka planda sunucuya gönderiyorum.', 'success');
+    });
+}
+
 function provideFeedback(message, pattern = [30]) {
     if (navigator.vibrate) {
         try {
@@ -575,6 +641,8 @@ function provideFeedback(message, pattern = [30]) {
 // =================== FORM IŞLEYENLER ===================
 
 document.addEventListener('DOMContentLoaded', async function () {
+    initOfflineResilienceBridge();
+
     const a11yMenuBtn = document.getElementById('a11yMenuBtn');
     const a11yMenu = document.getElementById('a11yMenu');
     if (a11yMenuBtn && a11yMenu) {
@@ -1732,7 +1800,15 @@ async function addHealthRecord(recordType, value, unit) {
         if (!response) return;
 
         if (response.ok) {
-            const result = await response.json();
+            const result = await safeReadJson(response, {});
+
+            if (result?.queued === true || response.status === 202) {
+                const queuedMessage = 'İnternet yok ama merak etme, verini kaydettim. İnternet gelince doktora ve aileye göndereceğim.';
+                showGracefulOfflineState(`📌 ${queuedMessage}`, 'offline');
+                speak(queuedMessage);
+                return;
+            }
+
             speak(`Sağlık kaydı başarıyla eklendi. ${recordType}: ${value} ${unit}`);
             loadHealthRecords();
 

@@ -81,13 +81,18 @@
 - ✅ **Config Sources** - `appsettings.Development.json`, `appsettings.Staging.json`, `appsettings.Production.json`
 
 ### 🍎 **Store-Critical: Sign in with Apple**
-- ✅ **Mandatory Compliance Path** - Apple Sign In flow is active for App Store approval requirements
+- ✅ **Mandatory for Review** - If the app provides its own account system, Apple review expects Sign in with Apple support; missing this can block approval
+- ✅ **Compliance + Trust** - Delivers App Store acceptance confidence and privacy-first user trust
 - ✅ **Endpoint in Production Flow** - `POST /api/auth/apple-signin`
 
 ### 📡 **Offline Sync Engine (sw.js)**
-- ✅ **Offline Capture** - Vital data/tasks are cached locally when internet is unavailable
-- ✅ **Auto Flush on Reconnect** - Background Sync pushes queued data to server after connectivity returns
-- ✅ **Smart Retry Logic** - Retry counters and failure metadata prevent silent data loss
+- ✅ **Offline-First Behavior** - If an elderly user records blood pressure without connectivity, the app continues without error
+- ✅ **Local Persistence** - Measurements are stored locally (device cache/IndexedDB) until network returns
+- ✅ **Auto Flush on Reconnect** - Background Sync pushes queued records to backend and keeps SQLite data layer in sync
+- ✅ **Resilience Gain** - Prevents data loss during weak/no-network conditions and preserves continuity of care
+- ✅ **Client-side Persistence** - `sw.js` stores offline blood pressure/glucose submissions in IndexedDB (`healthData`, `pendingSync`)
+- ✅ **Data Reconciliation** - Background Sync reconciles queued measurements with backend APIs when connectivity returns
+- ✅ **Graceful UI State** - Elderly users see clear large-text reassurance: “İnternet yok ama verin kaydedildi, bağlantı gelince gönderilecek.”
 
 ---
 

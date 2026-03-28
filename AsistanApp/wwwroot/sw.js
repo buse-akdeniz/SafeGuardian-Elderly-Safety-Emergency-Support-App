@@ -23,6 +23,12 @@ const STORES = {
     PENDING_SYNC: 'pendingSync'
 };
 
+const OFFLINE_QUEUE_ENDPOINTS = [
+    '/api/health-data',
+    '/api/health-records',
+    '/api/complete-task'
+];
+
 // Initialize IndexedDB
 function initDB() {
     return new Promise((resolve, reject) => {
@@ -55,6 +61,50 @@ function initDB() {
             }
         };
     });
+}
+
+async function notifyClients(type, payload = {}) {
+    const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+    for (const client of clients) {
+        client.postMessage({ type, ...payload });
+    }
+}
+
+async function queuePendingSync(entry) {
+    const db = await initDB();
+    const tx = db.transaction([STORES.PENDING_SYNC], 'readwrite');
+    const store = tx.objectStore(STORES.PENDING_SYNC);
+    const id = await new Promise((resolve, reject) => {
+        const req = store.add(entry);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+    return id;
+}
+
+async function saveLocalHealthSnapshot(payload) {
+    const db = await initDB();
+    const tx = db.transaction([STORES.HEALTH_DATA], 'readwrite');
+    const store = tx.objectStore(STORES.HEALTH_DATA);
+    return new Promise((resolve, reject) => {
+        const req = store.add({
+            ...payload,
+            savedOffline: true,
+            timestamp: payload.timestamp || new Date().toISOString()
+        });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function scheduleSync(tag) {
+    if (self.registration && self.registration.sync) {
+        try {
+            await self.registration.sync.register(tag);
+        } catch (err) {
+            console.warn('Sync registration failed:', err);
+        }
+    }
 }
 
 // Offline fallback HTML sayfası
@@ -183,8 +233,64 @@ self.addEventListener('fetch', event => {
     const { request } = event;
     const url = new URL(request.url);
 
-    // Don't cache API calls
+    // API calls: try network, queue supported writes when offline
     if (url.pathname.startsWith('/api/')) {
+        const isQueueablePost = request.method === 'POST' && OFFLINE_QUEUE_ENDPOINTS.includes(url.pathname);
+
+        if (isQueueablePost) {
+            event.respondWith((async () => {
+                const requestClone = request.clone();
+                try {
+                    return await fetch(request);
+                } catch {
+                    let payload = {};
+                    try {
+                        payload = await requestClone.json();
+                    } catch {
+                        payload = {};
+                    }
+
+                    const authHeader = requestClone.headers.get('Authorization');
+                    const queuedId = await queuePendingSync({
+                        endpoint: url.pathname,
+                        payload,
+                        authHeader,
+                        queuedAt: new Date().toISOString(),
+                        retryCount: 0
+                    });
+
+                    if (url.pathname === '/api/health-data' || url.pathname === '/api/health-records') {
+                        await saveLocalHealthSnapshot(payload);
+                        await scheduleSync('sync-health-data');
+                    }
+                    if (url.pathname === '/api/complete-task') {
+                        await scheduleSync('sync-tasks');
+                    }
+
+                    await notifyClients('OFFLINE_DATA_QUEUED', {
+                        endpoint: url.pathname,
+                        queuedId,
+                        message: 'İnternet yok ama merak etme, verin kaydedildi. Bağlantı gelince otomatik gönderilecek.'
+                    });
+
+                    return new Response(JSON.stringify({
+                        success: true,
+                        queued: true,
+                        offline: true,
+                        queuedId,
+                        message: 'Offline kaydedildi. İnternet geldiğinde otomatik senkronize edilecek.'
+                    }), {
+                        status: 202,
+                        statusText: 'Accepted (Queued Offline)',
+                        headers: new Headers({
+                            'Content-Type': 'application/json'
+                        })
+                    });
+                }
+            })());
+            return;
+        }
+
         event.respondWith(
             fetch(request)
                 .then(response => response)
@@ -326,17 +432,24 @@ async function syncHealthData() {
     const tx = db.transaction([STORES.PENDING_SYNC], 'readonly');
     const store = tx.objectStore(STORES.PENDING_SYNC);
     const records = await new Promise((resolve, reject) => {
-        store.getAll().onsuccess = (e) => resolve(e.target.result);
+        store.getAll().onsuccess = (e) => {
+            const all = e.target.result || [];
+            resolve(all.filter(r => r.endpoint === '/api/health-data' || r.endpoint === '/api/health-records'));
+        };
     });
 
     const maxRetries = 3;
+    let syncedCount = 0;
     for (const record of records) {
         let retryCount = record.retryCount || 0;
         
         try {
-            const response = await fetch('/api/health-data', {
+            const response = await fetch(record.endpoint || '/api/health-data', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(record.authHeader ? { 'Authorization': record.authHeader } : {})
+                },
                 body: JSON.stringify(record.payload),
                 timeout: 10000
             });
@@ -345,6 +458,7 @@ async function syncHealthData() {
                 // Success - delete from pending
                 const deleteTx = db.transaction([STORES.PENDING_SYNC], 'readwrite');
                 deleteTx.objectStore(STORES.PENDING_SYNC).delete(record.id);
+                syncedCount += 1;
                 console.log('✓ Health data synced:', record.id);
             } else if (response.status >= 500 && retryCount < maxRetries) {
                 // Server error - retry with exponential backoff
@@ -366,6 +480,14 @@ async function syncHealthData() {
             console.log(`Sync attempt ${retryCount + 1}/${maxRetries} failed:`, err.message);
         }
     }
+
+    if (syncedCount > 0) {
+        await notifyClients('OFFLINE_SYNC_COMPLETED', {
+            kind: 'health',
+            count: syncedCount,
+            message: `${syncedCount} sağlık verisi internet gelince başarıyla gönderildi.`
+        });
+    }
 }
 
 async function syncTasks() {
@@ -377,6 +499,7 @@ async function syncTasks() {
     });
 
     const maxRetries = 3;
+    let syncedCount = 0;
     for (const task of tasks) {
         if (!task.synced) {
             let retryCount = task.retryCount || 0;
@@ -395,6 +518,7 @@ async function syncTasks() {
                     task.synced = true;
                     task.syncedAt = new Date().toISOString();
                     updateTx.objectStore(STORES.TASKS).put(task);
+                    syncedCount += 1;
                     console.log('✓ Task synced:', task.taskId);
                 } else if (response.status >= 500 && retryCount < maxRetries) {
                     // Server error - retry
@@ -416,6 +540,57 @@ async function syncTasks() {
                 console.log(`Task sync attempt ${retryCount + 1}/${maxRetries} failed:`, err.message);
             }
         }
+    }
+
+    // Also reconcile queued complete-task writes stored in pendingSync
+    const pendingTx = db.transaction([STORES.PENDING_SYNC], 'readonly');
+    const pendingStore = pendingTx.objectStore(STORES.PENDING_SYNC);
+    const pendingTaskRecords = await new Promise((resolve, reject) => {
+        pendingStore.getAll().onsuccess = (e) => {
+            const all = e.target.result || [];
+            resolve(all.filter(r => r.endpoint === '/api/complete-task'));
+        };
+    });
+
+    for (const record of pendingTaskRecords) {
+        let retryCount = record.retryCount || 0;
+        try {
+            const response = await fetch('/api/complete-task', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(record.authHeader ? { 'Authorization': record.authHeader } : {})
+                },
+                body: JSON.stringify(record.payload)
+            });
+
+            if (response.ok) {
+                const deleteTx = db.transaction([STORES.PENDING_SYNC], 'readwrite');
+                deleteTx.objectStore(STORES.PENDING_SYNC).delete(record.id);
+                syncedCount += 1;
+            } else if (response.status >= 500 && retryCount < maxRetries) {
+                record.retryCount = retryCount + 1;
+                record.lastRetry = new Date().toISOString();
+                const updateTx = db.transaction([STORES.PENDING_SYNC], 'readwrite');
+                updateTx.objectStore(STORES.PENDING_SYNC).put(record);
+            }
+        } catch (err) {
+            if (retryCount < maxRetries) {
+                record.retryCount = retryCount + 1;
+                record.lastRetry = new Date().toISOString();
+                record.lastError = err.message;
+                const updateTx = db.transaction([STORES.PENDING_SYNC], 'readwrite');
+                updateTx.objectStore(STORES.PENDING_SYNC).put(record);
+            }
+        }
+    }
+
+    if (syncedCount > 0) {
+        await notifyClients('OFFLINE_SYNC_COMPLETED', {
+            kind: 'task',
+            count: syncedCount,
+            message: `${syncedCount} çevrimdışı kayıt sunucu ile eşitlendi.`
+        });
     }
 }
 
