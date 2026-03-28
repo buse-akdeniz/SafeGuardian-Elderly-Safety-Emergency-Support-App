@@ -1,0 +1,28 @@
+.env
+
+# Node
+node_modules/
+dist/
+npm-debug.log*
+
+# .NET build artifacts
+**/bin/
+**/obj/
+*.user
+*.suo
+*.cache
+
+# VS Code / IDE
+.vscode/*.log
+.idea/
+
+# macOS
+.DS_Store
+
+# iOS generated / dependency files
+AsistanApp/ios/App/Pods/
+AsistanApp/ios/DerivedData/
+
+# Runtime logs
+*.log
+/tmp/
