@@ -78,6 +78,56 @@ CREATE TABLE IF NOT EXISTS ElderlyUsers (
     db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_ElderlyUsers_Email ON ElderlyUsers (Email);");
 }
 
+// Rate Limiting Middleware
+var rateLimitStore = new Dictionary<string, List<long>>();
+var rateLimitLock = new object();
+app.Use(async (ctx, next) =>
+{
+    string clientIp = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    int maxRequests = 100; // 100 requests per minute per IP
+    long windowMs = 60000; // 1 minute window
+    bool limitExceeded = false;
+    int remaining = 0;
+    
+    lock (rateLimitLock)
+    {
+        if (!rateLimitStore.ContainsKey(clientIp))
+            rateLimitStore[clientIp] = new List<long>();
+        
+        // Remove old requests outside the window
+        rateLimitStore[clientIp].RemoveAll(t => t < now - windowMs);
+        
+        // Check if limit exceeded
+        if (rateLimitStore[clientIp].Count >= maxRequests)
+        {
+            limitExceeded = true;
+            remaining = 0;
+        }
+        else
+        {
+            remaining = maxRequests - rateLimitStore[clientIp].Count;
+            rateLimitStore[clientIp].Add(now);
+        }
+    }
+    
+    if (limitExceeded)
+    {
+        ctx.Response.StatusCode = 429; // Too Many Requests
+        ctx.Response.Headers.Append("Retry-After", "60");
+        ctx.Response.Headers.Append("X-RateLimit-Limit", maxRequests.ToString());
+        ctx.Response.Headers.Append("X-RateLimit-Remaining", "0");
+        ctx.Response.ContentType = "application/json";
+        await ctx.Response.WriteAsJsonAsync(new { error = "Rate limit exceeded. Max 100 requests per minute." });
+        return;
+    }
+    
+    ctx.Response.Headers.Append("X-RateLimit-Limit", maxRequests.ToString());
+    ctx.Response.Headers.Append("X-RateLimit-Remaining", remaining.ToString());
+    
+    await next();
+});
+
 app.UseRouting();
 if (!app.Environment.IsDevelopment())
 {

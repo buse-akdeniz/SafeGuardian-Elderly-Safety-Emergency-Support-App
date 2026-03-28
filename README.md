@@ -45,6 +45,34 @@
 
 ---
 
+## 🚀 Advanced System Resilience
+
+### 🍎 **Sign in with Apple**
+- ✅ **Seamless Private Authentication** - One-tap login with encrypted Apple identity tokens
+- ✅ **Email Linking** - Automatic account recovery via email-based matching
+- ✅ **Production-Ready** - Token signature validation, JWT parsing, session management
+- **API Endpoint:** `POST /api/auth/apple-signin`
+
+### 🏥 **HealthKit Bridge**
+- ✅ **Bidirectional Sync** - Health data exported in Apple HealthKit-compatible format
+- ✅ **Unified Vitals Tracking** - Blood pressure, glucose, heart rate, temperature, weight, steps
+- ✅ **Capacitor Integration Ready** - Native iOS plugin support for seamless data sharing
+- **API Endpoint:** `GET /api/health/export-healthkit`
+
+### 📡 **Offline-First Engine**
+- ✅ **Service Worker v3** - Intelligent caching with IndexedDB persistent stores
+- ✅ **Background Sync** - Queues pending requests when offline, auto-retries on reconnect
+- ✅ **24/7 Reliability** - App remains fully functional without connectivity
+- **Storage:** IndexedDB (healthData, tasks, pendingSync stores)
+
+### 🛡️ **Rate Limiting & Security**
+- ✅ **DDoS Protection** - Per-IP rate limiting (100 requests/minute per endpoint)
+- ✅ **Graceful Degradation** - HTTP 429 response with Retry-After header
+- ✅ **Configurable Thresholds** - Adjust in `appsettings.json` → `RateLimitingOptions`
+- **Applies To:** All public API endpoints
+
+---
+
 ## 📊 Project Status
 
 ```

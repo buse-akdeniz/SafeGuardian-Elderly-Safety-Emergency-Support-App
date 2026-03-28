@@ -329,18 +329,41 @@ async function syncHealthData() {
         store.getAll().onsuccess = (e) => resolve(e.target.result);
     });
 
+    const maxRetries = 3;
     for (const record of records) {
+        let retryCount = record.retryCount || 0;
+        
         try {
-            await fetch('/api/health-data', {
+            const response = await fetch('/api/health-data', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(record.payload)
+                body: JSON.stringify(record.payload),
+                timeout: 10000
             });
 
-            const deleteTx = db.transaction([STORES.PENDING_SYNC], 'readwrite');
-            deleteTx.objectStore(STORES.PENDING_SYNC).delete(record.id);
+            if (response.ok) {
+                // Success - delete from pending
+                const deleteTx = db.transaction([STORES.PENDING_SYNC], 'readwrite');
+                deleteTx.objectStore(STORES.PENDING_SYNC).delete(record.id);
+                console.log('✓ Health data synced:', record.id);
+            } else if (response.status >= 500 && retryCount < maxRetries) {
+                // Server error - retry with exponential backoff
+                record.retryCount = retryCount + 1;
+                record.lastRetry = new Date().toISOString();
+                const updateTx = db.transaction([STORES.PENDING_SYNC], 'readwrite');
+                updateTx.objectStore(STORES.PENDING_SYNC).put(record);
+            } else if (response.status >= 500) {
+                console.warn('✗ Health sync failed after max retries, will retry later');
+            }
         } catch (err) {
-            console.log('Sync failed, will retry later:', err);
+            if (retryCount < maxRetries) {
+                record.retryCount = retryCount + 1;
+                record.lastRetry = new Date().toISOString();
+                record.lastError = err.message;
+                const updateTx = db.transaction([STORES.PENDING_SYNC], 'readwrite');
+                updateTx.objectStore(STORES.PENDING_SYNC).put(record);
+            }
+            console.log(`Sync attempt ${retryCount + 1}/${maxRetries} failed:`, err.message);
         }
     }
 }
@@ -353,20 +376,44 @@ async function syncTasks() {
         store.getAll().onsuccess = (e) => resolve(e.target.result);
     });
 
+    const maxRetries = 3;
     for (const task of tasks) {
         if (!task.synced) {
+            let retryCount = task.retryCount || 0;
+            
             try {
-                await fetch('/api/complete-task', {
+                const response = await fetch('/api/complete-task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(task)
+                    body: JSON.stringify(task),
+                    timeout: 10000
                 });
 
-                const updateTx = db.transaction([STORES.TASKS], 'readwrite');
-                task.synced = true;
-                updateTx.objectStore(STORES.TASKS).put(task);
+                if (response.ok) {
+                    // Success - mark synced
+                    const updateTx = db.transaction([STORES.TASKS], 'readwrite');
+                    task.synced = true;
+                    task.syncedAt = new Date().toISOString();
+                    updateTx.objectStore(STORES.TASKS).put(task);
+                    console.log('✓ Task synced:', task.taskId);
+                } else if (response.status >= 500 && retryCount < maxRetries) {
+                    // Server error - retry
+                    task.retryCount = retryCount + 1;
+                    task.lastRetry = new Date().toISOString();
+                    const updateTx = db.transaction([STORES.TASKS], 'readwrite');
+                    updateTx.objectStore(STORES.TASKS).put(task);
+                } else if (response.status >= 500) {
+                    console.warn('✗ Task sync failed after max retries');
+                }
             } catch (err) {
-                console.log('Task sync failed, will retry later:', err);
+                if (retryCount < maxRetries) {
+                    task.retryCount = retryCount + 1;
+                    task.lastRetry = new Date().toISOString();
+                    task.lastError = err.message;
+                    const updateTx = db.transaction([STORES.TASKS], 'readwrite');
+                    updateTx.objectStore(STORES.TASKS).put(task);
+                }
+                console.log(`Task sync attempt ${retryCount + 1}/${maxRetries} failed:`, err.message);
             }
         }
     }
