@@ -1,5 +1,5 @@
 // Service Worker for Offline Support
-const CACHE_NAME = 'safeguardian-v3';
+const CACHE_NAME = 'vitaguard-v4';
 const urlsToCache = [
     '/',
     '/index.html',
@@ -117,7 +117,7 @@ const OFFLINE_FALLBACK = `
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Çevrimdışı Mod - SafeGuardian</title>
+    <title>Çevrimdışı Mod - Vita Guard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -183,7 +183,7 @@ const OFFLINE_FALLBACK = `
         <div class="offline-icon">📡</div>
         <h1>Çevrimdışı Mod</h1>
         <p>
-            İnternet bağlantınız bulunmamaktadır. SafeGuardian yerel modda çalışıyor.
+            İnternet bağlantınız bulunmamaktadır. Vita Guard yerel modda çalışıyor.
         </p>
         <p style="font-size: 16px; opacity: 0.7;">
             Görevleriniz ve sağlık bilgileriniz cihazda saklanıyor. 
@@ -410,7 +410,7 @@ self.addEventListener('push', event => {
         }
 
         event.waitUntil(
-            self.registration.showNotification(data.title || '🏥 SafeGuardian', options)
+            self.registration.showNotification(data.title || '🏥 Vita Guard', options)
         );
     } catch (err) {
         console.error('Service Worker push notification error:', err);

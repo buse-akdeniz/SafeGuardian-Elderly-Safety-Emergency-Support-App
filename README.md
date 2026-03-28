@@ -1,4 +1,4 @@
-# 👴👵 Yaşlı Asistanı - Health Monitoring System
+# 👴👵 Vita Guard - Health Monitoring System
 
 **Yaşlı bakımı için tam kapsamlı sağlık izleme, otomatik uyarı ve aile entegrasyonu sistemi**
 
@@ -103,6 +103,11 @@
 - **Emergency Voice Shortcut:** Supports assistant deep-link intent flow for emergency command handoff (Siri/Google Assistant trigger path).
 - **Data Safety:** Health data is stored in a SQLite persistence layer and transmitted over HTTPS/TLS in production deployments.
 - **Account Control:** Users can permanently delete account + personal data from in-app flows (GDPR/KVKK aligned).
+
+### 🎙️ Voice Assistant Integration
+
+- **Zero-Touch Emergency:** Deep-link schema (`vitaguard://emergency`) integrated for Siri Shortcuts and Google Assistant handoff.
+- **State-Aware Execution:** Post-login intent handling ensures emergency signals are processed even if app is initially closed or unauthorized.
 
 ---
 
