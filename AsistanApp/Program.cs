@@ -1,8 +1,13 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using ilk_projem.Controllers;
+using ilk_projem.Data;
+using ilk_projem.Hubs;
+using ilk_projem.Models;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -21,7 +26,10 @@ builder.WebHost.UseUrls("http://0.0.0.0:5007");
 builder.Services.AddScoped<HealthDataService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<ISmsSender, SmsSender>();
+builder.Services.AddControllers();
 builder.Services.AddSignalR();
+var sqliteConnection = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=asistanapp.db";
+builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqliteConnection));
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
@@ -34,9 +42,16 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated();
+}
+
 app.UseRouting();
 app.UseCors("AllowAll");
 app.UseStaticFiles();
+app.MapControllers();
 
 string ResolveToken(HttpContext ctx, JsonElement? body = null)
 {
@@ -76,6 +91,9 @@ app.MapFallback(async (HttpContext ctx) =>
     var filePath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "index.html");
     return Results.File(System.IO.File.ReadAllBytes(filePath), "text/html");
 });
+
+// Controller-style endpoint grouping
+app.MapStateEndpoints();
 
 // APIs
 app.MapPost("/api/complete-task", async (HttpContext ctx, HealthDataService svc, IHubContext<HealthReportHub> hub) =>
@@ -194,6 +212,13 @@ app.MapPost("/api/ai-fall-detection", async (HttpContext ctx, HealthDataService 
         {
             var alert = new { elderlyId, type = "fall_detected", timestamp = DateTime.Now, requiresVoiceCheck = true, accelerationMagnitude };
             await hub.Clients.All.SendAsync("ReceiveAICritical", alert);
+            await hub.Clients.Group("family:all").SendAsync("ReceiveFallDetected", new
+            {
+                elderlyId,
+                accelerationMagnitude,
+                title = "Düşme Algılandı",
+                timestamp = DateTime.Now
+            });
             var familyAlert = new
             {
                 elderlyId,
@@ -1001,60 +1026,6 @@ app.MapPost("/api/send-notification", async (HttpContext ctx, HealthDataService 
     }
 });
 
-app.MapGet("/api/user-state", (HttpContext ctx, HealthDataService svc) =>
-{
-    var token = ResolveToken(ctx);
-    var elderly = svc.GetElderlySession(token);
-    if (elderly == null)
-    {
-        return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
-    }
-
-    var state = svc.GetUserState(elderly.Id);
-    return Results.Json(new
-    {
-        currentContext = state.CurrentContext,
-        activeTaskId = state.ActiveTaskId,
-        screenPriority = state.ScreenPriority,
-        isAssistantActive = state.IsAssistantActive,
-        updatedAt = state.UpdatedAt
-    });
-});
-
-app.MapPost("/api/user-state", async (HttpContext ctx, HealthDataService svc) =>
-{
-    try
-    {
-        var json = await JsonDocument.ParseAsync(ctx.Request.Body);
-        var token = ResolveToken(ctx, json.RootElement);
-        var elderly = svc.GetElderlySession(token);
-        if (elderly == null)
-        {
-            return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
-        }
-
-        var currentContext = json.RootElement.TryGetProperty("currentContext", out var c) ? c.GetString() ?? "home" : "home";
-        var activeTaskId = json.RootElement.TryGetProperty("activeTaskId", out var a) ? a.GetString() ?? "" : "";
-        var screenPriority = json.RootElement.TryGetProperty("screenPriority", out var p) ? p.GetString() ?? "normal" : "normal";
-        var isAssistantActive = json.RootElement.TryGetProperty("isAssistantActive", out var ia) ? ia.GetBoolean() : true;
-
-        var updated = svc.SetUserState(elderly.Id, new UserState
-        {
-            ElderlyId = elderly.Id,
-            CurrentContext = currentContext,
-            ActiveTaskId = activeTaskId,
-            ScreenPriority = screenPriority,
-            IsAssistantActive = isAssistantActive,
-            UpdatedAt = DateTime.Now
-        });
-
-        return Results.Json(new { success = true, state = updated });
-    }
-    catch
-    {
-        return Results.Json(new { success = false, message = "İşlem başarısız" }, statusCode: 500);
-    }
-});
 app.MapGet("/api/pending-tasks/{userId}", (string userId, HealthDataService svc) => Results.Json(new { success = true, count = svc.GetPendingTasks(userId).Count }));
 app.MapGet("/api/elderly-status/{userId}", (string userId, HealthDataService svc) => Results.Json(new { success = true, status = new { name = svc.GetUser(userId)?.Name, location = "Evde", pendingTasks = svc.GetPendingTasks(userId).Count } }));
 app.MapGet("/api/task-history/{userId}", (string userId, HealthDataService svc) => Results.Json(new { success = true, tasks = svc.GetTaskHistory(userId) }));
@@ -1471,16 +1442,6 @@ public class EmergencyAlert
     public DateTime OccurredAt { get; set; }
     public string Description { get; set; } = "";
     public bool IsResolved { get; set; }
-}
-
-public class UserState
-{
-    public string ElderlyId { get; set; } = "";
-    public string CurrentContext { get; set; } = "home";
-    public string ActiveTaskId { get; set; } = "";
-    public string ScreenPriority { get; set; } = "normal";
-    public bool IsAssistantActive { get; set; } = true;
-    public DateTime UpdatedAt { get; set; } = DateTime.Now;
 }
 
 // SERVICE
@@ -2078,32 +2039,3 @@ public class TwilioSettings
 }
 
 // SIGNALR HUB
-public class HealthReportHub : Hub
-{
-    public async Task SendHealthUpdate(string elderlyId, string healthData) => await Clients.All.SendAsync("ReceiveHealthUpdate", new { elderlyId, data = healthData });
-    public async Task SendEmergencyAlert(string elderlyId, string alertType) => await Clients.All.SendAsync("ReceiveEmergencyAlert", new { elderlyId, alertType });
-    public async Task SendTaskUpdate(string elderlyId, string taskId, string status) => await Clients.All.SendAsync("ReceiveTaskUpdate", new { elderlyId, taskId, status });
-    public async Task SendAICriticalAlert(string elderlyId, string alertType) => await Clients.All.SendAsync("ReceiveAICritical", new { elderlyId, alertType, timestamp = DateTime.Now });
-    public async Task SendEmergencyEscalation(string elderlyId) => await Clients.All.SendAsync("ReceiveEmergencyEscalation", new { elderlyId, timestamp = DateTime.Now });
-    public async Task SendEmergencyBroadcast(object broadcastData) => await Clients.All.SendAsync("ReceiveEmergencyBroadcast", broadcastData);
-    public async Task SendFamilyAlert(object alertData) => await Clients.Group("family:all").SendAsync("ReceiveFamilyAlert", alertData);
-    public async Task SendAlertCancelled(string elderlyId) => await Clients.All.SendAsync("ReceiveAlertCancelled", new { elderlyId, timestamp = DateTime.Now });
-    public async Task JoinFamilyGroup(string recipient)
-    {
-        var group = string.IsNullOrWhiteSpace(recipient) ? "family:all" : $"family:{recipient}";
-        await Groups.AddToGroupAsync(Context.ConnectionId, group);
-    }
-
-    public async Task LeaveFamilyGroup(string recipient)
-    {
-        var group = string.IsNullOrWhiteSpace(recipient) ? "family:all" : $"family:{recipient}";
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, group);
-    }
-
-    public override async Task OnConnectedAsync()
-    {
-        Console.WriteLine($"✅ Client Connected: {Context.ConnectionId}");
-        await Groups.AddToGroupAsync(Context.ConnectionId, "family:all");
-        await base.OnConnectedAsync();
-    }
-}

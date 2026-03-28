@@ -367,9 +367,61 @@ Recommended workspace configuration is available in [.vscode/settings.json](.vsc
 - Includes: Swagger, SignalR hubs, background services
 - Port: http://localhost:5007 (development)
 
+### New Backend Folder Layout (Separation of Concerns)
+
+```
+AsistanApp/
+├── Controllers/
+│   └── StateController.cs
+├── Models/
+│   └── UserState.cs
+├── Services/
+│   └── AuthTokenService.cs
+├── Hubs/
+│   └── HealthReportHub.cs
+└── Program.cs
+```
+
+- **Controllers/**: API endpoint mappings
+- **Models/**: data contracts and domain models
+- **Services/**: business logic and helpers
+- **Hubs/**: SignalR real-time communication
+
+### MVC Pipeline Activation (Required)
+
+Program startup now includes controller pipeline activation:
+
+```csharp
+builder.Services.AddControllers();
+app.MapControllers();
+```
+
+Without these two lines, controller files under `Controllers/` will not be discovered.
+
+### Namespace Consistency Rule
+
+To avoid namespace errors during refactor, every new backend file uses project namespace style:
+
+```csharp
+namespace ilk_projem.Models;
+namespace ilk_projem.Controllers;
+namespace ilk_projem.Services;
+namespace ilk_projem.Hubs;
+```
+
 ### Configuration Hierarchy
 
 ```
+
+### Database Migration (First Step)
+
+Initial EF Core + SQLite infrastructure is added:
+
+- `Data/AppDbContext.cs`
+- `Models/Persistence/StoredHealthRecord.cs`
+- Packages: `Microsoft.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Sqlite`, `Microsoft.EntityFrameworkCore.Design`
+
+Current mode is hybrid: existing in-memory flow still works, and new records can persist into SQLite (`asistanapp.db`) as migration groundwork.
 appsettings.json              (base, all environments)
 ├── appsettings.Development.json  (local dev, 5s emergency delay)
 ├── appsettings.Production.json   (Azure, 8s emergency delay)

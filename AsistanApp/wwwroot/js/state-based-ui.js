@@ -362,6 +362,11 @@ class StateBasedUIManager {
                 await this.fetchAndRenderState();
             });
 
+            this.connection.on('ReceiveFallDetected', async (payload) => {
+                console.log('🚨 ReceiveFallDetected:', payload);
+                await this.setContext('emergency', 'emergency');
+            });
+
             await this.connection.start();
             console.log('✅ SignalR gerçek zamanlı bağlantı aktif');
         } catch (error) {

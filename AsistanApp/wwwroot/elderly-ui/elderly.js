@@ -151,8 +151,14 @@ function handleAuthExpired() {
 
 async function safeFetch(url, options) {
     let finalUrl = url;
+    let extractedToken = null;
     try {
-        finalUrl = new URL(url, API_BASE).toString();
+        const parsed = new URL(url, API_BASE);
+        extractedToken = parsed.searchParams.get('token');
+        if (extractedToken) {
+            parsed.searchParams.delete('token');
+        }
+        finalUrl = parsed.toString();
     } catch (error) {
         console.error('Geçersiz API adresi:', { url, apiBase: API_BASE, error });
         showNotification('Hata', 'API adresi geçersiz. Lütfen ayarlardan güncelleyin.', 'error');
@@ -160,7 +166,16 @@ async function safeFetch(url, options) {
     }
 
     try {
-        const response = await fetch(finalUrl, options);
+        const requestOptions = { ...(options || {}) };
+        const headers = new Headers(requestOptions.headers || {});
+        const fallbackToken = authTokenCache || localStorage.getItem('token');
+        const bearer = extractedToken || fallbackToken;
+        if (bearer && !headers.has('Authorization')) {
+            headers.set('Authorization', `Bearer ${bearer}`);
+        }
+        requestOptions.headers = headers;
+
+        const response = await fetch(finalUrl, requestOptions);
         if (response.status === 401 || response.status === 403) {
             handleAuthExpired();
             return null;
@@ -1008,15 +1023,15 @@ async function handleAddMedication(e) {
     }
 
     try {
-            const token = await requireAuthTokenAsync();
-            if (!token) return;
-        const response = await fetch(`${API_BASE}/api/medications?token=${token}`, {
+        const token = await requireAuthTokenAsync();
+        if (!token) return;
+        const response = await safeFetch(`${API_BASE}/api/medications?token=${token}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, notes, scheduleTimes: times })
         });
 
-        if (response.ok) {
+        if (response?.ok) {
             showNotification('Başarılı', 'İlaç eklendi', 'success');
             document.getElementById('addMedicationForm').reset();
             await sendFamilyNotification('medication_added', `Yeni ilaç eklendi: ${name}`, 'normal');

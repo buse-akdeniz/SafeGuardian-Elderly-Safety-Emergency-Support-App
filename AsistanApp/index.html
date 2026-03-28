@@ -396,7 +396,11 @@
                 
                 // Subscription kontrolü yap
                 if (user.token) {
-                    fetch(`/api/subscription?token=${user.token}`)
+                    fetch(`/api/subscription`, {
+                        headers: {
+                            'Authorization': `Bearer ${user.token}`
+                        }
+                    })
                         .then(r => r.json())
                         .then(data => {
                             if (data.success || data.plan) {

@@ -26,3 +26,6 @@ AsistanApp/ios/DerivedData/
 # Runtime logs
 *.log
 /tmp/
+
+# Local database
+*.db
