@@ -658,47 +658,81 @@
         }
 
         // ============= SPEECH RECOGNITION ============= 
-        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-        recognition.lang = 'tr-TR';
-        recognition.continuous = true;
-        recognition.interimResults = false;
+        let recognition = null;
+        let recognitionStarted = false;
+        
+        function initializeRecognition() {
+            if (!recognitionStarted && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
+                recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                recognition.lang = 'tr-TR';
+                recognition.continuous = true;
+                recognition.interimResults = false;
 
-        function startListening() {
-            isVoiceActive = true;
-            document.getElementById('voiceIndicator').classList.add('active');
-            recognition.start();
+                recognition.onresult = (event) => {
+                    const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+                    console.log('🎤 Recognized:', transcript);
+
+                    // Flexible voice commands
+                    if (transcript.includes('evet') || transcript.includes('tamam') || 
+                        transcript.includes('aldım') || transcript.includes('içtim') ||
+                        transcript.includes('hazır') || transcript.includes('ok')) {
+                        confirmTask();
+                    } else if (transcript.includes('sonra') || transcript.includes('iptal') ||
+                               transcript.includes('bekleteceğim') || transcript.includes('bekle')) {
+                        skipTask();
+                    } else if (transcript.includes('yardım') || transcript.includes('İmdad') ||
+                               transcript.includes('acil') || transcript.includes('asistan')) {
+                        triggerEmergency();
+                    } else if (transcript.includes('ayarlar') || transcript.includes('panel')) {
+                        openSettings();
+                    }
+                };
+
+                recognition.onend = () => {
+                    document.getElementById('voiceIndicator').classList.remove('active');
+                    isVoiceActive = false;
+                    // Restart listening after 2 seconds
+                    setTimeout(() => startListening(), 2000);
+                };
+
+                recognition.onerror = (event) => {
+                    console.error('🎤 Speech recognition error:', event.error);
+                    isVoiceActive = false;
+                };
+
+                recognitionStarted = true;
+                console.log('🎤 Speech recognition initialized.');
+            }
         }
 
-        recognition.onresult = (event) => {
-            const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
-            console.log('Recognized:', transcript);
-
-            // Flexible voice commands
-            if (transcript.includes('evet') || transcript.includes('tamam') || 
-                transcript.includes('aldım') || transcript.includes('içtim') ||
-                transcript.includes('hazır') || transcript.includes('ok')) {
-                confirmTask();
-            } else if (transcript.includes('sonra') || transcript.includes('iptal') ||
-                       transcript.includes('bekleteceğim') || transcript.includes('bekle')) {
-                skipTask();
-            } else if (transcript.includes('yardım') || transcript.includes('İmdad') ||
-                       transcript.includes('acil') || transcript.includes('asistan')) {
-                triggerEmergency();
-            } else if (transcript.includes('ayarlar') || transcript.includes('panel')) {
-                openSettings();
+        function startListening() {
+            if (!recognitionStarted) {
+                initializeRecognition();
             }
-        };
+            if (recognition && recognitionStarted && currentUser) {
+                try {
+                    isVoiceActive = true;
+                    document.getElementById('voiceIndicator').classList.add('active');
+                    recognition.start();
+                    console.log('🎤 Listening started.');
+                } catch (e) {
+                    console.warn('Could not start listening:', e);
+                }
+            }
+        }
 
-        recognition.onend = () => {
-            document.getElementById('voiceIndicator').classList.remove('active');
-            isVoiceActive = false;
-            setTimeout(() => startListening(), 2000); // Re-enable after 2s
-        };
-
-        // Start listening on app load
-        setTimeout(() => {
-            startListening();
-        }, 500);
+        // Initialize speech recognition only after user interaction
+        document.addEventListener('click', () => {
+            if (!recognitionStarted && currentUser) {
+                startListening();
+            }
+        }, { once: true });
+        
+        document.addEventListener('touchstart', () => {
+            if (!recognitionStarted && currentUser) {
+                startListening();
+            }
+        }, { once: true });
 
         // ============= TASK ACTIONS ============= 
         function confirmTask() {
@@ -800,41 +834,75 @@
                 return;
             }
 
-            fetch('/api/login', {
+            fetch('/api/elderly/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
             })
             .then(res => res.json())
             .then(data => {
-                if (data.success) {
-                    currentUser = data.user;
+                if (data.success || data.token) {
+                    // Store user data in localStorage for auto-login
+                    const userData = {
+                        name: data.name || 'Kullanıcı',
+                        id: data.userId || data.id,
+                        token: data.token,
+                        email: email,
+                        loginTime: new Date().toISOString()
+                    };
+                    localStorage.setItem('elderly_user', JSON.stringify(userData));
+                    localStorage.setItem('elderly_device_id', userData.id);
+                    
+                    currentUser = userData;
                     document.getElementById('loginScreen').classList.add('hidden');
                     document.getElementById('mainApp').classList.remove('hidden');
-                    document.getElementById('greetingText').innerText = `Merhaba ${data.user.name}`;
+                    document.getElementById('greetingText').innerText = `Merhaba ${userData.name}`;
                     
-                    speak(`Merhaba ${data.user.name}. Sana nasıl yardımcı olabilirim?`);
+                    speak(`Merhaba ${userData.name}. Sana nasıl yardımcı olabilirim?`);
+                    startListening();
                     checkAndDisplayTask();
                 } else {
-                    alert('Giriş başarısız: ' + data.message);
+                    alert('Giriş başarısız: ' + (data.message || 'Bilinmeyen hata'));
                 }
             })
-            .catch(err => alert('Hata: ' + err.message));
+            .catch(err => {
+                console.error('Login error:', err);
+                alert('Hata: ' + err.message);
+            });
         }
+        
+        // ============= AUTO-LOGIN ON PAGE LOAD ============= 
+        function checkAutoLogin() {
+            const userData = localStorage.getItem('elderly_user');
+            if (userData) {
+                try {
+                    const user = JSON.parse(userData);
+                    currentUser = user;
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('mainApp').classList.remove('hidden');
+                    document.getElementById('greetingText').innerText = `Merhaba ${user.name}`;
+                    console.log('✅ Auto-login successful:', user.name);
+                    startListening();
+                    checkAndDisplayTask();
+                } catch (e) {
+                    console.error('Auto-login failed:', e);
+                    localStorage.removeItem('elderly_user');
+                }
+            }
+        }
+        
+        // Check auto-login on page load
+        window.addEventListener('load', checkAutoLogin);
 
         // Prevent Settings access without password
         let settingsAttempts = 0;
         document.getElementById('settingsPanel').addEventListener('click', function(e) {
             if (!currentUser) {
-                settingsAttempts++;
-                if (settingsAttempts > 2) {
-                    const pwd = prompt('Şifre girin (Aile için):');
-                    if (pwd !== currentUser?.password) {
-                        alert('Yanlış şifre!');
-                        return;
-                    }
-                }
+                alert('Lütfen önce giriş yapın.');
+                return;
             }
+            // Settings aile üyelerine açık (backend'de doğrulama yapılmalı)
+            // Kullanıcı kendi ayarlarını yönetebilir
         });
 
         // Emergency on accelerometer (Fall Detection)

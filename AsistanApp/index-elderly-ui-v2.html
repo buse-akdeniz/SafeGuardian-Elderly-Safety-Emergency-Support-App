@@ -686,6 +686,8 @@
         let doubleCheckAction = null;
         let testMedicationTimer = null;
         let pendingConfirmation = false;
+        let completedToday = []; // Bugün tamamlanan görevlerin ID'leri
+        let lastResetDate = new Date().toDateString(); // Gün değişimini kontrol et
 
         // ============= LOGGER SYSTEM =============
         class DebugLogger {
@@ -1004,7 +1006,11 @@
                 return;
             }
 
-            logger.log('TASK_COMPLETED', { taskType: currentTask });
+            // Görevi tamamlananlara ekle
+            completedToday.push(currentTask);
+            localStorage.setItem('completedTodayTasks', JSON.stringify(completedToday));
+
+            logger.log('TASK_COMPLETED', { taskType: currentTask, completedCount: completedToday.length });
             speak('Tamamlandı. İyi yapıyorsun!');
 
             const taskData = {
@@ -1039,6 +1045,15 @@
 
         // ============= TASK SCHEDULER =============
         function checkAndDisplayTask() {
+            // Gün değiştiğinde completedToday'ı sıfırla
+            const today = new Date().toDateString();
+            if (today !== lastResetDate) {
+                completedToday = [];
+                lastResetDate = today;
+                localStorage.removeItem('completedTodayTasks');
+                logger.log('DAILY_RESET_COMPLETED', { date: today });
+            }
+
             const now = new Date();
             const hours = now.getHours();
             const minutes = now.getMinutes();
@@ -1050,44 +1065,46 @@
 
             // Testin etkinleşip etkinleşmediğini kontrol et
             if (localStorage.getItem('testMedicationActive') === 'true') {
-                document.getElementById('taskMedicine').classList.add('active');
-                currentTask = 'medicine';
-                speak('Test: İlaç vakti simülasyonu yapılıyor.');
-                logger.log('TEST_MEDICATION_TRIGGERED', {});
+                if (!completedToday.includes('medicine')) {
+                    document.getElementById('taskMedicine').classList.add('active');
+                    currentTask = 'medicine';
+                    speak('Test: İlaç vakti simülasyonu yapılıyor.');
+                    logger.log('TEST_MEDICATION_TRIGGERED', {});
+                }
                 localStorage.removeItem('testMedicationActive');
                 return;
             }
 
-            // 09:00 - 09:30: İlaç Vakti
-            if (currentTime >= 900 && currentTime < 930) {
+            // 09:00 - 09:30: İlaç Vakti (Eğer bugün tamamlanmamışsa)
+            if (currentTime >= 900 && currentTime < 930 && !completedToday.includes('medicine')) {
                 document.getElementById('taskMedicine').classList.add('active');
                 currentTask = 'medicine';
                 speak('İlaç vakti. Aspirin ilaçlarını su ile almayı unutma.');
                 logger.log('SCHEDULED_TASK_TRIGGERED', { taskType: 'medicine', time: `${hours}:${String(minutes).padStart(2, '0')}` });
             }
-            // 12:00 - 12:30: Yemek Vakti
-            else if (currentTime >= 1200 && currentTime < 1230) {
+            // 12:00 - 12:30: Yemek Vakti (Eğer bugün tamamlanmamışsa)
+            else if (currentTime >= 1200 && currentTime < 1230 && !completedToday.includes('meal')) {
                 document.getElementById('taskMeal').classList.add('active');
                 currentTask = 'meal';
                 speak('Öğle yemeğini almayı unutma.');
                 logger.log('SCHEDULED_TASK_TRIGGERED', { taskType: 'meal', time: `${hours}:${String(minutes).padStart(2, '0')}` });
             }
-            // 15:00 - 15:30: Su İçme
-            else if (currentTime >= 1500 && currentTime < 1530) {
+            // 15:00 - 15:30: Su İçme (Eğer bugün tamamlanmamışsa)
+            else if (currentTime >= 1500 && currentTime < 1530 && !completedToday.includes('water')) {
                 document.getElementById('taskWater').classList.add('active');
                 currentTask = 'water';
                 speak('Su içmeyi unutma. Günde sekiz bardak su içmelisin.');
                 logger.log('SCHEDULED_TASK_TRIGGERED', { taskType: 'water', time: `${hours}:${String(minutes).padStart(2, '0')}` });
             }
-            // 20:00 - 20:30: Akşam İlaçları
-            else if (currentTime >= 2000 && currentTime < 2030) {
+            // 20:00 - 20:30: Akşam İlaçları (Eğer bugün tamamlanmamışsa)
+            else if (currentTime >= 2000 && currentTime < 2030 && !completedToday.includes('medicine_evening')) {
                 document.getElementById('taskMedicine').classList.add('active');
                 currentTask = 'medicine_evening';
                 speak('Akşam ilaç vakti.');
                 logger.log('SCHEDULED_TASK_TRIGGERED', { taskType: 'medicine_evening', time: `${hours}:${String(minutes).padStart(2, '0')}` });
             }
-            // 21:00 - 21:30: Duş (Pazartesi, Çarşamba, Cuma)
-            else if (currentTime >= 2100 && currentTime < 2130 && [1, 3, 5].includes(dayOfWeek)) {
+            // 21:00 - 21:30: Duş (Pazartesi, Çarşamba, Cuma, Eğer bugün tamamlanmamışsa)
+            else if (currentTime >= 2100 && currentTime < 2130 && [1, 3, 5].includes(dayOfWeek) && !completedToday.includes('shower')) {
                 document.getElementById('taskShower').classList.add('active');
                 currentTask = 'shower';
                 speak('Duşa gitmek ister misin? Seni çok iyi hissettirecek.');
@@ -1148,9 +1165,28 @@
             recognition.onend = () => {
                 document.getElementById('voiceIndicator').classList.remove('active');
                 setTimeout(() => {
-                    recognition.start();
-                    logger.log('VOICE_RECOGNITION_RESTART', {});
+                    try {
+                        recognition.start();
+                        logger.log('VOICE_RECOGNITION_RESTART', {});
+                    } catch (err) {
+                        logger.log('VOICE_RESTART_ERROR', { error: err.message });
+                    }
                 }, 1000);
+            };
+
+            recognition.onerror = (event) => {
+                logger.log('VOICE_RECOGNITION_ERROR', { error: event.error });
+                document.getElementById('voiceIndicator').classList.remove('active');
+                
+                // Hata sonrası 2 saniye bekleyip yeniden başlat
+                setTimeout(() => {
+                    try {
+                        recognition.start();
+                        logger.log('VOICE_RECOGNITION_RESTARTED_AFTER_ERROR', { errorType: event.error });
+                    } catch (err) {
+                        logger.log('VOICE_ERROR_RECOVERY_FAILED', { error: err.message });
+                    }
+                }, 2000);
             };
 
             recognition.onresult = (event) => {
@@ -1172,10 +1208,6 @@
                     logger.log('VOICE_HELP_RECOGNIZED', { word: transcript });
                     triggerEmergency();
                 }
-            };
-
-            recognition.onerror = (event) => {
-                logger.log('VOICE_RECOGNITION_ERROR', { error: event.error });
             };
 
             try {
@@ -1304,7 +1336,17 @@
             document.getElementById('greetingText').textContent = `Merhaba ${currentUser.name}`;
             speak(`Merhaba ${currentUser.name}. Sana nasıl yardımcı olabilirim?`);
 
-            logger.log('MAIN_APP_SHOWN', { userId: currentUser.id });
+            // localStorage'dan tamamlanan görevleri yükle
+            const saved = localStorage.getItem('completedTodayTasks');
+            if (saved) {
+                try {
+                    completedToday = JSON.parse(saved);
+                } catch (e) {
+                    completedToday = [];
+                }
+            }
+
+            logger.log('MAIN_APP_SHOWN', { userId: currentUser.id, completedTasksCount: completedToday.length });
 
             // Sistemleri başlat
             checkAndDisplayTask();

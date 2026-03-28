@@ -349,7 +349,7 @@
         <div class="hidden-status">Lütfen şekerinizi ölçün</div>
     </div>
 
-    <div style="text-align: center; color: #ffd700; font-size: 40px; font-weight: bold;">
+    <div class="task-card" id="noTaskMessage" style="text-align: center; color: #ffd700; font-size: 40px; font-weight: bold;">
         💤 Şu an görev yok<br>
         <span style="font-size: 30px; opacity: 0.8;">Rahatça bekleyebilirsiniz</span>
     </div>
@@ -371,7 +371,7 @@
 </div>
 
 <!-- SignalR & Voice Recognition -->
-<script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@latest/signalr.js"></script>
+<script src="/js/signalr.min.js"></script>
 
 <!-- Localization (i18n) -->
 <script src="/js/i18n.js"></script>
@@ -385,22 +385,25 @@
 
     // ========== OTOMATIK GİRİŞ KONTROL (Yaşlı Self-Enrollment) ==========
     function checkAutoLogin() {
-        const deviceId = sessionStorage.getItem('auto_login_device');
+        const deviceId = localStorage.getItem('elderly_device_id');
         if (deviceId) {
             // Otomatik olarak giriş yaptı, kullanıcı verilerini yükle
             const userData = localStorage.getItem(`elderly_${deviceId}`);
             if (userData) {
                 const user = JSON.parse(userData);
                 console.log('✅ Otomatik giriş başarılı:', user.fullName);
+                document.querySelector('.greeting').textContent = `👋 Merhaba ${user.fullName}`;
                 
                 // Subscription kontrolü yap
-                fetch(`/api/subscription/${deviceId}`)
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.success) {
-                            console.log('📋 Abonelik yüklendi:', data.subscription.plan);
-                        }
-                    });
+                if (user.token) {
+                    fetch(`/api/subscription?token=${user.token}`)
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success || data.plan) {
+                                console.log('📋 Abonelik yüklendi:', data.plan || data.subscription.plan);
+                            }
+                        });
+                }
             }
         }
     }
@@ -472,12 +475,20 @@
 
     // ========== GÖREV DÖNGÜSÜ ==========
     function rotateTask() {
-        const tasks = document.querySelectorAll('.task-card');
+        const tasks = document.querySelectorAll('.task-card:not(#noTaskMessage)');
+        const noTaskMsg = document.getElementById('noTaskMessage');
+        
         tasks.forEach(t => t.classList.remove('active'));
+        noTaskMsg.classList.remove('active');
+        
+        currentTaskIndex++;
 
-        currentTaskIndex = (currentTaskIndex + 1) % tasks.length;
-        if (currentTaskIndex < tasks.length - 1) {
+        if (currentTaskIndex < tasks.length) {
             tasks[currentTaskIndex].classList.add('active');
+        } else {
+            // Tüm görevler bittiğinde boş kartı göster
+            noTaskMsg.classList.add('active');
+            console.log('✅ Tüm görevler tamamlandı.');
         }
     }
 
@@ -492,38 +503,53 @@
 
     // ========== SES TANIMA (SPEECH RECOGNITION) ==========
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'tr-TR';
-        recognition.continuous = true;
-        recognition.interimResults = false;
+    let recognition = null;
+    let recognitionStarted = false;
+    
+    function startSpeechRecognition() {
+        if (!recognitionStarted && SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'tr-TR';
+            recognition.continuous = true;
+            recognition.interimResults = false;
 
-        recognition.onstart = () => {
-            isListening = true;
-            console.log('🎤 Dinleme başladı');
-        };
+            recognition.onstart = () => {
+                isListening = true;
+                console.log('🎤 Dinleme başladı');
+            };
 
-        recognition.onresult = (event) => {
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const transcript = event.results[i][0].transcript.toLowerCase();
-                console.log('Söylenen:', transcript);
+            recognition.onresult = (event) => {
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript.toLowerCase();
+                    console.log('Söylenen:', transcript);
 
-                if (transcript.includes('evet') || transcript.includes('tamam') || transcript.includes('aldım') || transcript.includes('içtim')) {
-                    completeTask();
-                } else if (transcript.includes('sonra') || transcript.includes('bekle')) {
-                    skipTask();
-                } else if (transcript.includes('yardım') || transcript.includes('imdad') || transcript.includes('acil')) {
-                    triggerEmergency();
+                    if (transcript.includes('evet') || transcript.includes('tamam') || transcript.includes('aldım') || transcript.includes('içtim')) {
+                        completeTask();
+                    } else if (transcript.includes('sonra') || transcript.includes('bekle')) {
+                        skipTask();
+                    } else if (transcript.includes('yardım') || transcript.includes('imdad') || transcript.includes('acil')) {
+                        triggerEmergency();
+                    }
                 }
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Ses tanıma hatası:', event.error);
+            };
+
+            try {
+                recognition.start();
+                recognitionStarted = true;
+                console.log('🎤 Ses tanıma başlatıldı.');
+            } catch (e) {
+                console.warn('Ses tanıma başlatılamadı:', e);
             }
-        };
-
-        recognition.onerror = (event) => {
-            console.error('Ses tanıma hatası:', event.error);
-        };
-
-        recognition.start();
+        }
     }
+    
+    // Kullanıcı ekrana dokunduğunda veya tıkladığında ses dinlemeyi başlat
+    document.addEventListener('click', startSpeechRecognition, { once: true });
+    document.addEventListener('touchstart', startSpeechRecognition, { once: true });
 
     // ========== BAĞLANTI DURUMU ==========
     window.addEventListener('online', () => {

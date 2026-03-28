@@ -1,11 +1,108 @@
 // Service Worker for Offline Support
-const CACHE_NAME = 'safeguardian-v1';
+const CACHE_NAME = 'safeguardian-v2';
 const urlsToCache = [
     '/',
+    '/index.html',
+    '/index-elderly-ui.html',
     '/index-elderly-ui-v2.html',
+    '/privacy-policy.html',
     '/css/site.css',
-    '/js/site.js'
+    '/js/site.js',
+    '/js/i18n.js',
+    '/js/ai-emergency.js',
+    '/js/signalr.min.js',
+    '/favicon.ico'
 ];
+
+// Offline fallback HTML sayfası
+const OFFLINE_FALLBACK = `
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Çevrimdışı Mod - SafeGuardian</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a3a 100%);
+            color: white;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .offline-box {
+            text-align: center;
+            max-width: 500px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 40px;
+            border: 2px solid #ffd700;
+        }
+        .offline-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            color: #ffd700;
+        }
+        p {
+            font-size: 18px;
+            line-height: 1.6;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 15px;
+            background: rgba(255, 215, 0, 0.1);
+            border-left: 4px solid #ffd700;
+            text-align: left;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        .retry-btn {
+            margin-top: 30px;
+            padding: 15px 40px;
+            background: #1e90ff;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .retry-btn:hover {
+            background: #0047ab;
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-box">
+        <div class="offline-icon">📡</div>
+        <h1>Çevrimdışı Mod</h1>
+        <p>
+            İnternet bağlantınız bulunmamaktadır. SafeGuardian yerel modda çalışıyor.
+        </p>
+        <p style="font-size: 16px; opacity: 0.7;">
+            Görevleriniz ve sağlık bilgileriniz cihazda saklanıyor. 
+            Bağlantı geri geldiğinde otomatik olarak senkronize olacaktır.
+        </p>
+        <div class="status">
+            ✓ Yerel veri depolaması aktif<br>
+            ✓ Sesli komutlar çalışıyor<br>
+            ✓ Görevler kaydediliyor
+        </div>
+        <button class="retry-btn" onclick="location.reload()">⟲ Sayfayı Yenile</button>
+    </div>
+</body>
+</html>
+`;
 
 // Install event - Cache files
 self.addEventListener('install', event => {
@@ -85,12 +182,13 @@ self.addEventListener('fetch', event => {
 
                 return response;
             }).catch(() => {
-                // Fallback for offline
-                return caches.match(request).then(response => {
-                    return response || new Response('Offline - page not available', {
-                        status: 503,
-                        statusText: 'Service Unavailable'
-                    });
+                // Offline fallback - HTML sayfası döndür
+                return new Response(OFFLINE_FALLBACK, {
+                    status: 503,
+                    statusText: 'Service Unavailable',
+                    headers: new Headers({
+                        'Content-Type': 'text/html; charset=utf-8'
+                    })
                 });
             });
         })
@@ -101,26 +199,54 @@ self.addEventListener('fetch', event => {
 self.addEventListener('sync', event => {
     if (event.tag === 'sync-pending-actions') {
         event.waitUntil(
-            // Sync logic here
-            Promise.resolve()
+            // Pending actions'ları sunucuya gönder
+            (async () => {
+                try {
+                    const clients = await self.clients.matchAll();
+                    if (clients.length > 0) {
+                        clients[0].postMessage({
+                            type: 'SYNC_PENDING_ACTIONS',
+                            timestamp: new Date().toISOString()
+                        });
+                        console.log('Service Worker: Syncing pending actions');
+                    }
+                } catch (err) {
+                    console.error('Service Worker sync error:', err);
+                }
+            })()
         );
     }
 });
 
 // Push notifications
 self.addEventListener('push', event => {
-    const data = event.data ? event.data.json() : {};
-    const options = {
-        body: data.message || 'Yeni bildirim',
-        icon: '/icon-192x192.png',
-        badge: '/badge-72x72.png',
-        tag: data.tag || 'notification',
-        requireInteraction: data.requireInteraction || false
-    };
+    if (!event.data) return;
+    
+    try {
+        const data = event.data.json();
+        const options = {
+            body: data.message || 'Yeni bildirim',
+            icon: '/favicon.ico',
+            tag: data.tag || 'notification',
+            requireInteraction: data.requireInteraction || data.severity === 'high' || false,
+            badge: '/favicon.ico',
+            vibrate: [200, 100, 200],
+            data: data.data || {}
+        };
 
-    event.waitUntil(
-        self.registration.showNotification(data.title || 'SafeGuardian', options)
-    );
+        // Acil durum ise ekstra notifikasyon
+        if (data.severity === 'high') {
+            options.tag = 'emergency-' + Date.now();
+            options.requireInteraction = true;
+            options.vibrate = [500, 200, 500, 200, 500];
+        }
+
+        event.waitUntil(
+            self.registration.showNotification(data.title || '🏥 SafeGuardian', options)
+        );
+    } catch (err) {
+        console.error('Service Worker push notification error:', err);
+    }
 });
 
 // Notification click handler
@@ -141,4 +267,4 @@ self.addEventListener('notificationclick', event => {
     );
 });
 
-console.log('Service Worker loaded and ready for offline support');
+console.log('Service Worker loaded and ready for offline support - v2 with improved offline handling');

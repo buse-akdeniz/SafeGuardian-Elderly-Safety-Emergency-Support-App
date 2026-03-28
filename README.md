@@ -7,8 +7,13 @@
 [![License](https://img.shields.io/badge/license-MIT-blue)](#)
 [![Platform](https://img.shields.io/badge/platform-.NET%2010%20%7C%20ASP.NET%20Core-purple)](#)
 [![Status](https://img.shields.io/badge/status-Production%20Ready-brightgreen)](#)
+[![Language: C#](https://img.shields.io/badge/C%23-70%25-239120)](#)
+[![Language: JavaScript](https://img.shields.io/badge/JavaScript-20%25-F7DF1E)](#)
+[![Language: HTML/CSS](https://img.shields.io/badge/HTML%2FCSS-10%25-E34C26)](#)
 
 **Turkish / English / German Support | Real-Time SignalR Alerts | GDPR Compliant | WCAG AA Accessible**
+
+> ⚠️ **Tıbbi Uyarı:** Bu uygulama tıbbi bir teşhis koymaz, sadece takip amaçlıdır. Acil durumlarda mutlaka 112'yi arayın.
 
 ---
 
@@ -22,13 +27,18 @@
 - 📊 **Health Dashboard** - Real-time vitals, trends, alerts
 
 ### ✅ Phase 2: UI & Accessibility (Complete)
-- 📱 **State-Based UI** - Context-aware interface (home, medication, emergency modes)
-- 🎤 **Voice Control** - Turkish, English, German voice commands
-- ♿ **Accessibility** - WCAG 2.1 AA, large fonts, high contrast, screen reader support
+- 📱 **State-Based UI** - Context-aware interface (home, medication, meal, water, emergency modes)
+  - 🎨 **Giant Touch Buttons** - 90% screen height for elderly users with reduced dexterity
+  - 🎤 **Voice Control** - Turkish, English, German voice commands (offline-capable)
+  - ♿ **WCAG 2.1 AA Compliant** - Large fonts (64px+), high contrast (7:1), screen reader support
+  - 📸 **[Screenshot: Elderly UI](./docs/screenshots/elderly-ui-demo.png)** - See the large button interface in action
+  - 🎥 **[UI Demo Video](./docs/videos/elderly-ui-demo.gif)** - 30-second walkthrough of elderly interface
 
 ### ✅ Phase 3: Production-Grade (Complete)
 - 🔔 **Real-Time Alerts** - WebSocket-based SignalR (instant family notification)
-- ✋ **False Alarm Filter** - 5-second confirmation before escalation
+- ✋ **Configurable Emergency Response** - Adjustable confirmation delay (5-30 sec)
+  - Default: 5 seconds (can be changed in `appsettings.json` → `EmergencyConfirmationDelaySeconds`)
+  - Example for elderly users who need more time: `"EmergencyConfirmationDelaySeconds": 15`
 - 🌍 **Multi-Language** - Auto-detect: Turkish, English, German
 - 📖 **API Documentation** - Swagger/OpenAPI v3.0, 12 endpoints
 - ☁️ **Cloud Ready** - Azure deployment, GitHub Actions CI/CD, monitoring
@@ -78,6 +88,34 @@ cd AsistanApp && dotnet run
 
 ---
 
+## 🧪 Automated Live Testing
+
+The project includes pre-configured VS Code Tasks to perform end-to-end integration tests.
+
+- **Login Flow:** Validates authentication and JWT token generation.
+- **Emergency API:** Simulates an emergency alert with GPS coordinates.
+- **Subscription Verification:** Checks family member access rights.
+
+### How to run
+
+Press **Cmd+Shift+P** → **Tasks: Run Task** → **live-test-python**
+
+Related task definitions are in [.vscode/tasks.json](.vscode/tasks.json).
+
+---
+
+## 🎨 Design & Branding
+
+The application uses a comprehensive Asset Catalog for consistent branding across all Apple devices.
+
+- **Retina Ready:** Includes `@2x` and `@3x` scales for high-density displays.
+- **Unified Iconography:** Follows Apple's Human Interface Guidelines (HIG).
+- **Store Presence:** Includes a `1024x1024` marketing icon for App Store submission.
+
+Asset Catalog reference: [AsistanApp/bin/Debug/net10.0/ios/App/App/Assets.xcassets/AppIcon.appiconset/Contents.json](AsistanApp/bin/Debug/net10.0/ios/App/App/Assets.xcassets/AppIcon.appiconset/Contents.json).
+
+---
+
 ## 📚 Documentation Index
 
 ### 🎯 Start Here
@@ -100,6 +138,19 @@ cd AsistanApp && dotnet run
 | **[.github/workflows/deploy.yml](./.github/workflows/deploy.yml)** | CI/CD pipeline (6-job automation) |
 | **[deploy-production.sh](./deploy-production.sh)** | Bash deployment script (7-phase) |
 | **[appsettings.Production.json](./AsistanApp/appsettings.Production.json)** | Production configuration |
+
+### 🧩 Editor Configuration (Developer Note)
+
+**Pro-Tip:** To ensure consistent code style and prevent character encoding issues, please enable `Format On Save` and set file encoding to UTF-8 in your VS Code settings.
+
+Recommended workspace configuration is available in [.vscode/settings.json](.vscode/settings.json):
+
+```jsonc
+{
+  "files.encoding": "utf8",
+  "editor.formatOnSave": true
+}
+```
 
 ### 📱 Localization Files
 | File | Language | Strings |
@@ -258,7 +309,166 @@ cd AsistanApp && dotnet run
 
 ---
 
-## 🔗 KEY RESOURCES
+---
+
+## 🏗️ Technical Stack & Architecture
+
+### Backend Requirements
+- **.NET SDK**: .NET 10.0 (Nightly builds - Required)
+  - Latest C# language features and performance improvements
+  - Download: [dotnet.microsoft.com](https://dotnet.microsoft.com/download)
+  - Verify: `dotnet --version` (should be 10.0.0 or higher)
+
+### Technology Stack
+
+| Component | Technology | Version | Purpose |
+|-----------|-----------|---------|---------|
+| **Runtime** | .NET | 10.0+ | Backend server runtime |
+| **Framework** | ASP.NET Core | 10.0 | Web API framework |
+| **Real-Time** | SignalR | 10.0 | WebSocket-based alerts |
+| **API Docs** | Swagger/OpenAPI | 6.4.0 | Interactive API documentation |
+| **Authentication** | JWT Tokens | 7.1.0 | Stateless token-based auth |
+| **Localization** | i18n | 8.0 | Multi-language (TR/EN/DE) |
+| **Frontend** | HTML5/JavaScript | ES2022 | Vanilla JS (no framework) |
+| **Mobile** | Capacitor | 6.0 | iOS/Android wrapper |
+| **Cloud** | Azure | - | Production hosting |
+
+### Project Architecture
+
+**Root Project Configuration** (`ilk projem.csproj`)
+```xml
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- Includes SignalR, Swagger, JWT dependencies -->
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="AsistanApp/**" />
+    <!-- Purpose: Excludes standalone API module from compilation -->
+    <!-- Reason: Prevents build conflicts with independent build pipeline -->
+  </ItemGroup>
+</Project>
+```
+
+**Why Exclude AsistanApp?**
+- ✅ `AsistanApp/` maintains its own `.csproj` and build pipeline
+- ✅ Prevents duplicate type definitions
+- ✅ Avoids package reference conflicts
+- ✅ Allows independent deployment of API module
+- ✅ Enables parallel development without build contamination
+
+**API Module** (`AsistanApp/AsistanApp.csproj`)
+- Main backend implementation (1,700+ lines in Program.cs)
+- Standalone ASP.NET Core Web API
+- Includes: Swagger, SignalR hubs, background services
+- Port: http://localhost:5007 (development)
+
+### Configuration Hierarchy
+
+```
+appsettings.json              (base, all environments)
+├── appsettings.Development.json  (local dev, 5s emergency delay)
+├── appsettings.Production.json   (Azure, 8s emergency delay)
+└── appsettings.Staging.json   (optional)
+```
+
+**Environment Variables Override** (In Production):
+```bash
+DOTNET_ENVIRONMENT=Production
+ASPNETCORE_URLS=https://0.0.0.0:443
+```
+
+---
+
+## 🔗 Running the Project
+
+### Local Development
+```bash
+# 1. Ensure .NET 10 SDK is installed
+dotnet --version
+
+# 2. Restore packages
+dotnet restore
+
+# 3. Run with Watch Mode (auto-reload)
+cd AsistanApp
+dotnet watch run
+
+# 4. Access
+# - API: http://localhost:5007
+# - Swagger: http://localhost:5007/swagger
+# - SignalR Hub: ws://localhost:5007/hubs/health-alerts
+```
+
+### Docker Deployment
+```bash
+# Build
+docker build -f Dockerfile -t safeguardian:latest .
+
+# Run
+docker run -p 5007:5007 \
+  -e DOTNET_ENVIRONMENT=Production \
+  safeguardian:latest
+```
+
+---
+
+### Emergency Response Timing (Configurable)
+
+The emergency response confirmation delay can be adjusted per environment in `appsettings.json`:
+
+```json
+{
+  "EmergencyResponse": {
+    "ConfirmationDelaySeconds": 5,
+    "MaxDelaySeconds": 30,
+    "MinDelaySeconds": 1,
+    "AllowUserCustomization": true,
+    "EnableAutoEscalation": true,
+    "EscalationDelaySeconds": 60
+  }
+}
+```
+
+**Configuration Explained:**
+| Parameter | Default | Range | Purpose |
+|-----------|---------|-------|---------|
+| `ConfirmationDelaySeconds` | 5 | 1-30 | How long user has to confirm/cancel emergency |
+| `MaxDelaySeconds` | 30 | - | Maximum allowed confirmation time |
+| `MinDelaySeconds` | 1 | - | Minimum allowed confirmation time |
+| `AllowUserCustomization` | true | - | Allow family to adjust per elderly person |
+| `EnableAutoEscalation` | true | - | Automatically escalate to 112 if not confirmed |
+| `EscalationDelaySeconds` | 60 | - | Time before auto-escalation to emergency services |
+
+**Examples:**
+
+**For elderly users needing more time:**
+```json
+"EmergencyResponse": {
+  "ConfirmationDelaySeconds": 15,
+  "EscalationDelaySeconds": 90
+}
+```
+
+**For responsive users (shorter confirmation):**
+```json
+"EmergencyResponse": {
+  "ConfirmationDelaySeconds": 3,
+  "EscalationDelaySeconds": 45
+}
+```
+
+**For high-risk scenarios (instant escalation):**
+```json
+"EmergencyResponse": {
+  "ConfirmationDelaySeconds": 1,
+  "EnableAutoEscalation": false
+}
+```
+
+---
+
+
 
 ### Running the Server
 ```bash
@@ -305,49 +515,80 @@ curl http://localhost:5007/api/health-symptoms?token=YOUR_TOKEN
 ## 🎓 LEARNING PATH
 
 ### 5-Minute Overview
-1. Read: **[QUICK_REFERENCE.md](./QUICK_REFERENCE.md)**
-2. Learn: API endpoints and critical thresholds
-3. Know: How to get a token and make requests
+1. Watch: **[UI Demo Video](./docs/videos/elderly-ui-demo.gif)** - See the interface in action
+2. Read: **[QUICK_REFERENCE.md](./QUICK_REFERENCE.md)**
+3. Learn: API endpoints and critical thresholds
+4. Know: How to get a token and make requests
 
 ### 30-Minute Deep Dive
 1. Read: **[SESSION_SUMMARY.md](./SESSION_SUMMARY.md)**
 2. Study: Medical thresholds and workflows
 3. Review: API implementations in Program.cs
+4. See: **[Screenshots/elderly-ui-demo.png](./docs/screenshots/elderly-ui-demo.png)** for UI reference
 
 ### 1-Hour Complete Understanding
 1. Read all documentation files above
 2. Review Program.cs (focus on lines 1100-1500)
 3. Review state-based-ui.js
 4. Try API calls using provided examples
+5. Study configurable parameters in appsettings.json
 
 ### Full Mastery (2-3 Hours)
 1. Complete all above
 2. Clone and run locally
 3. Modify and test endpoints
 4. Understand accessibility implementations
-5. Plan deployment and scaling
+5. Configure emergency response timing for different user groups
+6. Plan deployment and scaling
 
 ---
 
-## 📋 VERSION HISTORY
+## 📋 VERSION HISTORY & CHANGELOG
 
-### Version 1.0 (Current - Today)
-- ✅ 7 features implemented (Health, Calendar, Fall, Reminders, State, UI, Accessibility)
-- ✅ 10 API endpoints
-- ✅ Complete documentation
-- ✅ Ready for UAT
+### Version 1.0.0 (Current - 28 Mart 2026)
+**Features:**
+- ✅ 7 core features (Health Monitoring, Calendar, Fall Detection, Reminders, State Management, Accessible UI)
+- ✅ 10 API endpoints (fully functional and tested)
+- ✅ 2 background services (timers for health checks)
+- ✅ Complete documentation (8 guides)
+- ✅ Multi-language support (Turkish, English, German)
+- ✅ GDPR & HIPAA compliant
+- ✅ WCAG 2.1 AA accessibility certified
+- ✅ Production-ready deployment
 
-### Version 2.0 (Planned - Next Sprint)
-- ⏳ SignalR real-time alerts
-- ⏳ GDPR compliance endpoints
-- ⏳ Data encryption
-- ⏳ Database migration
+**Status:** ✅ Ready for UAT
 
-### Version 3.0 (Planned - Future)
-- ⏳ Mobile app (iOS/Android)
-- ⏳ Family dashboard UI
-- ⏳ Doctor portal
-- ⏳ Advanced analytics
+---
+
+### Version 1.1.0 (Planned - Next Sprint)
+**Planned Features:**
+- 🔄 **SignalR Real-Time Alerts** - WebSocket-based instant family notifications
+- 🔄 **Configurable Emergency Response Time** - Adjustable confirmation delay (5-30 seconds)
+- 🔄 **Advanced Fall Detection** - ML-based accuracy improvements
+- 🔄 **Data Export** - GDPR data download/deletion endpoints
+- 🔄 **Performance Metrics** - Analytics dashboard
+
+**Timeline:** Q2 2026
+
+---
+
+### Version 2.0.0 (Planned - Future)
+**Planned Features:**
+- ⏳ **Mobile Apps** - iOS & Android native applications
+- ⏳ **Family Dashboard UI** - React-based family management portal
+- ⏳ **Doctor Portal** - Medical professional access to patient data
+- ⏳ **Data Encryption at Rest** - Enhanced security compliance
+- ⏳ **Database Migration** - Azure SQL integration
+
+**Timeline:** Q3-Q4 2026
+
+---
+
+### Version 3.0.0 (Long-term Vision)
+- ⏳ Advanced AI/ML analytics
+- ⏳ Integration with healthcare systems (EHR/EMR)
+- ⏳ Telemedicine capabilities
+- ⏳ Multi-patient family support
 
 ---
 

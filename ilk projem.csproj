@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -6,6 +6,36 @@
     <RootNamespace>ilk_projem</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <Version>1.0.0</Version>
+    <Authors>VitaGuard Team</Authors>
+    <Description>Elder care monitoring system with real-time alerts and family integration</Description>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Core ASP.NET & Web Framework -->
+    <PackageReference Include="Microsoft.AspNetCore.App" Version="10.0.0" />
+    
+    <!-- SignalR for Real-Time Communication -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Core" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.0" />
+    
+    <!-- Swagger/OpenAPI Documentation -->
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore.Swagger" Version="6.4.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="6.4.0" />
+    
+    <!-- Localization -->
+    <PackageReference Include="Microsoft.Extensions.Localization" Version="8.0.0" />
+    
+    <!-- JWT Authentication -->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.1.0" />
+    <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="7.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Exclude AsistanApp folder from root project compilation to prevent conflicts -->
+    <Compile Remove="AsistanApp/**" />
+  </ItemGroup>
 
 </Project>

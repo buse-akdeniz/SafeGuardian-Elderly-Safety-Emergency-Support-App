@@ -14,6 +14,9 @@ class StateBasedUIManager {
         this.currentState = null;
         this.pollInterval = 5000; // Poll every 5 seconds
         this.apiBase = 'http://localhost:5007/api';
+        this.requestTimeoutMs = 4500;
+        this.errorCount = 0;
+        this.lastSuccessfulFetchAt = null;
         
         // Screen configurations for each context
         this.screenConfigs = {
@@ -76,14 +79,23 @@ class StateBasedUIManager {
     // Fetch current state from backend
     async fetchAndRenderState() {
         try {
-            const response = await fetch(`${this.apiBase}/user-state?token=${this.token}`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+            const response = await fetch(`${this.apiBase}/user-state?token=${this.token}`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
             
             if (!response.ok) {
                 console.error('❌ UserState fetch failed:', response.status);
+                this.handlePollingFailure();
                 return;
             }
 
             const state = await response.json();
+            this.errorCount = 0;
+            this.lastSuccessfulFetchAt = new Date();
+            this.hideOfflineBanner();
             
             // Check if context changed
             if (!this.currentState || this.currentState.currentContext !== state.currentContext) {
@@ -98,6 +110,54 @@ class StateBasedUIManager {
             }
         } catch (error) {
             console.error('❌ State fetch error:', error);
+            this.handlePollingFailure(error);
+        }
+    }
+
+    handlePollingFailure(error) {
+        this.errorCount += 1;
+
+        if (this.errorCount >= 2) {
+            this.showOfflineBanner();
+        }
+
+        if (!this.currentState) {
+            // İlk yüklemede hata olursa boş ekran yerine güvenli ana ekran
+            this.renderContextScreen('home');
+        }
+
+        if (error && error.name === 'AbortError') {
+            console.warn('⏱️ UserState isteği zaman aşımına uğradı');
+        }
+    }
+
+    showOfflineBanner() {
+        let banner = document.getElementById('state-offline-banner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'state-offline-banner';
+            banner.style.position = 'fixed';
+            banner.style.top = '12px';
+            banner.style.left = '50%';
+            banner.style.transform = 'translateX(-50%)';
+            banner.style.zIndex = '9999';
+            banner.style.background = '#FFB300';
+            banner.style.color = '#222';
+            banner.style.padding = '10px 16px';
+            banner.style.borderRadius = '10px';
+            banner.style.fontWeight = 'bold';
+            banner.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+            document.body.appendChild(banner);
+        }
+
+        banner.textContent = '📡 Bağlantı zayıf. Son bilinen ekran gösteriliyor...';
+        banner.style.display = 'block';
+    }
+
+    hideOfflineBanner() {
+        const banner = document.getElementById('state-offline-banner');
+        if (banner) {
+            banner.style.display = 'none';
         }
     }
 
