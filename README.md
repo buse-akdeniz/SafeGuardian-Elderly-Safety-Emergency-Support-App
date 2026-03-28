@@ -68,7 +68,7 @@
 ### 🛡️ **Rate Limiting & Security**
 - ✅ **DDoS Protection** - Per-IP rate limiting (100 requests/minute per endpoint)
 - ✅ **Graceful Degradation** - HTTP 429 response with Retry-After header
-- ✅ **Configurable Thresholds** - Adjust in `appsettings.json` → `RateLimitingOptions`
+- ✅ **Configurable Thresholds** - Adjust in `appsettings*.json` → `RateLimiting`
 - **Applies To:** All public API endpoints
 
 ---

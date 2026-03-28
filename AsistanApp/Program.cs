@@ -81,52 +81,65 @@ CREATE TABLE IF NOT EXISTS ElderlyUsers (
 // Rate Limiting Middleware
 var rateLimitStore = new Dictionary<string, List<long>>();
 var rateLimitLock = new object();
-app.Use(async (ctx, next) =>
+var rateLimitingEnabled = builder.Configuration.GetValue<bool?>("RateLimiting:Enabled") ?? true;
+var rateLimitRequestsPerMinute = builder.Configuration.GetValue<int?>("RateLimiting:RequestsPerMinute")
+    ?? (builder.Environment.IsDevelopment() ? 300 : 100);
+var rateLimitWindowSeconds = builder.Configuration.GetValue<int?>("RateLimiting:WindowSeconds") ?? 60;
+
+rateLimitRequestsPerMinute = Math.Max(1, rateLimitRequestsPerMinute);
+rateLimitWindowSeconds = Math.Max(1, rateLimitWindowSeconds);
+var rateLimitWindowMs = rateLimitWindowSeconds * 1000L;
+
+if (rateLimitingEnabled)
 {
-    string clientIp = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-    long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-    int maxRequests = 100; // 100 requests per minute per IP
-    long windowMs = 60000; // 1 minute window
-    bool limitExceeded = false;
-    int remaining = 0;
-    
-    lock (rateLimitLock)
+    app.Use(async (ctx, next) =>
     {
-        if (!rateLimitStore.ContainsKey(clientIp))
-            rateLimitStore[clientIp] = new List<long>();
-        
-        // Remove old requests outside the window
-        rateLimitStore[clientIp].RemoveAll(t => t < now - windowMs);
-        
-        // Check if limit exceeded
-        if (rateLimitStore[clientIp].Count >= maxRequests)
+        string clientIp = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        bool limitExceeded = false;
+        int remaining = 0;
+
+        lock (rateLimitLock)
         {
-            limitExceeded = true;
-            remaining = 0;
+            if (!rateLimitStore.ContainsKey(clientIp))
+                rateLimitStore[clientIp] = new List<long>();
+
+            // Remove old requests outside the window
+            rateLimitStore[clientIp].RemoveAll(t => t < now - rateLimitWindowMs);
+
+            // Check if limit exceeded
+            if (rateLimitStore[clientIp].Count >= rateLimitRequestsPerMinute)
+            {
+                limitExceeded = true;
+                remaining = 0;
+            }
+            else
+            {
+                remaining = rateLimitRequestsPerMinute - rateLimitStore[clientIp].Count;
+                rateLimitStore[clientIp].Add(now);
+            }
         }
-        else
+
+        if (limitExceeded)
         {
-            remaining = maxRequests - rateLimitStore[clientIp].Count;
-            rateLimitStore[clientIp].Add(now);
+            ctx.Response.StatusCode = 429; // Too Many Requests
+            ctx.Response.Headers.Append("Retry-After", rateLimitWindowSeconds.ToString());
+            ctx.Response.Headers.Append("X-RateLimit-Limit", rateLimitRequestsPerMinute.ToString());
+            ctx.Response.Headers.Append("X-RateLimit-Remaining", "0");
+            ctx.Response.ContentType = "application/json";
+            await ctx.Response.WriteAsJsonAsync(new
+            {
+                error = $"Rate limit exceeded. Max {rateLimitRequestsPerMinute} requests per {rateLimitWindowSeconds} seconds."
+            });
+            return;
         }
-    }
-    
-    if (limitExceeded)
-    {
-        ctx.Response.StatusCode = 429; // Too Many Requests
-        ctx.Response.Headers.Append("Retry-After", "60");
-        ctx.Response.Headers.Append("X-RateLimit-Limit", maxRequests.ToString());
-        ctx.Response.Headers.Append("X-RateLimit-Remaining", "0");
-        ctx.Response.ContentType = "application/json";
-        await ctx.Response.WriteAsJsonAsync(new { error = "Rate limit exceeded. Max 100 requests per minute." });
-        return;
-    }
-    
-    ctx.Response.Headers.Append("X-RateLimit-Limit", maxRequests.ToString());
-    ctx.Response.Headers.Append("X-RateLimit-Remaining", remaining.ToString());
-    
-    await next();
-});
+
+        ctx.Response.Headers.Append("X-RateLimit-Limit", rateLimitRequestsPerMinute.ToString());
+        ctx.Response.Headers.Append("X-RateLimit-Remaining", remaining.ToString());
+
+        await next();
+    });
+}
 
 app.UseRouting();
 if (!app.Environment.IsDevelopment())
