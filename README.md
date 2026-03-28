@@ -1,4 +1,9 @@
-# 👴👵 Vita Guard - Health Monitoring System
+# 👴👵 VitaGuard: Yaşlı Bakım Rehberi - Health Monitoring System
+
+## 👵 Elderly Care Assistant (yaşlı bakım rehberi)
+**A Smart Safety and Health Tracking Platform for Seniors.**
+
+This application is designed to provide maximum safety and ease of use for elderly individuals, featuring one-touch emergency alerts, voice command integration, and offline-first health tracking.
 
 **Yaşlı bakımı için tam kapsamlı sağlık izleme, otomatik uyarı ve aile entegrasyonu sistemi**
 
