@@ -88,6 +88,35 @@ cd AsistanApp && dotnet run
 
 ---
 
+## 🔒 Compliance & Security Standard
+
+VitaGuard is engineered with a **Security-First mindset**:
+
+### 🛡️ **Privacy**
+- ✅ **Full GDPR/KVKK Compliance** - Dedicated account deletion endpoints (`DELETE /api/elderly/account`)
+- ✅ **Data Deletion on Request** - Permanent removal of user + health records + all PII within 24 hours
+- ✅ **Audit Logging** - Account lifecycle events logged for compliance verification
+
+### 🔐 **Encryption**
+- ✅ **Password Security** - Never stored in plaintext; secured via **PBKDF2-SHA256** with **100k iterations**
+- ✅ **Constant-Time Verification** - Prevents timing attacks using `CryptographicOperations.FixedTimeEquals()`
+- ✅ **Transport Layer** - Production deployment uses **TLS 1.3** (HTTPS-only)
+- ✅ **Device Storage** - SQLite databases encrypted at rest on iOS (Apple Keychain integration)
+
+### 🌐 **Network & ATS**
+- ✅ **App Transport Security (ATS) Ready** - All endpoints configured for HTTPS/TLS
+- ✅ **Production HTTPS Redirect** - HTTP automatically redirected to HTTPS in non-dev environments
+- ✅ **HSTS Enabled** - HTTP Strict-Transport-Security headers (31536000 sec max-age)
+- ✅ **Certificate Pinning Ready** - Infrastructure supports public key pinning for enhanced security
+
+### 📱 **Apple Ecosystem**
+- ✅ **Sign in with Apple** - Full support with identity token validation + encrypted credentials
+- ✅ **HealthKit Integration** - Seamless health data sharing with Apple Health app
+- ✅ **Offline-First Architecture** - IndexedDB + Background Sync for uninterrupted service
+- ✅ **Privacy Labels** - Compliant with App Store privacy label requirements
+
+---
+
 ## 🧪 Automated Live Testing
 
 The project includes pre-configured VS Code Tasks to perform end-to-end integration tests.

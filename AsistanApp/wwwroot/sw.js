@@ -1,5 +1,5 @@
 // Service Worker for Offline Support
-const CACHE_NAME = 'safeguardian-v2';
+const CACHE_NAME = 'safeguardian-v3';
 const urlsToCache = [
     '/',
     '/index.html',
@@ -13,6 +13,49 @@ const urlsToCache = [
     '/js/signalr.min.js',
     '/favicon.ico'
 ];
+
+// IndexedDB for offline data sync
+const DB_NAME = 'VitaGuardOffline';
+const DB_VERSION = 1;
+const STORES = {
+    HEALTH_DATA: 'healthData',
+    TASKS: 'tasks',
+    PENDING_SYNC: 'pendingSync'
+};
+
+// Initialize IndexedDB
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+            const db = request.result;
+            // Create stores if they don't exist
+            if (!db.objectStoreNames.contains(STORES.HEALTH_DATA)) {
+                db.createObjectStore(STORES.HEALTH_DATA, { keyPath: 'id', autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains(STORES.TASKS)) {
+                db.createObjectStore(STORES.TASKS, { keyPath: 'id', autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains(STORES.PENDING_SYNC)) {
+                db.createObjectStore(STORES.PENDING_SYNC, { keyPath: 'id', autoIncrement: true });
+            }
+            resolve(db);
+        };
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(STORES.HEALTH_DATA)) {
+                db.createObjectStore(STORES.HEALTH_DATA, { keyPath: 'id', autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains(STORES.TASKS)) {
+                db.createObjectStore(STORES.TASKS, { keyPath: 'id', autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains(STORES.PENDING_SYNC)) {
+                db.createObjectStore(STORES.PENDING_SYNC, { keyPath: 'id', autoIncrement: true });
+            }
+        };
+    });
+}
 
 // Offline fallback HTML sayfası
 const OFFLINE_FALLBACK = `
@@ -94,11 +137,12 @@ const OFFLINE_FALLBACK = `
             Bağlantı geri geldiğinde otomatik olarak senkronize olacaktır.
         </p>
         <div class="status">
-            ✓ Yerel veri depolaması aktif<br>
+            ✓ Yerel veri depolaması aktif (IndexedDB)<br>
             ✓ Sesli komutlar çalışıyor<br>
-            ✓ Görevler kaydediliyor
+            ✓ Görevler kaydediliyor<br>
+            ✓ Otomatik senkronizasyon hazır
         </div>
-        <button class="retry-btn" onclick="location.reload()">⟲ Sayfayı Yenile</button>
+        <button class="retry-btn" onclick="location.reload()">Yeniden Dene</button>
     </div>
 </body>
 </html>
@@ -267,4 +311,66 @@ self.addEventListener('notificationclick', event => {
     );
 });
 
-console.log('Service Worker loaded and ready for offline support - v2 with improved offline handling');
+// Background Sync for offline data
+self.addEventListener('sync', event => {
+    if (event.tag === 'sync-health-data') {
+        event.waitUntil(syncHealthData());
+    }
+    if (event.tag === 'sync-tasks') {
+        event.waitUntil(syncTasks());
+    }
+});
+
+async function syncHealthData() {
+    const db = await initDB();
+    const tx = db.transaction([STORES.PENDING_SYNC], 'readonly');
+    const store = tx.objectStore(STORES.PENDING_SYNC);
+    const records = await new Promise((resolve, reject) => {
+        store.getAll().onsuccess = (e) => resolve(e.target.result);
+    });
+
+    for (const record of records) {
+        try {
+            await fetch('/api/health-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(record.payload)
+            });
+
+            const deleteTx = db.transaction([STORES.PENDING_SYNC], 'readwrite');
+            deleteTx.objectStore(STORES.PENDING_SYNC).delete(record.id);
+        } catch (err) {
+            console.log('Sync failed, will retry later:', err);
+        }
+    }
+}
+
+async function syncTasks() {
+    const db = await initDB();
+    const tx = db.transaction([STORES.TASKS], 'readonly');
+    const store = tx.objectStore(STORES.TASKS);
+    const tasks = await new Promise((resolve, reject) => {
+        store.getAll().onsuccess = (e) => resolve(e.target.result);
+    });
+
+    for (const task of tasks) {
+        if (!task.synced) {
+            try {
+                await fetch('/api/complete-task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(task)
+                });
+
+                const updateTx = db.transaction([STORES.TASKS], 'readwrite');
+                task.synced = true;
+                updateTx.objectStore(STORES.TASKS).put(task);
+            } catch (err) {
+                console.log('Task sync failed, will retry later:', err);
+            }
+        }
+    }
+}
+
+console.log('Service Worker loaded and ready for offline support - v3 with IndexedDB + Background Sync');
+

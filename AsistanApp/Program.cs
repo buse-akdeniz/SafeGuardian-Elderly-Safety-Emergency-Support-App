@@ -9,6 +9,7 @@ using ilk_projem.Data;
 using ilk_projem.Hubs;
 using ilk_projem.Models;
 using ilk_projem.Models.Persistence;
+using ilk_projem.Services;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -949,6 +950,121 @@ app.MapDelete("/api/elderly/account", async (HttpContext ctx, HealthDataService 
     }
 });
 
+// SIGN IN WITH APPLE ENDPOINT
+app.MapPost("/api/auth/apple-signin", async (HttpContext ctx, HealthDataService svc) =>
+{
+    try
+    {
+        var json = await JsonDocument.ParseAsync(ctx.Request.Body);
+        var identityToken = json.RootElement.TryGetProperty("identityToken", out var it)
+            ? it.GetString() ?? ""
+            : "";
+        var userId = json.RootElement.TryGetProperty("userId", out var uid)
+            ? uid.GetString() ?? ""
+            : "";
+        var email = json.RootElement.TryGetProperty("email", out var em)
+            ? em.GetString() ?? userId
+            : userId;
+        var fullName = json.RootElement.TryGetProperty("fullName", out var fn)
+            ? fn.GetString() ?? "Apple User"
+            : "Apple User";
+
+        var (valid, appleUserId, _) = AppleAuthService.VerifyAppleToken(identityToken, userId);
+        if (!valid)
+        {
+            return Results.Json(new { success = false, message = "Apple token doğrulması başarısız" }, statusCode: 401);
+        }
+
+        var existingUser = svc.GetUser(userId) ?? svc.GetUserByEmail(email);
+        if (existingUser != null)
+        {
+            var token = $"elderly_{existingUser.Id}_{Guid.NewGuid():N}";
+            svc.SetElderlySession(token, existingUser);
+            return Results.Json(new
+            {
+                success = true,
+                token,
+                userId = existingUser.Id,
+                name = existingUser.Name,
+                message = "Apple ile başarıyla giriş yapıldı"
+            });
+        }
+
+        var newUser = new ElderlyUser
+        {
+            Id = userId,
+            Name = fullName,
+            Email = email,
+            Password = string.Empty,
+            PasswordHash = PasswordSecurity.HashPassword(Guid.NewGuid().ToString()),
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            Subscription = new Subscription
+            {
+                UserId = userId,
+                Plan = "standard",
+                StartDate = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddYears(1),
+                IsActive = true,
+                HasEmergencyIntegration = true
+            }
+        };
+
+        svc.AddUser(newUser);
+        var newToken = $"elderly_{newUser.Id}_{Guid.NewGuid():N}";
+        svc.SetElderlySession(newToken, newUser);
+
+        return Results.Json(new
+        {
+            success = true,
+            token = newToken,
+            userId = newUser.Id,
+            name = newUser.Name,
+            isNewUser = true,
+            message = "Apple ile başarıyla kaydolundu"
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { success = false, message = $"Apple giriş hatası: {ex.Message}" }, statusCode: 500);
+    }
+});
+
+// HEALTHKIT DATA EXPORT ENDPOINT
+app.MapGet("/api/health/export-healthkit", (HttpContext ctx, HealthDataService svc) =>
+{
+    try
+    {
+        var token = ResolveToken(ctx);
+        var elderly = svc.GetElderlySession(token);
+        if (elderly == null)
+            return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
+
+        var records = svc.GetHealthRecords(elderly.Id, 30);
+        var healthKitExport = records.Select(r => HealthKitService.FormatForHealthKit(
+            elderly.Id,
+            r.MetricType,
+            r.Value,
+            r.Systolic,
+            r.Diastolic
+        )).ToList();
+
+        return Results.Json(new
+        {
+            success = true,
+            exportDate = DateTime.UtcNow.ToString("O"),
+            userId = elderly.Id,
+            recordCount = healthKitExport.Count,
+            format = "HealthKit-Compatible",
+            samples = healthKitExport
+        });
+    }
+    catch
+    {
+        return Results.Json(new { success = false, message = "HealthKit export başarısız" }, statusCode: 500);
+    }
+});
+
 app.MapGet("/api/family/me", (string token, HealthDataService svc) =>
 {
     var member = svc.GetFamilySession(token);
@@ -1794,10 +1910,15 @@ public class HealthDataService
     
     public void AddEmergencyAlert(string elderlyId, string alertType, string desc) => emergencyAlerts.Add(new EmergencyAlert { Id = Guid.NewGuid().ToString(), ElderlyId = elderlyId, AlertType = alertType, OccurredAt = DateTime.Now, Description = desc, IsResolved = false });
     public ElderlyUser? GetUser(string userId) => _users.FirstOrDefault(u => u.Id == userId);
+    public ElderlyUser? GetUserByEmail(string email) => _users.FirstOrDefault(u => u.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
     public void AddUser(ElderlyUser user)
     {
         _users.Add(user);
         UpsertUser(user);
+    }
+    public void SetElderlySession(string token, ElderlyUser user)
+    {
+        ElderlySessions[token] = user;
     }
     public List<FamilyMember> GetFamilyMembers(string elderlyId) => familyMembers.Where(f => f.ElderlyId == elderlyId).ToList();
     public void AddFamilyMember(FamilyMember member) => familyMembers.Add(member);
