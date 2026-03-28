@@ -1,6 +1,19 @@
-# 👴👵 VitaGuard: Yaşlı Bakım Rehberi - Health Monitoring System
+# 👵 VitaGuard: Elderly Care Assistant (Yaşlı Bakım Asistanı)
+> **A Smart Safety and Health Tracking Platform for Seniors.**
+> *Yaşlılar için Akıllı Güvenlik ve Sağlık Takip Platformu.*
 
-## 👵 Elderly Care Assistant (yaşlı bakım rehberi)
+[![Localization](https://img.shields.io/badge/Language-TR%20%7C%20EN-blue)](#)
+[![Build](https://img.shields.io/badge/Build-Production--Ready-green)](#)
+
+---
+
+## 🌍 Overview / Genel Bakış
+**EN:** VitaGuard is designed to ensure maximum safety for elderly individuals through one-touch emergency alerts, Siri/Voice integrations, and offline-first health tracking.
+**TR:** VitaGuard, tek dokunuşla acil durum uyarıları, Siri/Sesli komut entegrasyonları ve çevrimdışı öncelikli sağlık takibi ile yaşlıların güvenliğini sağlamak için tasarlanmıştır.
+
+---
+
+## 👵 Elderly Care Assistant (Yaşlı Bakım Asistanı)
 **A Smart Safety and Health Tracking Platform for Seniors.**
 
 This application is designed to provide maximum safety and ease of use for elderly individuals, featuring one-touch emergency alerts, voice command integration, and offline-first health tracking.
@@ -99,6 +112,8 @@ This application is designed to provide maximum safety and ease of use for elder
 - ✅ **Data Reconciliation** - Background Sync reconciles queued measurements with backend APIs when connectivity returns
 - ✅ **Graceful UI State** - Elderly users see clear large-text reassurance: “İnternet yok ama verin kaydedildi, bağlantı gelince gönderilecek.”
 
+> **EN Summary:** Health records are cached locally while offline and then auto-synced to backend services on reconnect, preserving data continuity and reducing loss risk.
+
 ---
 
 ## 🧾 Technical Notes for Reviewers
@@ -124,7 +139,17 @@ This application is designed to provide maximum safety and ease of use for elder
 4. **Online Dönüş:** Network → `No Throttling`, Console: `🌐 Back Online! Syncing data...`
 5. **Senkron Onayı:** Başarılı senkron sonrası kuyruk kayıtları silinir, backend verisi güncellenir
 
+### EN Quick Validation Checklist
+
+1. **Switch to Offline Mode:** DevTools → Network → `Offline`
+2. **Submit a Measurement:** Enter blood pressure/glucose and confirm offline queue notice
+3. **Check IndexedDB:** Application → IndexedDB → `VitaGuardOffline` → `pendingSync`
+4. **Return Online:** Network → `No Throttling`, Console: `🌐 Back Online! Syncing data...`
+5. **Verify Sync:** Queued records are cleared and backend data is updated
+
 ✅ **Final Technical Sign-off:** Smart offline synchronization + reviewer compliance notes tamamlandı. Proje **Production Ready** durumundadır.
+
+**EN Summary:** Offline sync and reviewer compliance checks are completed; the project is production-ready.
 
 ---
 
@@ -534,6 +559,8 @@ Initial EF Core + SQLite infrastructure is added:
 - Packages: `Microsoft.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Sqlite`, `Microsoft.EntityFrameworkCore.Design`
 
 Current mode is hybrid: existing in-memory flow still works, and new records can persist into SQLite (`asistanapp.db`) as migration groundwork.
+
+**EN Summary:** EF Core + SQLite persistence has been initialized. The app currently runs in hybrid mode (in-memory + SQLite) to support safe, incremental migration.
 appsettings.json              (base, all environments)
 ├── appsettings.Development.json  (local dev, 5s emergency delay)
 ├── appsettings.Production.json   (Azure, 8s emergency delay)
