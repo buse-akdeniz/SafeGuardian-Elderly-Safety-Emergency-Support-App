@@ -18,6 +18,7 @@ class StateBasedUIManager {
         this.errorCount = 0;
         this.lastSuccessfulFetchAt = null;
         this.connection = null;
+        this.syncBridgeInitialized = false;
         
         // Screen configurations for each context
         this.screenConfigs = {
@@ -67,6 +68,8 @@ class StateBasedUIManager {
     // Start polling backend for state changes
     async startPolling() {
         console.log('🔄 StateBasedUIManager: Polling başladı (5 saniye aralığında)');
+
+        this.initSmartSyncBridge();
 
         // Real-time SignalR bağlantısı (polling fallback ile birlikte)
         await this.initRealtime();
@@ -139,6 +142,10 @@ class StateBasedUIManager {
     }
 
     showOfflineBanner() {
+        this.showSyncStatus('📡 İnternet zayıf veya yok. Merak etme, veriler cihazda güvenle saklanır ve internet gelince otomatik gönderilir.', '#FFB300', '#222');
+    }
+
+    showSyncStatus(message, bg = '#FFB300', color = '#222') {
         let banner = document.getElementById('state-offline-banner');
         if (!banner) {
             banner = document.createElement('div');
@@ -154,10 +161,15 @@ class StateBasedUIManager {
             banner.style.borderRadius = '10px';
             banner.style.fontWeight = 'bold';
             banner.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+            banner.style.maxWidth = '92vw';
+            banner.style.fontSize = '22px';
+            banner.style.lineHeight = '1.35';
             document.body.appendChild(banner);
         }
 
-        banner.textContent = '📡 Bağlantı zayıf. Son bilinen ekran gösteriliyor...';
+        banner.style.background = bg;
+        banner.style.color = color;
+        banner.textContent = message;
         banner.style.display = 'block';
     }
 
@@ -166,6 +178,65 @@ class StateBasedUIManager {
         if (banner) {
             banner.style.display = 'none';
         }
+    }
+
+    initSmartSyncBridge() {
+        if (this.syncBridgeInitialized) return;
+        this.syncBridgeInitialized = true;
+
+        if (!('serviceWorker' in navigator)) {
+            console.warn('⚠️ Service Worker desteklenmiyor');
+            return;
+        }
+
+        navigator.serviceWorker.register('/sw.js')
+            .then(() => console.log('✅ Service Worker registered for smart sync'))
+            .catch(err => console.warn('⚠️ Service Worker register error:', err));
+
+        navigator.serviceWorker.addEventListener('message', (event) => {
+            const data = event.data || {};
+            if (data.type === 'OFFLINE_DATA_QUEUED') {
+                this.showSyncStatus(
+                    '📦 İnternet yok ama merak etme, ölçümün kaydedildi. İnternet gelince doktora/aileye otomatik gönderilecek.',
+                    '#FFD54F',
+                    '#222'
+                );
+            }
+            if (data.type === 'OFFLINE_SYNC_COMPLETED') {
+                this.showSyncStatus(
+                    `✅ Senkron tamamlandı: ${data.count || 0} kayıt sunucuya gönderildi.`,
+                    '#2E7D32',
+                    '#fff'
+                );
+                setTimeout(() => this.hideOfflineBanner(), 5000);
+            }
+        });
+
+        window.addEventListener('online', async () => {
+            this.showSyncStatus(
+                '🌐 İnternet geri geldi. Bekleyen sağlık verileri şimdi senkronize ediliyor...',
+                '#4CAF50',
+                '#fff'
+            );
+
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                const worker = registration.active || navigator.serviceWorker.controller;
+                if (worker) {
+                    worker.postMessage({ type: 'FORCE_SYNC' });
+                }
+            } catch (error) {
+                console.warn('⚠️ FORCE_SYNC message failed:', error);
+            }
+        });
+
+        window.addEventListener('offline', () => {
+            this.showSyncStatus(
+                '📡 İnternet kesildi. Ölçümler güvenle yerelde saklanacak ve bağlantı gelince otomatik gönderilecek.',
+                '#FFB300',
+                '#222'
+            );
+        });
     }
 
     // Render screen based on context

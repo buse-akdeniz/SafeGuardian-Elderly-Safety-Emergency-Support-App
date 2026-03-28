@@ -75,7 +75,10 @@ async function queuePendingSync(entry) {
     const tx = db.transaction([STORES.PENDING_SYNC], 'readwrite');
     const store = tx.objectStore(STORES.PENDING_SYNC);
     const id = await new Promise((resolve, reject) => {
-        const req = store.add(entry);
+        const req = store.add({
+            status: 'queued',
+            ...entry
+        });
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
     });
@@ -365,6 +368,21 @@ self.addEventListener('sync', event => {
                 }
             })()
         );
+    }
+});
+
+// Message bridge from UI (e.g. online event) to force immediate reconciliation
+self.addEventListener('message', event => {
+    const data = event.data || {};
+    if (data.type !== 'FORCE_SYNC') return;
+
+    const run = (async () => {
+        await syncHealthData();
+        await syncTasks();
+    })();
+
+    if (typeof event.waitUntil === 'function') {
+        event.waitUntil(run);
     }
 });
 

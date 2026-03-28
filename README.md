@@ -96,6 +96,15 @@
 
 ---
 
+## 🧾 Technical Notes for Reviewers
+
+- **Offline Functionality:** The app uses Service Workers + IndexedDB so elderly users can record vitals without active internet. Queued data is automatically synchronized via Background Sync once connectivity is restored.
+- **Authentication:** Supports standard login and is ready for **Sign in with Apple** to align with App Store Guideline 4.8 expectations.
+- **Data Safety:** Health data is stored in a SQLite persistence layer and transmitted over HTTPS/TLS in production deployments.
+- **Account Control:** Users can permanently delete account + personal data from in-app flows (GDPR/KVKK aligned).
+
+---
+
 ## 📊 Project Status
 
 ```
