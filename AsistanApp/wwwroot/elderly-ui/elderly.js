@@ -1111,6 +1111,11 @@ async function handleAddMedication(e) {
     }
 }
 
+async function handleAppleSignInPreview() {
+    showNotification('Apple Giriş', 'Sign in with Apple taslağı hazır. Üretimde Apple kimlik doğrulama akışı aktif edilecektir.', 'success');
+    speak('Apple ile giriş seçeneği hazır. Mağaza uyumluluğu için aktif edilecek.');
+}
+
 async function handleRegister(e) {
     e.preventDefault();
     const fullName = document.getElementById('regFullName').value.trim();

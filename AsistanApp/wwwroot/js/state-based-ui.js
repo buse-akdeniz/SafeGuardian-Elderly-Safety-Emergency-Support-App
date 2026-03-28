@@ -213,6 +213,7 @@ class StateBasedUIManager {
         });
 
         window.addEventListener('online', async () => {
+            console.log('🌐 Back Online! Syncing data...');
             this.showSyncStatus(
                 '🌐 İnternet geri geldi. Bekleyen sağlık verileri şimdi senkronize ediliyor...',
                 '#4CAF50',
