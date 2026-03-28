@@ -8,6 +8,7 @@ using ilk_projem.Controllers;
 using ilk_projem.Data;
 using ilk_projem.Hubs;
 using ilk_projem.Models;
+using ilk_projem.Models.Persistence;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -18,10 +19,14 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.UseUrls("http://0.0.0.0:5007");
+if (builder.Environment.IsDevelopment())
+{
+    builder.WebHost.UseUrls("http://0.0.0.0:5007");
+}
 
 builder.Services.AddScoped<HealthDataService>();
 builder.Services.AddHttpClient();
@@ -46,9 +51,38 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
+    db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS ElderlyUsers (
+    Id TEXT NOT NULL PRIMARY KEY,
+    Name TEXT NOT NULL,
+    Email TEXT NOT NULL,
+    PasswordHash TEXT NOT NULL,
+    PhoneNumber TEXT NULL,
+    BirthDate TEXT NULL,
+    BloodType TEXT NULL,
+    MedicalHistory TEXT NULL,
+    Allergies TEXT NULL,
+    DoctorPhone TEXT NULL,
+    CreatedAt TEXT NOT NULL,
+    IsActive INTEGER NOT NULL,
+    Plan TEXT NOT NULL,
+    SubscriptionStartDate TEXT NOT NULL,
+    SubscriptionExpiresAt TEXT NOT NULL,
+    SubscriptionIsActive INTEGER NOT NULL,
+    HasAIAnalysis INTEGER NOT NULL,
+    HasFallDetection INTEGER NOT NULL,
+    HasLiveLocation INTEGER NOT NULL,
+    HasEmergencyIntegration INTEGER NOT NULL
+);");
+    db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_ElderlyUsers_Email ON ElderlyUsers (Email);");
 }
 
 app.UseRouting();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+    app.UseHttpsRedirection();
+}
 app.UseCors("AllowAll");
 app.UseStaticFiles();
 app.MapControllers();
@@ -475,7 +509,8 @@ app.MapPost("/api/elderly-self-enroll", async (HttpContext ctx, HealthDataServic
             Id = deviceId,
             Name = fullName,
             Email = email,
-            Password = finalPassword,
+            Password = string.Empty,
+            PasswordHash = PasswordSecurity.HashPassword(finalPassword),
             PhoneNumber = phone,
             BirthDate = birthDate,
             BloodType = bloodType,
@@ -887,6 +922,31 @@ app.MapPost("/api/elderly/reset-password", async (HttpContext ctx, HealthDataSer
         });
     }
     catch { return Results.Json(new { success = false }, statusCode: 500); }
+});
+
+// DATA DELETION ENDPOINT (App Store compliance)
+app.MapDelete("/api/elderly/account", async (HttpContext ctx, HealthDataService svc) =>
+{
+    try
+    {
+        var json = await JsonDocument.ParseAsync(ctx.Request.Body);
+        var password = json.RootElement.TryGetProperty("password", out var pw)
+            ? pw.GetString() ?? ""
+            : "";
+
+        var token = ResolveToken(ctx, json.RootElement);
+        var result = svc.DeleteElderlyAccount(token, password);
+        if (!result.Success)
+        {
+            return Results.Json(new { success = false, message = result.Message }, statusCode: 400);
+        }
+
+        return Results.Json(new { success = true, message = "Hesap ve ilişkili veriler kalıcı olarak silindi" });
+    }
+    catch
+    {
+        return Results.Json(new { success = false, message = "Hesap silme işlemi başarısız" }, statusCode: 500);
+    }
 });
 
 app.MapGet("/api/family/me", (string token, HealthDataService svc) =>
@@ -1340,6 +1400,7 @@ public class ElderlyUser
     public string Name { get; set; } = "";
     public string Email { get; set; } = "";
     public string Password { get; set; } = "";
+    public string PasswordHash { get; set; } = "";
     public DateTime CreatedAt { get; set; }
     
     // Yaşlı Self-Enrollment için yeni alanlar
@@ -1461,20 +1522,122 @@ public class HealthDataService
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> lastFamilyContact = new();
 
     private readonly IConfiguration _configuration;
+    private readonly AppDbContext _db;
 
-    public HealthDataService(IConfiguration configuration)
+    public HealthDataService(IConfiguration configuration, AppDbContext db)
     {
         _configuration = configuration;
-        _users.Add(new ElderlyUser
+        _db = db;
+        LoadUsersFromDb();
+
+        if (!_users.Any())
         {
-            Id = "elderly-001",
-            Name = "Buse",
-            Email = "elderly@test.com",
-            Password = "123",
-            IsActive = true,
-            Subscription = new Subscription { Plan = "premium", IsActive = true }
-        });
+            var seeded = new ElderlyUser
+            {
+                Id = "elderly-001",
+                Name = "Buse",
+                Email = "elderly@test.com",
+                Password = string.Empty,
+                PasswordHash = PasswordSecurity.HashPassword("123"),
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                Subscription = new Subscription
+                {
+                    UserId = "elderly-001",
+                    Plan = "premium",
+                    StartDate = DateTime.UtcNow,
+                    ExpiresAt = DateTime.UtcNow.AddYears(1),
+                    IsActive = true,
+                    HasAIAnalysis = true,
+                    HasFallDetection = true,
+                    HasLiveLocation = true,
+                    HasEmergencyIntegration = true
+                }
+            };
+
+            _users.Add(seeded);
+            UpsertUser(seeded);
+        }
+
         InitializeSampleData();
+    }
+
+    private void LoadUsersFromDb()
+    {
+        List<StoredElderlyUser> storedUsers;
+        try
+        {
+            storedUsers = _db.ElderlyUsers.AsNoTracking().ToList();
+        }
+        catch
+        {
+            return;
+        }
+
+        if (!storedUsers.Any())
+        {
+            return;
+        }
+
+        _users = storedUsers.Select(s => new ElderlyUser
+        {
+            Id = s.Id,
+            Name = s.Name,
+            Email = s.Email,
+            PasswordHash = s.PasswordHash,
+            PhoneNumber = s.PhoneNumber,
+            BirthDate = s.BirthDate,
+            BloodType = s.BloodType,
+            MedicalHistory = s.MedicalHistory,
+            Allergies = s.Allergies,
+            DoctorPhone = s.DoctorPhone,
+            CreatedAt = s.CreatedAt,
+            IsActive = s.IsActive,
+            Subscription = new Subscription
+            {
+                UserId = s.Id,
+                Plan = s.Plan,
+                StartDate = s.SubscriptionStartDate,
+                ExpiresAt = s.SubscriptionExpiresAt,
+                IsActive = s.SubscriptionIsActive,
+                HasAIAnalysis = s.HasAIAnalysis,
+                HasFallDetection = s.HasFallDetection,
+                HasLiveLocation = s.HasLiveLocation,
+                HasEmergencyIntegration = s.HasEmergencyIntegration
+            }
+        }).ToList();
+    }
+
+    private void UpsertUser(ElderlyUser user)
+    {
+        var existing = _db.ElderlyUsers.FirstOrDefault(x => x.Id == user.Id);
+        if (existing == null)
+        {
+            existing = new StoredElderlyUser { Id = user.Id };
+            _db.ElderlyUsers.Add(existing);
+        }
+
+        existing.Name = user.Name;
+        existing.Email = user.Email;
+        existing.PasswordHash = user.PasswordHash;
+        existing.PhoneNumber = user.PhoneNumber;
+        existing.BirthDate = user.BirthDate;
+        existing.BloodType = user.BloodType;
+        existing.MedicalHistory = user.MedicalHistory;
+        existing.Allergies = user.Allergies;
+        existing.DoctorPhone = user.DoctorPhone;
+        existing.CreatedAt = user.CreatedAt == default ? DateTime.UtcNow : user.CreatedAt;
+        existing.IsActive = user.IsActive;
+        existing.Plan = user.Subscription?.Plan ?? "standard";
+        existing.SubscriptionStartDate = user.Subscription?.StartDate ?? DateTime.UtcNow;
+        existing.SubscriptionExpiresAt = user.Subscription?.ExpiresAt ?? DateTime.UtcNow.AddYears(1);
+        existing.SubscriptionIsActive = user.Subscription?.IsActive ?? true;
+        existing.HasAIAnalysis = user.Subscription?.HasAIAnalysis ?? false;
+        existing.HasFallDetection = user.Subscription?.HasFallDetection ?? false;
+        existing.HasLiveLocation = user.Subscription?.HasLiveLocation ?? false;
+        existing.HasEmergencyIntegration = user.Subscription?.HasEmergencyIntegration ?? true;
+
+        _db.SaveChanges();
     }
 
     private void InitializeSampleData()
@@ -1487,7 +1650,8 @@ public class HealthDataService
             Id = "elderly-001", 
             Name = "Ahmet Amca", 
             Email = "elderly@test.com", 
-            Password = "1234",
+            Password = string.Empty,
+            PasswordHash = PasswordSecurity.HashPassword("123"),
             PhoneNumber = "+90 555 123 4567",
             BirthDate = "1948-04-12",
             CreatedAt = DateTime.Now,
@@ -1504,6 +1668,12 @@ public class HealthDataService
                 HasEmergencyIntegration = true
             }
             });
+
+            var seededUser = _users.FirstOrDefault(u => u.Id == "elderly-001");
+            if (seededUser != null)
+            {
+                UpsertUser(seededUser);
+            }
         }
         
         familyMembers.AddRange(new[] {
@@ -1624,7 +1794,11 @@ public class HealthDataService
     
     public void AddEmergencyAlert(string elderlyId, string alertType, string desc) => emergencyAlerts.Add(new EmergencyAlert { Id = Guid.NewGuid().ToString(), ElderlyId = elderlyId, AlertType = alertType, OccurredAt = DateTime.Now, Description = desc, IsResolved = false });
     public ElderlyUser? GetUser(string userId) => _users.FirstOrDefault(u => u.Id == userId);
-    public void AddUser(ElderlyUser user) => _users.Add(user);
+    public void AddUser(ElderlyUser user)
+    {
+        _users.Add(user);
+        UpsertUser(user);
+    }
     public List<FamilyMember> GetFamilyMembers(string elderlyId) => familyMembers.Where(f => f.ElderlyId == elderlyId).ToList();
     public void AddFamilyMember(FamilyMember member) => familyMembers.Add(member);
     public void RecordFamilyContact(string elderlyId)
@@ -1782,10 +1956,27 @@ public class HealthDataService
         var normalizedEmail = email.Trim();
         var normalizedPassword = password.Trim();
         Console.WriteLine($"Giriş deneniyor: {normalizedEmail}");
-        var user = _users.FirstOrDefault(u => u.Email.Equals(normalizedEmail, StringComparison.OrdinalIgnoreCase));
+        var user = _users.FirstOrDefault(u =>
+            u.IsActive &&
+            u.Email.Equals(normalizedEmail, StringComparison.OrdinalIgnoreCase));
         if (user == null) return null;
-        var expectedPassword = string.IsNullOrWhiteSpace(user.Password) ? "1234" : user.Password;
-        if (!string.Equals(normalizedPassword, expectedPassword, StringComparison.Ordinal)) return null;
+
+        var verified = PasswordSecurity.VerifyPassword(normalizedPassword, user.PasswordHash);
+
+        // Backward-compatible migration from plaintext passwords
+        if (!verified && !string.IsNullOrWhiteSpace(user.Password))
+        {
+            verified = string.Equals(normalizedPassword, user.Password, StringComparison.Ordinal);
+            if (verified)
+            {
+                user.PasswordHash = PasswordSecurity.HashPassword(normalizedPassword);
+                user.Password = string.Empty;
+                UpsertUser(user);
+            }
+        }
+
+        if (!verified) return null;
+
         var token = $"elderly_{user.Id}_{Guid.NewGuid():N}";
         ElderlySessions[token] = user;
         return (token, user);
@@ -1805,7 +1996,9 @@ public class HealthDataService
         }
 
         var tempPassword = new Random().Next(100000, 999999).ToString();
-        user.Password = tempPassword;
+        user.PasswordHash = PasswordSecurity.HashPassword(tempPassword);
+        user.Password = string.Empty;
+        UpsertUser(user);
 
         var emailResult = SendResetPasswordEmail(user, tempPassword);
         if (!emailResult.Success)
@@ -1814,6 +2007,54 @@ public class HealthDataService
         }
 
         return (true, null, "Geçici şifre e-posta adresinize gönderildi");
+    }
+
+    public (bool Success, string Message) DeleteElderlyAccount(string token, string password)
+    {
+        var user = GetElderlySession(token);
+        if (user == null)
+        {
+            return (false, "Geçersiz oturum");
+        }
+
+        if (!PasswordSecurity.VerifyPassword(password, user.PasswordHash))
+        {
+            return (false, "Şifre doğrulanamadı");
+        }
+
+        _users.RemoveAll(u => u.Id == user.Id);
+        tasks.RemoveAll(t => t.ElderlyId == user.Id);
+        healthRecords.RemoveAll(h => h.ElderlyId == user.Id);
+        emergencyAlerts.RemoveAll(a => a.ElderlyId == user.Id);
+        familyMembers.RemoveAll(f => f.ElderlyId == user.Id);
+        medications.RemoveAll(m => m.ElderlyId == user.Id);
+        moodRecords.RemoveAll(m => m.ElderlyId == user.Id);
+        userStates.TryRemove(user.Id, out _);
+        lastFamilyContact.TryRemove(user.Id, out _);
+
+        foreach (var sessionToken in ElderlySessions
+                     .Where(kvp => kvp.Value.Id == user.Id)
+                     .Select(kvp => kvp.Key)
+                     .ToList())
+        {
+            ElderlySessions.TryRemove(sessionToken, out _);
+        }
+
+        var storedUser = _db.ElderlyUsers.FirstOrDefault(u => u.Id == user.Id);
+        if (storedUser != null)
+        {
+            _db.ElderlyUsers.Remove(storedUser);
+        }
+
+        var storedRecords = _db.HealthRecords.Where(r => r.ElderlyId == user.Id).ToList();
+        if (storedRecords.Count > 0)
+        {
+            _db.HealthRecords.RemoveRange(storedRecords);
+        }
+
+        _db.SaveChanges();
+
+        return (true, "Hesap başarıyla silindi");
     }
 
     private (bool Success, string Message) SendResetPasswordEmail(ElderlyUser user, string tempPassword)
@@ -1902,6 +2143,51 @@ public interface ISmsSender
 {
     string EmergencyServicesNumber { get; }
     Task<bool> SendAsync(string to, string message);
+}
+
+public static class PasswordSecurity
+{
+    private const int Iterations = 100_000;
+    private const int SaltSize = 16;
+    private const int KeySize = 32;
+
+    public static string HashPassword(string password)
+    {
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new ArgumentException("Şifre boş olamaz", nameof(password));
+        }
+
+        var salt = RandomNumberGenerator.GetBytes(SaltSize);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, HashAlgorithmName.SHA256, KeySize);
+
+        return $"PBKDF2${Iterations}${Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
+    }
+
+    public static bool VerifyPassword(string password, string storedHash)
+    {
+        if (string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(storedHash))
+        {
+            return false;
+        }
+
+        var parts = storedHash.Split('$', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 4 || !string.Equals(parts[0], "PBKDF2", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (!int.TryParse(parts[1], out var iterations) || iterations <= 0)
+        {
+            return false;
+        }
+
+        var salt = Convert.FromBase64String(parts[2]);
+        var expected = Convert.FromBase64String(parts[3]);
+        var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, expected.Length);
+
+        return CryptographicOperations.FixedTimeEquals(actual, expected);
+    }
 }
 
 public class SmsSender : ISmsSender
