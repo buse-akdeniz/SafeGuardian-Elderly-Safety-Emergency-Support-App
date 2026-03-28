@@ -1,0 +1,40 @@
+/* ===========================
+   MOOD THEME - DECLINING
+   Soothing, warm palette
+   =========================== */
+
+body.mood-declining {
+    background: #2a1f1a;
+}
+
+body.mood-declining .screen {
+    background: linear-gradient(180deg, #2b1f1a 0%, #2f241d 100%);
+}
+
+body.mood-declining #moodScreen h1,
+body.mood-declining #moodScreen #moodDashboard {
+    color: #ffd4a3;
+}
+
+body.mood-declining #moodDashboard {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+body.mood-declining #moodDashboard > div,
+body.mood-declining #moodDashboard .medication-card {
+    background: rgba(255, 200, 140, 0.08);
+    border-left-color: #ffb36b;
+}
+
+body.mood-declining .btn-giant,
+body.mood-declining .btn-mega {
+    background: linear-gradient(135deg, #ffb36b 0%, #f77f63 100%);
+    color: #2b1f1a;
+}
+
+body.mood-declining .voice-guidance,
+body.mood-declining .voice-indicator {
+    border-color: #ffb36b;
+    color: #ffddb8;
+    background: rgba(43, 31, 26, 0.85);
+}

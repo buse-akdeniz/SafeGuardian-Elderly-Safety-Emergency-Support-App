@@ -2,11 +2,12 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=4, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>Yaşlı Asistanı</title>
     <link rel="stylesheet" href="elderly.css">
+    <link rel="stylesheet" href="mood-theme.css">
 </head>
 <body>
     <!-- =================== GİRİŞ EKRANI =================== -->
@@ -19,19 +20,61 @@
         <form id="loginForm" class="form-container">
             <div class="input-group">
                 <label for="email">E-POSTA</label>
-                <input type="email" id="email" placeholder="test@mail.com" required>
+                <input type="email" id="email" required>
             </div>
 
             <div class="input-group">
                 <label for="password">ŞİFRE</label>
-                <input type="password" id="password" placeholder="1234" required>
+                <input type="password" id="password" required>
             </div>
+
+            <label class="remember-row">
+                <input type="checkbox" id="rememberMe" />
+                <span>BENİ HATIRLA</span>
+            </label>
 
             <button type="submit" class="btn-giant btn-blue">
                 GİRİŞ YAP
             </button>
 
-            <p class="hint-text">Test: elderly@test.com / 1234</p>
+            <button type="button" class="btn-giant btn-green" onclick="goToRegister()" style="margin-top: 10px;">
+                KAYIT OL
+            </button>
+
+            <button type="button" class="btn-small btn-gray" onclick="handleForgotPassword()" style="margin-top: 12px; width: 100%;">
+                ŞİFREMİ UNUTTUM
+            </button>
+
+            <p class="hint-text" id="testHint" style="display: none;">Test: elderly@test.com / 123</p>
+        </form>
+    </div>
+
+    <!-- =================== KAYIT OL =================== -->
+    <div id="registerScreen" class="screen">
+        <div class="top-bar">
+            <button class="btn-small btn-back" onclick="showScreen('loginScreen')">← GERİ</button>
+            <h1>KAYIT OL</h1>
+        </div>
+
+        <form id="registerForm" class="form-container" style="margin-top: 20px;">
+            <div class="input-group">
+                <label for="regFullName">AD SOYAD</label>
+                <input type="text" id="regFullName" placeholder="Örn: Ayşe Yılmaz" required>
+            </div>
+            <div class="input-group">
+                <label for="regPhone">TELEFON</label>
+                <input type="tel" id="regPhone" placeholder="05xx xxx xx xx" required>
+            </div>
+            <div class="input-group">
+                <label for="regEmail">E-POSTA</label>
+                <input type="email" id="regEmail" placeholder="ayse@mail.com" required>
+            </div>
+            <div class="input-group">
+                <label for="regBirthDate">DOĞUM TARİHİ</label>
+                <input type="date" id="regBirthDate" required>
+            </div>
+
+            <button type="submit" class="btn-giant btn-green">KAYDI TAMAMLA</button>
         </form>
     </div>
 
@@ -44,7 +87,7 @@
 
         <div class="main-area">
             <!-- SESLİ REHBERLİK -->
-            <div id="voiceGuidance" class="voice-guidance"></div>
+            <div id="voiceGuidance" class="voice-guidance" role="status" aria-live="polite"></div>
 
             <!-- 3 ANA BUTON -->
             <div class="three-button-layout">
@@ -67,8 +110,31 @@
                 </button>
             </div>
 
+            <button class="btn-giant btn-red emergency-main" onclick="showEmergencyConfirm()" aria-label="Acil yardım çağır">
+                🚨 ACİL YARDIM
+            </button>
+
             <!-- EKLENTI BUTONLARI -->
-            <div class="three-button-layout" style="margin-top: 20px;">
+            <div id="simpleModeBanner" class="simple-banner" aria-live="polite">
+                Basit mod açık: Ek özellikler gizlendi.
+            </div>
+
+            <div class="mood-quick" aria-live="polite">
+                <div class="mood-quick-title">NASILSIN?</div>
+                <div class="mood-quick-buttons">
+                    <button class="btn-giant btn-green mood-quick-btn" onclick="submitMood(8)" aria-label="İyiyim">
+                        😊 İYİYİM
+                    </button>
+                    <button class="btn-giant btn-yellow mood-quick-btn" onclick="submitMood(5)" aria-label="İdare eder">
+                        😐 İDARE EDER
+                    </button>
+                    <button class="btn-giant btn-red mood-quick-btn" onclick="submitMood(2)" aria-label="Kötüyüm">
+                        😟 KÖTÜYÜM
+                    </button>
+                </div>
+            </div>
+
+            <div class="three-button-layout extra" style="margin-top: 20px;">
                 <!-- Ruh Hali Dashboard -->
                 <button class="btn-mega btn-mood" onclick="goToMoodDashboard()" aria-label="Ruh Hali Takibi">
                     <span class="btn-icon">😊</span>
@@ -87,15 +153,23 @@
                 </button>
             </div>
 
+            <button class="btn-giant btn-blue" onclick="shareDoctorReport()" aria-label="Doktora rapor göster">
+                🩺 DOKTORA GÖSTER
+            </button>
+
+            <button id="repeatGuidanceBtn" class="btn-giant btn-blue" onclick="toggleListening()">
+                🎙️ DİNLE / SESİ TEKRARLA
+            </button>
+
             <!-- SES DURUMU -->
-            <div id="voiceStatus" class="voice-indicator"></div>
+            <div id="voiceStatus" class="voice-indicator" role="status" aria-live="polite"></div>
         </div>
     </div>
 
     <!-- =================== RUH HALİ DASHBOARD =================== -->
     <div id="moodScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-gray" onclick="goHome()">← GERİ</button>
+            <button class="btn-small btn-back" onclick="showScreen('homeScreen')">← GERİ</button>
             <h1>RUH HALİ TAKIBI</h1>
         </div>
 
@@ -112,7 +186,7 @@
     <!-- =================== SAĞLIK KAYITLARI =================== -->
     <div id="healthRecordsScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-gray" onclick="goHome()">← GERİ</button>
+            <button class="btn-small btn-back" onclick="showScreen('homeScreen')">← GERİ</button>
             <h1>SAĞLIK KAYITLARI</h1>
         </div>
 
@@ -129,7 +203,7 @@
     <!-- =================== İLAÇ YÖNETIMI =================== -->
     <div id="medicationScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-gray" onclick="goHome()">← GERİ</button>
+            <button class="btn-small btn-back" onclick="showScreen('homeScreen')">← GERİ</button>
             <h1>İLAÇLARIM</h1>
         </div>
 
@@ -147,7 +221,7 @@
     <!-- =================== İLAÇ EKLEME =================== -->
     <div id="addMedicationScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-gray" onclick="goHome()">← GERİ</button>
+            <button class="btn-small btn-back" onclick="showScreen('homeScreen')">← GERİ</button>
             <h1>YENİ İLAÇ EKLE</h1>
         </div>
 
@@ -178,7 +252,7 @@
     <!-- =================== AİLE ÜYELERİ =================== -->
     <div id="familyScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-gray" onclick="goHome()">← GERİ</button>
+            <button class="btn-small btn-back" onclick="showScreen('homeScreen')">← GERİ</button>
             <h1>AİLE ÜYELERİ</h1>
         </div>
 
@@ -196,7 +270,7 @@
     <!-- =================== AILE ÜYESİ EKLEME =================== -->
     <div id="addFamilyScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-gray" onclick="goFamily()">← GERİ</button>
+            <button type="button" class="btn-small btn-back" onclick="goToFamily()">← GERİ</button>
             <h1>AILE ÜYESİ EKLE</h1>
         </div>
 
@@ -204,6 +278,11 @@
             <div class="input-group">
                 <label for="familyName">AD</label>
                 <input type="text" id="familyName" placeholder="Örn: Ali" required>
+            </div>
+
+            <div class="input-group">
+                <label for="familyPhone">TELEFON</label>
+                <input type="tel" id="familyPhone" placeholder="Telefon Numarası (05XX...)" class="form-control">
             </div>
 
             <div class="input-group">
@@ -231,7 +310,7 @@
 
     <div id="helpScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-gray" onclick="goHome()">← GERİ</button>
+            <button class="btn-small btn-back" onclick="showScreen('homeScreen')">← GERİ</button>
             <h1>YARDIM</h1>
         </div>
 
@@ -262,7 +341,59 @@
         </div>
     </div>
 
-    <script src="voice-assistant.js"></script>
+    <!-- =================== ACİL DURUM ONAY =================== -->
+    <div id="emergencyModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="emergencyTitle">
+        <div class="modal-content">
+            <h2 id="emergencyTitle">Acil yardım çağrılıyor</h2>
+            <p>5 saniye içinde onaylanacak. Aileye ve sağlık kuruluşlarına bildirim ile konum paylaşılır. İptal edebilirsiniz.</p>
+            <div class="modal-actions">
+                <button class="btn-giant btn-red" onclick="confirmEmergency()">ONAYLA</button>
+                <button class="btn-giant btn-gray" onclick="cancelEmergency()">İPTAL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================== SESLI ASİSTAN ONBOARDING =================== -->
+    <div id="voiceOnboarding" class="voice-onboarding" role="dialog" aria-modal="true" aria-labelledby="voiceOnboardingTitle" aria-describedby="voiceOnboardingDesc">
+        <div class="voice-onboarding-card">
+            <div class="voice-onboarding-icon" aria-hidden="true">🎙️</div>
+            <h2 id="voiceOnboardingTitle">Sesli Asistanı Başlat</h2>
+            <p id="voiceOnboardingDesc">Mikrofona dokun ve konuş. İstersen “İlaçlarım”, “Aile”, “Yardım” diyebilirsin.</p>
+            <div class="voice-onboarding-actions">
+                <button id="voiceOnboardingStart" class="btn-giant btn-green">DİNLEMEYİ BAŞLAT</button>
+                <button id="voiceOnboardingSkip" class="btn-giant btn-gray">ŞİMDİ DEĞİL</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="a11y-controls" aria-label="Erişilebilirlik ayarları">
+        <button id="a11yMenuBtn" class="btn-small btn-yellow a11y-menu-btn" aria-expanded="false" aria-controls="a11yMenu" onclick="toggleA11yMenu(event)">
+            ⚙️ AYARLAR
+        </button>
+        <div id="a11yMenu" class="a11y-menu" hidden>
+            <div class="a11y-group">
+                <label for="apiBaseInput" class="a11y-label">API ADRESİ</label>
+                <input id="apiBaseInput" class="a11y-input" type="url" placeholder="http://192.168.1.10:5007" />
+                <button id="apiBaseSave" class="btn-small btn-yellow a11y-btn">KAYDET</button>
+                <button id="apiBaseClear" class="btn-small btn-gray a11y-btn">SIFIRLA</button>
+            </div>
+            <button id="a11yToggle" type="button" class="btn-small btn-yellow a11y-btn" aria-pressed="false" onclick="toggleLargeText(this)">
+                YAZIYI BÜYÜT
+            </button>
+            <button id="contrastToggle" type="button" class="btn-small btn-yellow a11y-btn" aria-pressed="false" onclick="toggleHighContrast(this)">
+                KONTRASTI ARTIR
+            </button>
+            <button id="simpleHomeToggle" type="button" class="btn-small btn-yellow a11y-btn" aria-pressed="false" onclick="toggleSimpleHome(this)">
+                BASİT MOD
+            </button>
+            <button id="resetViewBtn" type="button" class="btn-small btn-gray a11y-btn" onclick="resetViewSettings()">
+                GÖRÜNÜMÜ SIFIRLA
+            </button>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
     <script src="elderly.js"></script>
+    <script src="voice-assistant.js"></script>
 </body>
 </html>

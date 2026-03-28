@@ -1,0 +1,20 @@
+{
+  "name": "safeguardian-asistanapp",
+  "version": "2.0.0",
+  "private": true,
+  "description": "SafeGuardian AsistanApp - Capacitor wrapper",
+  "scripts": {
+    "cap:add:ios": "npx cap add ios",
+    "cap:sync": "npx cap sync",
+    "cap:open:ios": "npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/geolocation": "^6.1.1",
+    "@capacitor/ios": "^6.0.0",
+    "@capacitor/preferences": "^6.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0"
+  }
+}

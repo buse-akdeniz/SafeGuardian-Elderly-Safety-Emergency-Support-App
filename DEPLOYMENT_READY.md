@@ -218,6 +218,10 @@
 - Responsive design (works on all sizes)
 - Touch-optimized for tablet family members
 
+### iOS Simulator Notu (Xcode)
+- Xcode simülatörü ayrı bir cihaz gibi davranır; `localhost` veya `127.0.0.1` bilgisayardaki sunucuya erişmez.
+- Çözüm: API adresini bilgisayarın yerel IP’siyle kullanın (örn. `http://192.168.1.50:5007/api`).
+
 ### Accessibility Hardware
 - Vibration motor (haptic feedback)
 - Proximity sensor (wake detection)

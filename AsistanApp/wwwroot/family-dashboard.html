@@ -297,12 +297,28 @@
                 <input type="password" id="familyPassword" placeholder="••••••" required>
             </div>
 
+            <label style="display: flex; align-items: center; gap: 10px; margin: 15px 0; font-size: 16px; color: #333;">
+                <input type="checkbox" id="rememberMe" />
+                Beni Hatırla
+            </label>
+
             <button type="submit">Giriş Yap</button>
 
             <p style="text-align: center; color: #666; margin-top: 20px; font-size: 14px;">
                 Test: ali@example.com / 1234
             </p>
         </form>
+
+        <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+            <div class="form-group">
+                <label for="apiBaseInput">API Adresi</label>
+                <input type="url" id="apiBaseInput" placeholder="https://api.yasliyakini.com" />
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" id="apiBaseSave" style="flex: 1;">Kaydet</button>
+                <button type="button" id="apiBaseClear" class="logout-btn" style="flex: 1;">Sıfırla</button>
+            </div>
+        </div>
     </div>
 
     <!-- DASHBOARD EKRANI -->
@@ -337,9 +353,51 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:5007/api';
+        const DEFAULT_API_BASE = 'http://localhost:5007/api';
+
+        function getApiBase() {
+            const stored = localStorage.getItem('apiBaseUrl');
+            if (stored) return `${stored.replace(/\/$/, '')}/api`;
+            if (window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
+                return `${window.location.origin}/api`;
+            }
+            return DEFAULT_API_BASE;
+        }
+
+        const API_BASE = getApiBase();
         let familyToken = null;
         let elderlyId = null;
+        const storage = {
+            getItem: (key) => (sessionStorage.getItem(key) ?? localStorage.getItem(key)),
+            setItem: (key, value, remember) => (remember ? localStorage : sessionStorage).setItem(key, value),
+            removeItem: (key) => { sessionStorage.removeItem(key); localStorage.removeItem(key); }
+        };
+
+        const apiBaseInput = document.getElementById('apiBaseInput');
+        const apiBaseSave = document.getElementById('apiBaseSave');
+        const apiBaseClear = document.getElementById('apiBaseClear');
+
+        if (apiBaseInput) {
+            const stored = localStorage.getItem('apiBaseUrl');
+            apiBaseInput.value = stored || '';
+        }
+
+        if (apiBaseSave && apiBaseInput) {
+            apiBaseSave.addEventListener('click', () => {
+                const value = apiBaseInput.value.trim();
+                if (!value) return;
+                localStorage.setItem('apiBaseUrl', value);
+                location.reload();
+            });
+        }
+
+        if (apiBaseClear && apiBaseInput) {
+            apiBaseClear.addEventListener('click', () => {
+                localStorage.removeItem('apiBaseUrl');
+                apiBaseInput.value = '';
+                location.reload();
+            });
+        }
 
         // GİRİŞ YÖNETIMI
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -356,11 +414,12 @@
 
                 if (response.ok) {
                     const data = await response.json();
+                    const remember = document.getElementById('rememberMe')?.checked;
                     familyToken = data.token;
                     elderlyId = data.caringFor;
-                    
-                    localStorage.setItem('familyToken', familyToken);
-                    localStorage.setItem('elderlyId', elderlyId);
+
+                    storage.setItem('familyToken', familyToken, remember);
+                    storage.setItem('elderlyId', elderlyId, remember);
                     
                     showDashboard();
                 } else {
@@ -375,7 +434,25 @@
         function showDashboard() {
             document.getElementById('loginContainer').classList.remove('active');
             document.getElementById('dashboardContainer').classList.add('active');
+            if (!history.state || history.state.view !== 'dashboard') {
+                history.pushState({ view: 'dashboard' }, '', window.location.href);
+            }
+            markFamilyContact();
             loadDashboard();
+        }
+
+        async function markFamilyContact() {
+            if (!familyToken) return;
+            try {
+                await fetch(`${API_BASE}/family/contact?token=${familyToken}`, { method: 'POST' });
+            } catch (error) {
+                console.warn('Aile iletişim kaydı başarısız:', error);
+            }
+        }
+
+        function showLogin() {
+            document.getElementById('loginContainer').classList.add('active');
+            document.getElementById('dashboardContainer').classList.remove('active');
         }
 
         async function loadDashboard() {
@@ -385,12 +462,38 @@
                 if (response.ok) {
                     const data = await response.json();
                     renderDashboard(data);
+                    setDashboardAlert('');
                     
                     // Her 30 saniyede yenile
                     setTimeout(loadDashboard, 30000);
+                } else {
+                    setDashboardAlert('Veriler güncellenemiyor. Lütfen internet bağlantınızı kontrol edin.');
                 }
             } catch (error) {
                 console.error('Dashboard hatası:', error);
+                setDashboardAlert('Veriler güncellenemiyor. Lütfen internet bağlantınızı kontrol edin.');
+            }
+        }
+
+        function setDashboardAlert(message) {
+            const container = document.getElementById('dashboardContainer');
+            if (!container) return;
+
+            let alert = document.getElementById('dashboardAlert');
+            if (!alert) {
+                alert = document.createElement('div');
+                alert.id = 'dashboardAlert';
+                alert.className = 'alert error';
+                alert.style.marginBottom = '20px';
+                container.prepend(alert);
+            }
+
+            if (!message) {
+                alert.style.display = 'none';
+                alert.textContent = '';
+            } else {
+                alert.textContent = message;
+                alert.style.display = 'block';
             }
         }
 
@@ -445,22 +548,34 @@
         }
 
         function logout() {
-            localStorage.removeItem('familyToken');
-            localStorage.removeItem('elderlyId');
-            document.getElementById('loginContainer').classList.add('active');
-            document.getElementById('dashboardContainer').classList.remove('active');
+            storage.removeItem('familyToken');
+            storage.removeItem('elderlyId');
+            showLogin();
             document.getElementById('loginForm').reset();
+            history.replaceState({ view: 'login' }, '', window.location.href);
         }
 
         // Sayfa açılırken kontrol et
         window.addEventListener('load', () => {
-            const token = localStorage.getItem('familyToken');
-            const eId = localStorage.getItem('elderlyId');
+            if (!history.state) {
+                history.replaceState({ view: 'login' }, '', window.location.href);
+            }
+            const token = storage.getItem('familyToken');
+            const eId = storage.getItem('elderlyId');
             if (token && eId) {
                 familyToken = token;
                 elderlyId = eId;
                 showDashboard();
             }
+        });
+
+        window.addEventListener('popstate', (event) => {
+            const view = event.state?.view;
+            if (view === 'dashboard' && storage.getItem('familyToken') && storage.getItem('elderlyId')) {
+                showDashboard();
+                return;
+            }
+            showLogin();
         });
     </script>
 </body>

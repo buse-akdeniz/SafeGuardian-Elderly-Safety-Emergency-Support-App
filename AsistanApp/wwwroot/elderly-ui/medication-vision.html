@@ -158,6 +158,30 @@
             color: #ff6666;
         }
 
+        .permission-guide {
+            display: none;
+            background: rgba(255, 255, 255, 0.08);
+            border: 3px dashed #ffff00;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .permission-guide.active {
+            display: block;
+        }
+
+        .permission-guide h3 {
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+
+        .permission-guide ol {
+            margin-left: 20px;
+            font-size: 18px;
+            line-height: 1.6;
+        }
+
         .action-buttons {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -192,6 +216,17 @@
             color: #ff6666;
             font-size: 18px;
             display: none;
+        }
+
+        #qualityWarning {
+            background: rgba(255, 200, 0, 0.15);
+            border: 3px solid #ffbb00;
+            padding: 16px;
+            border-radius: 12px;
+            color: #ffbb00;
+            font-size: 18px;
+            display: none;
+            margin-bottom: 12px;
         }
 
         @keyframes slideIn {
@@ -242,7 +277,22 @@
             3. Sistem ilaç şişesini tanıyacak ve stok seviyesini gösterecek
         </div>
 
+        <div class="info-box">
+            <strong>🔒 HTTPS Zorunluluğu:</strong><br>
+            Kamera izni yalnızca HTTPS (veya localhost) üzerinden çalışır. Canlıya geçerken SSL sertifikanız olduğundan emin olun.
+        </div>
+
+        <div class="permission-guide" id="permissionGuide">
+            <h3>📌 Kamera izni nasıl verilir?</h3>
+            <ol>
+                <li>Adres çubuğundaki 🔒 kilit simgesine tıklayın.</li>
+                <li>“Kamera” iznini “İzin ver” yapın.</li>
+                <li>Sayfayı yenileyin ve tekrar deneyin.</li>
+            </ol>
+        </div>
+
         <div class="camera-section">
+            <div id="qualityWarning"></div>
             <div id="cameraError"></div>
             <video id="video" autoplay playsinline></video>
             <canvas id="canvas" style="display: none;"></canvas>
@@ -277,14 +327,33 @@
     </div>
 
     <script>
+        const DEFAULT_API_BASE = 'http://localhost:5007';
+
+        function getApiBase() {
+            const stored = localStorage.getItem('apiBaseUrl');
+            if (stored) return stored.replace(/\/$/, '');
+            if (window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
+                return window.location.origin;
+            }
+            return DEFAULT_API_BASE;
+        }
+
+        const API_BASE = getApiBase();
+
         let video = null;
         let canvas = null;
         let stream = null;
         let detectedMedications = [];
+        let lastCapturedImage = null;
+        let lastThumbnail = null;
 
         async function startCamera() {
             const cameraError = document.getElementById('cameraError');
+            const permissionGuide = document.getElementById('permissionGuide');
+            const qualityWarning = document.getElementById('qualityWarning');
             cameraError.style.display = 'none';
+            if (qualityWarning) qualityWarning.style.display = 'none';
+            if (permissionGuide) permissionGuide.classList.remove('active');
 
             try {
                 video = document.getElementById('video');
@@ -309,6 +378,7 @@
             } catch (error) {
                 cameraError.style.display = 'block';
                 cameraError.innerHTML = `<strong>❌ Kamera Hatası:</strong><br>Kameranıza erişim için izin verin. Tarayıcınız kamerayı desteklemiyor olabilir.<br><br>Hata: ${error.message}`;
+                if (permissionGuide) permissionGuide.classList.add('active');
                 console.error('Kamera hatası:', error);
             }
         }
@@ -331,12 +401,89 @@
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0);
 
+            const quality = evaluateImageQuality(canvas);
+            if (!quality.isOk) {
+                showQualityWarning(quality.message);
+                return;
+            }
+
+            lastCapturedImage = canvas.toDataURL('image/jpeg', 0.7);
+            lastThumbnail = createThumbnail(canvas, 200);
+
             // Basit ilaç tanıma simülasyonu
             analyzeMedicationImage(canvas);
         }
 
+        function evaluateImageQuality(canvasEl) {
+            const ctx = canvasEl.getContext('2d');
+            const { width, height } = canvasEl;
+            const sampleWidth = Math.min(320, width);
+            const sampleHeight = Math.min(240, height);
+            const imageData = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
+            const data = imageData.data;
+
+            let sumLuma = 0;
+            let sumLumaSq = 0;
+            let laplacianSum = 0;
+            let count = 0;
+
+            const getLuma = (idx) => 0.2126 * data[idx] + 0.7152 * data[idx + 1] + 0.0722 * data[idx + 2];
+
+            for (let y = 1; y < sampleHeight - 1; y++) {
+                for (let x = 1; x < sampleWidth - 1; x++) {
+                    const idx = (y * sampleWidth + x) * 4;
+                    const luma = getLuma(idx);
+                    sumLuma += luma;
+                    sumLumaSq += luma * luma;
+
+                    const idxL = idx - 4;
+                    const idxR = idx + 4;
+                    const idxU = idx - sampleWidth * 4;
+                    const idxD = idx + sampleWidth * 4;
+                    const lap = (getLuma(idxL) + getLuma(idxR) + getLuma(idxU) + getLuma(idxD) - 4 * luma);
+                    laplacianSum += Math.abs(lap);
+                    count++;
+                }
+            }
+
+            const mean = sumLuma / count;
+            const variance = (sumLumaSq / count) - mean * mean;
+            const laplacianMean = laplacianSum / count;
+
+            const tooDark = mean < 55;
+            const tooBright = mean > 220;
+            const blurry = laplacianMean < 8 || variance < 120;
+
+            if (tooDark) return { isOk: false, message: '⚠️ Görüntü karanlık. Lütfen ışığı açın.' };
+            if (tooBright) return { isOk: false, message: '⚠️ Görüntü çok parlak. Işığı azaltmayı deneyin.' };
+            if (blurry) return { isOk: false, message: '⚠️ Görüntü bulanık. Lütfen biraz daha yaklaştırın veya sabit tutun.' };
+
+            return { isOk: true, message: '' };
+        }
+
+        function showQualityWarning(message) {
+            const qualityWarning = document.getElementById('qualityWarning');
+            if (!qualityWarning) return;
+            qualityWarning.textContent = message;
+            qualityWarning.style.display = 'block';
+        }
+
+        function createThumbnail(canvasEl, maxWidth) {
+            const ratio = canvasEl.height / canvasEl.width;
+            const width = Math.min(maxWidth, canvasEl.width);
+            const height = Math.round(width * ratio);
+            const thumbCanvas = document.createElement('canvas');
+            thumbCanvas.width = width;
+            thumbCanvas.height = height;
+            const tctx = thumbCanvas.getContext('2d');
+            tctx.drawImage(canvasEl, 0, 0, width, height);
+            return thumbCanvas.toDataURL('image/jpeg', 0.6);
+        }
+
         function analyzeMedicationImage(canvas) {
-            // Production'da TensorFlow.js veya Azure Vision API kullanılabilir
+            // Production'da: canvas base64 verisini .NET backend'e gönderip
+            // Azure Computer Vision / Google Vision gibi servislere bağlayabilirsiniz.
+            // Örn: POST ${API_BASE}/api/medication-vision/analyze
             // Şimdilik simülasyon
 
             detectedMedications = [
@@ -427,12 +574,14 @@
             }
 
             // Aile üyelerine bildirim gönder
-            fetch('http://localhost:5007/api/notifications', {
+            fetch(`${API_BASE}/api/notifications`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     title: '💊 İlaç Stoku Uyarısı',
-                    message: message || 'İlaç stoğu kontrol edildi'
+                    message: message || 'İlaç stoğu kontrol edildi',
+                    thumbnailBase64: lastThumbnail || null,
+                    capturedImageBase64: lastCapturedImage || null
                 })
             }).catch(e => console.log('Bildirim gönderilemedi:', e));
 

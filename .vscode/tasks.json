@@ -1,0 +1,30 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "live-test-asistanapp",
+			"type": "shell",
+			"command": "cd \"/Users/busenurakdeniz/Desktop/ilk projem\" && dotnet run --project AsistanApp/AsistanApp.csproj > /tmp/asistan_live_test.log 2>&1 & app_pid=$! && sleep 8 && login=$(curl -s -X POST \"http://127.0.0.1:5007/api/elderly/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"elderly@test.com\",\"password\":\"1234\"}') && echo \"LOGIN_RESPONSE:$login\" && token=$(printf '%s' \"$login\" | python3 -c \"import sys,json; print(json.load(sys.stdin).get('token',''))\") && if [ -z \"$token\" ]; then echo \"TOKEN_PARSE:FAILED\"; else echo \"TOKEN_PARSE:OK\"; fi && code_sub=$(curl -s -o /tmp/sub.json -w \"%{http_code}\" \"http://127.0.0.1:5007/api/subscription?token=$token\") && echo \"SUBSCRIPTION_STATUS:$code_sub\" && code_emg=$(curl -s -o /tmp/emergency.json -w \"%{http_code}\" -X POST \"http://127.0.0.1:5007/api/emergency-alert?token=$token\" -H \"Content-Type: application/json\" -d '{\"location\":\"41.0082,28.9784\",\"coords\":{\"latitude\":41.0082,\"longitude\":28.9784}}') && echo \"EMERGENCY_STATUS:$code_emg\" && echo \"SUBSCRIPTION_BODY:$(cat /tmp/sub.json)\" && echo \"EMERGENCY_BODY:$(cat /tmp/emergency.json)\" && kill $app_pid && wait $app_pid 2>/dev/null || true"
+		},
+		{
+			"label": "live-test-asistanapp-v2",
+			"type": "shell",
+			"command": "cd \"/Users/busenurakdeniz/Desktop/ilk projem\" && dotnet run --project AsistanApp/AsistanApp.csproj > /tmp/asistan_live_test_v2.log 2>&1 & app_pid=$! && sleep 8 && login=$(curl -s -X POST \"http://127.0.0.1:5007/api/elderly/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"elderly@test.com\",\"password\":\"123\"}') && echo \"LOGIN_RESPONSE:$login\" && token=$(printf '%s' \"$login\" | python3 -c \"import sys,json; print(json.load(sys.stdin).get('token',''))\") && if [ -z \"$token\" ]; then echo \"TOKEN_PARSE:FAILED\"; else echo \"TOKEN_PARSE:OK\"; fi && code_sub=$(curl -s -o /tmp/sub_v2.json -w \"%{http_code}\" \"http://127.0.0.1:5007/api/subscription?token=$token\") && echo \"SUBSCRIPTION_STATUS:$code_sub\" && code_emg=$(curl -s -o /tmp/emergency_v2.json -w \"%{http_code}\" -X POST \"http://127.0.0.1:5007/api/emergency-alert?token=$token\" -H \"Content-Type: application/json\" -d '{\"location\":\"41.0082,28.9784\",\"coords\":{\"latitude\":41.0082,\"longitude\":28.9784}}') && echo \"EMERGENCY_STATUS:$code_emg\" && echo \"SUBSCRIPTION_BODY:$(cat /tmp/sub_v2.json)\" && echo \"EMERGENCY_BODY:$(cat /tmp/emergency_v2.json)\" && kill $app_pid && wait $app_pid 2>/dev/null || true"
+		},
+		{
+			"label": "read-live-test-artifacts",
+			"type": "shell",
+			"command": "ls -l /tmp/asistan_live_test_v2.log /tmp/sub_v2.json /tmp/emergency_v2.json 2>/dev/null || true && echo \"---LOG---\" && tail -n 40 /tmp/asistan_live_test_v2.log 2>/dev/null || true && echo \"---SUB---\" && cat /tmp/sub_v2.json 2>/dev/null || true && echo \"---EMG---\" && cat /tmp/emergency_v2.json 2>/dev/null || true"
+		},
+		{
+			"label": "live-test-python",
+			"type": "shell",
+			"command": "cd \"/Users/busenurakdeniz/Desktop/ilk projem\" && dotnet run --project AsistanApp/AsistanApp.csproj > /tmp/asistan_live_test_py.log 2>&1 & app_pid=$! && sleep 8 && python3 - <<'PY'\nimport json, urllib.request\n\ndef post(url, payload):\n    data = json.dumps(payload).encode('utf-8')\n    req = urllib.request.Request(url, data=data, headers={'Content-Type':'application/json'})\n    with urllib.request.urlopen(req, timeout=10) as r:\n        return r.getcode(), r.read().decode('utf-8')\n\ndef get(url):\n    with urllib.request.urlopen(url, timeout=10) as r:\n        return r.getcode(), r.read().decode('utf-8')\n\nbase = 'http://127.0.0.1:5007'\ncode, body = post(base + '/api/elderly/login', {'email':'elderly@test.com','password':'123'})\nprint('LOGIN_STATUS:', code)\nprint('LOGIN_BODY:', body)\nobj = json.loads(body)\ntoken = obj.get('token','')\nprint('TOKEN_PRESENT:', bool(token))\ncode2, body2 = get(base + f'/api/subscription?token={token}')\nprint('SUB_STATUS:', code2)\nprint('SUB_BODY:', body2)\ncode3, body3 = post(base + f'/api/emergency-alert?token={token}', {'location':'41.0082,28.9784','coords':{'latitude':41.0082,'longitude':28.9784}})\nprint('EMERGENCY_STATUS:', code3)\nprint('EMERGENCY_BODY:', body3)\nPY\nkill $app_pid && wait $app_pid 2>/dev/null || true"
+		},
+		{
+			"label": "tail-live-log",
+			"type": "shell",
+			"command": "tail -n 30 /tmp/asistan_live_test_v2.log 2>/dev/null || true"
+		}
+	]
+}

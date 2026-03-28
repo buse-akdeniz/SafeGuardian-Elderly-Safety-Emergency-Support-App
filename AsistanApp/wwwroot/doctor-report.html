@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Doktor Raporu</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: #f6f7fb; color: #111827; }
+    .container { max-width: 900px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+    h1 { margin-top: 0; }
+    .section { margin-top: 24px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; }
+    .muted { color: #6b7280; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; font-size: 14px; }
+    th { background: #f3f4f6; }
+    .actions { display: flex; gap: 10px; margin-top: 16px; }
+    button { padding: 10px 14px; border: 0; border-radius: 8px; cursor: pointer; background: #2563eb; color: #fff; font-weight: 600; }
+    .error { color: #b91c1c; background: #fee2e2; padding: 12px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Doktor Raporu</h1>
+    <p class="muted">Bu rapor son 30 gün verilerini içerir.</p>
+    <div class="actions">
+      <button onclick="window.print()">Yazdır</button>
+    </div>
+
+    <div id="error" class="error" style="display:none;"></div>
+
+    <div id="content" style="display:none;">
+      <div class="section">
+        <h2>Hasta Bilgisi</h2>
+        <div class="grid" id="patientInfo"></div>
+      </div>
+
+      <div class="section">
+        <h2>İlaçlar</h2>
+        <div id="medications"></div>
+      </div>
+
+      <div class="section">
+        <h2>Sağlık Kayıtları</h2>
+        <div id="healthRecords"></div>
+      </div>
+
+      <div class="section">
+        <h2>Ruh Hali</h2>
+        <div id="mood"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const errorEl = document.getElementById('error');
+    const contentEl = document.getElementById('content');
+
+    if (!token) {
+      errorEl.textContent = 'Erişim anahtarı bulunamadı.';
+      errorEl.style.display = 'block';
+    } else {
+      loadReport();
+    }
+
+    async function loadReport() {
+      try {
+        const response = await fetch(`/api/doctor/report?token=${encodeURIComponent(token)}`);
+        const data = await response.json();
+        if (!response.ok || !data?.success) {
+          throw new Error(data?.message || 'Rapor yüklenemedi');
+        }
+        renderReport(data);
+        contentEl.style.display = 'block';
+      } catch (error) {
+        errorEl.textContent = error.message || 'Rapor yüklenemedi.';
+        errorEl.style.display = 'block';
+      }
+    }
+
+    function renderReport(data) {
+      const elder = data.elderly || {};
+      const info = document.getElementById('patientInfo');
+      info.innerHTML = `
+        <div class="card"><strong>Ad</strong><div>${elder.name || '-'}</div></div>
+        <div class="card"><strong>Doğum Tarihi</strong><div>${elder.birthDate || '-'}</div></div>
+        <div class="card"><strong>Telefon</strong><div>${elder.phone || '-'}</div></div>
+        <div class="card"><strong>Kan Grubu</strong><div>${elder.bloodType || '-'}</div></div>
+        <div class="card"><strong>Alerjiler</strong><div>${elder.allergies || '-'}</div></div>
+        <div class="card"><strong>Öykü</strong><div>${elder.medicalHistory || '-'}</div></div>
+      `;
+
+      const meds = data.medications || [];
+      const medsEl = document.getElementById('medications');
+      if (!meds.length) {
+        medsEl.innerHTML = '<div class="muted">Kayıtlı ilaç yok.</div>';
+      } else {
+        medsEl.innerHTML = `
+          <table>
+            <thead><tr><th>İlaç</th><th>Saatler</th><th>Not</th><th>Son Alım</th></tr></thead>
+            <tbody>
+              ${meds.map(m => `
+                <tr>
+                  <td>${m.name || '-'}</td>
+                  <td>${(m.scheduleTimes || []).join(', ') || '-'}</td>
+                  <td>${m.notes || '-'}</td>
+                  <td>${m.lastTakenAt ? new Date(m.lastTakenAt).toLocaleString('tr-TR') : '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+
+      const records = data.healthRecords || [];
+      const recEl = document.getElementById('healthRecords');
+      if (!records.length) {
+        recEl.innerHTML = '<div class="muted">Kayıtlı sağlık verisi yok.</div>';
+      } else {
+        recEl.innerHTML = `
+          <table>
+            <thead><tr><th>Tarih</th><th>Tür</th><th>Değer</th><th>Durum</th><th>Not</th></tr></thead>
+            <tbody>
+              ${records.map(r => {
+                const value = r.systolic || r.diastolic ? `${r.systolic || '-'} / ${r.diastolic || '-'}` : (r.glucose ?? r.heartRate ?? r.value ?? '-');
+                return `
+                  <tr>
+                    <td>${r.timestamp ? new Date(r.timestamp).toLocaleString('tr-TR') : '-'}</td>
+                    <td>${r.recordType || '-'}</td>
+                    <td>${value}</td>
+                    <td>${r.status || '-'}</td>
+                    <td>${r.notes || '-'}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+
+      const mood = data.mood || {};
+      const moodEl = document.getElementById('mood');
+      moodEl.innerHTML = `
+        <div class="grid">
+          <div class="card"><strong>Ortalama</strong><div>${mood.average ?? '-'}</div></div>
+          <div class="card"><strong>Trend</strong><div>${mood.trend || '-'}</div></div>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

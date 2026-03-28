@@ -93,6 +93,12 @@ Response:
     - `anomalyDetected: true` response döndürülür
 - Voice assistant'ın her komutunu question-log'a kaydetmesi için hazır
 
+**Siber Güvenlik Notu**:
+- Lowercase normalize işlemi, "Neredeyim?" ile "neredeyim?" arasındaki farkı kapatarak bypass girişimlerini azaltır.
+
+**İleri Seviye Tavsiye**:
+- Gelecekte "Fuzzy Matching" (Bulanık Eşleşme) eklenirse "Saat kaç?" ile "Şu an saat kaç?" benzerliği yakalanabilir.
+
 **Kullanım**:
 ```
 curl -X POST "http://localhost:5007/api/question-log?token=TOKEN" \
@@ -289,6 +295,44 @@ Bu implementasyon, **hayat kurtarıcı** özellikler içermektedir:
 Tüm bu özellikler **aile ile entegre** çalışarak İstanbul'daki yaşlılar için gerçek bir hayat kurtarıcı sistem oluşturmuştur.
 
 ---
+
+## 🧠 Teknik Derinlik ve Ticari Analiz (Peer Geri Bildirimi)
+
+**Mission-Critical Uygulama Notu**:
+- Bu sistem, insan hayatına doğrudan dokunan “görevi kritik” bir uygulama sınıfına girer.
+- Dementia tespiti + fail-safe alarm kurgusu, projeyi basit bir “hatırlatıcı”dan gerçek bir HealthTech ürününe dönüştürür.
+- Veri ayrıştırma (isolation) ve token yönetimi yaklaşımı doğru güvenlik pratikleriyle uyumlu.
+
+**1) Demans Anomalisi (Dementia Detection)**
+- Aynı sorunun 1 saat içinde 3 kez sorulmasını `GroupBy` ile yakalamak isabetli bir yaklaşım.
+- **Siber Güvenlik Notu**: Lowercase normalize işlemi, “Neredeyim?” ile “neredeyim?” arasındaki farkı kapatarak bypass girişimlerini azaltır.
+- **İleri Seviye Tavsiye**: “Fuzzy Matching” eklenirse “Saat kaç?” ile “Şu an saat kaç?” gibi benzer sorular da yakalanabilir.
+
+**2) Fail-Safe Timer (15 Dakika Kuralı)**
+- `System.Threading.Timer` ile 60 saniyede bir kontrol, performans ve hassasiyet dengesi açısından uygun.
+
+**3) Sağlık Kayıtları (Health Monitoring)**
+- Tansiyon ve şeker için eşik değerleri tıbbi standartlarla uyumlu.
+- **Ticari Zeka**: Trend analizi (ör. “son 1 haftadır yükseliş”) sigorta ve sağlık kuruluşları için değerli bir veri seti oluşturur.
+
+---
+
+## 📚 Yazılım & Ticari Terimler (English Practice)
+
+| İngilizce Terim | Türkçe Karşılığı | Açıklama |
+|---|---|---|
+| Fail-Safe | Hata-Güvenli Sistem | Hata/unutma anında güvenli duruma geçiş (aile uyarısı). |
+| Threshold | Eşik Değeri | Uyarıyı tetikleyen alt/üst sınır (örn. 160 mmHg). |
+| Anomaly Detection | Anomali Tespiti | Normal dışı davranışların fark edilmesi. |
+| B2B (Business to Business) | Şirketten Şirkete | Ürünün kurumsal müşterilere satılması. |
+| Mission-Critical | Görevi Kritik | Çalışmaması ciddi sonuçlar doğurabilecek sistem. |
+
+---
+
+## 💡 Gerçekçi Tavsiye ve Strateji
+
+- **Güvenlik Tavsiyesi**: Acil yardımda konum paylaşımı çok güçlü. Bir sonraki sprint’te “Live Tracking (Canlı Takip)” ile hareket halindeki yaşlı için anlık konum güncellemesi eklenebilir.
+- **Ticari Öneri**: Dementia Tracking için “Rapor İhracı” (PDF/CSV) butonu eklemek, ailelerin doktorlara çıktı götürmesini kolaylaştırır ve ürünün vazgeçilmezliğini artırır.
 
 **Build Date**: 22 Ocak 2026  
 **Deployment**: http://localhost:5007  
