@@ -13,10 +13,11 @@ class StateBasedUIManager {
         this.token = token;
         this.currentState = null;
         this.pollInterval = 5000; // Poll every 5 seconds
-        this.apiBase = 'http://localhost:5007/api';
+        this.apiBase = '/api';
         this.requestTimeoutMs = 4500;
         this.errorCount = 0;
         this.lastSuccessfulFetchAt = null;
+        this.connection = null;
         
         // Screen configurations for each context
         this.screenConfigs = {
@@ -66,6 +67,9 @@ class StateBasedUIManager {
     // Start polling backend for state changes
     async startPolling() {
         console.log('🔄 StateBasedUIManager: Polling başladı (5 saniye aralığında)');
+
+        // Real-time SignalR bağlantısı (polling fallback ile birlikte)
+        await this.initRealtime();
         
         // Initial fetch
         await this.fetchAndRenderState();
@@ -81,7 +85,10 @@ class StateBasedUIManager {
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs);
-            const response = await fetch(`${this.apiBase}/user-state?token=${this.token}`, {
+            const response = await fetch(`${this.apiBase}/user-state`, {
+                headers: {
+                    'Authorization': `Bearer ${this.token}`
+                },
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
@@ -305,10 +312,11 @@ class StateBasedUIManager {
     // Manual context update (for emergency or special cases)
     async setContext(context, priority = 'normal') {
         try {
-            const response = await fetch(`${this.apiBase}/user-state?token=${this.token}`, {
+            const response = await fetch(`${this.apiBase}/user-state`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.token}`
                 },
                 body: JSON.stringify({
                     currentContext: context,
@@ -323,6 +331,41 @@ class StateBasedUIManager {
             }
         } catch (error) {
             console.error('❌ Set context error:', error);
+        }
+    }
+
+    async initRealtime() {
+        if (!window.signalR) {
+            console.warn('⚠️ SignalR script bulunamadı, polling ile devam ediliyor');
+            return;
+        }
+
+        try {
+            this.connection = new signalR.HubConnectionBuilder()
+                .withUrl('/health-hub')
+                .withAutomaticReconnect()
+                .build();
+
+            this.connection.on('ReceiveTaskUpdate', async () => {
+                await this.fetchAndRenderState();
+            });
+
+            this.connection.on('ReceiveAICritical', async () => {
+                await this.fetchAndRenderState();
+            });
+
+            this.connection.on('ReceiveEmergencyAlert', async () => {
+                await this.fetchAndRenderState();
+            });
+
+            this.connection.on('ReceiveEmergencyEscalation', async () => {
+                await this.fetchAndRenderState();
+            });
+
+            await this.connection.start();
+            console.log('✅ SignalR gerçek zamanlı bağlantı aktif');
+        } catch (error) {
+            console.warn('⚠️ SignalR bağlantısı kurulamadı, polling devam ediyor:', error);
         }
     }
 }

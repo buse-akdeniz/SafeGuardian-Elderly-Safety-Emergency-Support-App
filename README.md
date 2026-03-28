@@ -102,6 +102,8 @@ Press **Cmd+Shift+P** → **Tasks: Run Task** → **live-test-python**
 
 Related task definitions are in [.vscode/tasks.json](.vscode/tasks.json).
 
+Security note: for production usage, pass session tokens via `Authorization: Bearer <token>` header instead of query string.
+
 ---
 
 ## 🎨 Design & Branding
@@ -113,6 +115,8 @@ The application uses a comprehensive Asset Catalog for consistent branding acros
 - **Store Presence:** Includes a `1024x1024` marketing icon for App Store submission.
 
 Asset Catalog reference: [AsistanApp/bin/Debug/net10.0/ios/App/App/Assets.xcassets/AppIcon.appiconset/Contents.json](AsistanApp/bin/Debug/net10.0/ios/App/App/Assets.xcassets/AppIcon.appiconset/Contents.json).
+
+Real-time note: elderly UI supports SignalR real-time updates with polling fallback (5 seconds) for unstable networks.
 
 ---
 

@@ -38,6 +38,24 @@ app.UseRouting();
 app.UseCors("AllowAll");
 app.UseStaticFiles();
 
+string ResolveToken(HttpContext ctx, JsonElement? body = null)
+{
+    var authHeader = ctx.Request.Headers.Authorization.ToString();
+    if (!string.IsNullOrWhiteSpace(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+    {
+        var bearerToken = authHeader.Substring("Bearer ".Length).Trim();
+        if (!string.IsNullOrWhiteSpace(bearerToken)) return bearerToken;
+    }
+
+    if (body.HasValue && body.Value.TryGetProperty("token", out var t))
+    {
+        var fromBody = t.GetString() ?? "";
+        if (!string.IsNullOrWhiteSpace(fromBody)) return fromBody;
+    }
+
+    return ctx.Request.Query["token"].ToString();
+}
+
 app.MapGet("/", async (HttpContext ctx) =>
 {
     ctx.Response.ContentType = "text/html; charset=utf-8";
@@ -925,7 +943,7 @@ app.MapPost("/api/send-notification", async (HttpContext ctx, HealthDataService 
         string severity = json.TryGetProperty("severity", out var s) ? s.GetString() ?? "normal" : "normal";
         var location = json.TryGetProperty("location", out var l) ? l.GetString() ?? "Unknown" : "Unknown";
 
-        var token = ctx.Request.Query["token"].ToString();
+        var token = ResolveToken(ctx, json);
         var elderly = svc.GetElderlySession(token);
         if (elderly == null)
         {
@@ -982,20 +1000,77 @@ app.MapPost("/api/send-notification", async (HttpContext ctx, HealthDataService 
         return Results.Json(new { success = false }, statusCode: 500);
     }
 });
+
+app.MapGet("/api/user-state", (HttpContext ctx, HealthDataService svc) =>
+{
+    var token = ResolveToken(ctx);
+    var elderly = svc.GetElderlySession(token);
+    if (elderly == null)
+    {
+        return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
+    }
+
+    var state = svc.GetUserState(elderly.Id);
+    return Results.Json(new
+    {
+        currentContext = state.CurrentContext,
+        activeTaskId = state.ActiveTaskId,
+        screenPriority = state.ScreenPriority,
+        isAssistantActive = state.IsAssistantActive,
+        updatedAt = state.UpdatedAt
+    });
+});
+
+app.MapPost("/api/user-state", async (HttpContext ctx, HealthDataService svc) =>
+{
+    try
+    {
+        var json = await JsonDocument.ParseAsync(ctx.Request.Body);
+        var token = ResolveToken(ctx, json.RootElement);
+        var elderly = svc.GetElderlySession(token);
+        if (elderly == null)
+        {
+            return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
+        }
+
+        var currentContext = json.RootElement.TryGetProperty("currentContext", out var c) ? c.GetString() ?? "home" : "home";
+        var activeTaskId = json.RootElement.TryGetProperty("activeTaskId", out var a) ? a.GetString() ?? "" : "";
+        var screenPriority = json.RootElement.TryGetProperty("screenPriority", out var p) ? p.GetString() ?? "normal" : "normal";
+        var isAssistantActive = json.RootElement.TryGetProperty("isAssistantActive", out var ia) ? ia.GetBoolean() : true;
+
+        var updated = svc.SetUserState(elderly.Id, new UserState
+        {
+            ElderlyId = elderly.Id,
+            CurrentContext = currentContext,
+            ActiveTaskId = activeTaskId,
+            ScreenPriority = screenPriority,
+            IsAssistantActive = isAssistantActive,
+            UpdatedAt = DateTime.Now
+        });
+
+        return Results.Json(new { success = true, state = updated });
+    }
+    catch
+    {
+        return Results.Json(new { success = false, message = "İşlem başarısız" }, statusCode: 500);
+    }
+});
 app.MapGet("/api/pending-tasks/{userId}", (string userId, HealthDataService svc) => Results.Json(new { success = true, count = svc.GetPendingTasks(userId).Count }));
 app.MapGet("/api/elderly-status/{userId}", (string userId, HealthDataService svc) => Results.Json(new { success = true, status = new { name = svc.GetUser(userId)?.Name, location = "Evde", pendingTasks = svc.GetPendingTasks(userId).Count } }));
 app.MapGet("/api/task-history/{userId}", (string userId, HealthDataService svc) => Results.Json(new { success = true, tasks = svc.GetTaskHistory(userId) }));
 app.MapGet("/api/health-analytics/{userId}", (string userId, HealthDataService svc) => Results.Json(new { success = true, analytics = new { } }));
 app.MapGet("/api/family-members/{userId}", (string userId, HealthDataService svc) => Results.Json(new { success = true, members = svc.GetFamilyMembers(userId) }));
-app.MapGet("/api/subscription", (string token, HealthDataService svc) =>
+app.MapGet("/api/subscription", (HttpContext ctx, HealthDataService svc) =>
 {
+    var token = ResolveToken(ctx);
     var elderly = svc.GetElderlySession(token);
     if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
     var sub = elderly.Subscription ?? new Subscription { UserId = elderly.Id, Plan = "standard", IsActive = false };
     return Results.Json(new { plan = sub.Plan, isActive = sub.IsActive, userId = elderly.Id });
 });
-app.MapGet("/api/family-members", (string token, HealthDataService svc) =>
+app.MapGet("/api/family-members", (HttpContext ctx, HealthDataService svc) =>
 {
+    var token = ResolveToken(ctx);
     var elderly = svc.GetElderlySession(token);
     if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
     return Results.Json(new { success = true, members = svc.GetFamilyMembers(elderly.Id) });
@@ -1005,11 +1080,7 @@ app.MapPost("/api/family-members", async (HttpContext ctx, HealthDataService svc
     try
     {
         var json = await JsonDocument.ParseAsync(ctx.Request.Body);
-        string token = ctx.Request.Query["token"].ToString();
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            token = json.RootElement.TryGetProperty("token", out var t) ? t.GetString() ?? "" : "";
-        }
+        string token = ResolveToken(ctx, json.RootElement);
 
         var elderly = svc.GetElderlySession(token);
         if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
@@ -1042,8 +1113,9 @@ app.MapPost("/api/family-members", async (HttpContext ctx, HealthDataService svc
         return Results.Json(new { success = false, message = "İşlem başarısız" }, statusCode: 500);
     }
 });
-app.MapGet("/api/medications", (string token, HealthDataService svc) =>
+app.MapGet("/api/medications", (HttpContext ctx, HealthDataService svc) =>
 {
+    var token = ResolveToken(ctx);
     var elderly = svc.GetElderlySession(token);
     if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
     return Results.Json(svc.GetMedications(elderly.Id));
@@ -1053,11 +1125,7 @@ app.MapPost("/api/medications", async (HttpContext ctx, HealthDataService svc) =
     try
     {
         var json = await JsonDocument.ParseAsync(ctx.Request.Body);
-        string token = ctx.Request.Query["token"].ToString();
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            token = json.RootElement.TryGetProperty("token", out var t) ? t.GetString() ?? "" : "";
-        }
+        string token = ResolveToken(ctx, json.RootElement);
 
         var elderly = svc.GetElderlySession(token);
         if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
@@ -1088,8 +1156,9 @@ app.MapPost("/api/medications", async (HttpContext ctx, HealthDataService svc) =
         return Results.Json(new { success = false, message = "İşlem başarısız" }, statusCode: 500);
     }
 });
-app.MapPost("/api/medications/{id}/taken", (int id, string token, HealthDataService svc) =>
+app.MapPost("/api/medications/{id}/taken", (HttpContext ctx, int id, HealthDataService svc) =>
 {
+    var token = ResolveToken(ctx);
     var elderly = svc.GetElderlySession(token);
     if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
 
@@ -1098,8 +1167,9 @@ app.MapPost("/api/medications/{id}/taken", (int id, string token, HealthDataServ
 
     return Results.Json(new { success = true, medication, stockCount = medication.StockCount });
 });
-app.MapGet("/api/health-records", (string token, HealthDataService svc) =>
+app.MapGet("/api/health-records", (HttpContext ctx, HealthDataService svc) =>
 {
+    var token = ResolveToken(ctx);
     var elderly = svc.GetElderlySession(token);
     if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
 
@@ -1172,11 +1242,7 @@ app.MapPost("/api/health-records", async (HttpContext ctx, HealthDataService svc
     try
     {
         var json = await JsonDocument.ParseAsync(ctx.Request.Body);
-        string token = ctx.Request.Query["token"].ToString();
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            token = json.RootElement.TryGetProperty("token", out var t) ? t.GetString() ?? "" : "";
-        }
+        string token = ResolveToken(ctx, json.RootElement);
 
         var elderly = svc.GetElderlySession(token);
         if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
@@ -1198,8 +1264,9 @@ app.MapPost("/api/health-records", async (HttpContext ctx, HealthDataService svc
         return Results.Json(new { success = false, message = "İşlem başarısız" }, statusCode: 500);
     }
 });
-app.MapGet("/api/doctor/report", (string token, HealthDataService svc) =>
+app.MapGet("/api/doctor/report", (HttpContext ctx, HealthDataService svc) =>
 {
+    var token = ResolveToken(ctx);
     var elderly = svc.GetElderlySession(token);
     if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
 
@@ -1254,8 +1321,9 @@ app.MapGet("/api/doctor/report", (string token, HealthDataService svc) =>
         }
     });
 });
-app.MapGet("/api/mood-analysis", (string token, HealthDataService svc) =>
+app.MapGet("/api/mood-analysis", (HttpContext ctx, HealthDataService svc) =>
 {
+    var token = ResolveToken(ctx);
     var elderly = svc.GetElderlySession(token);
     if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
 
@@ -1272,11 +1340,7 @@ app.MapPost("/api/mood", async (HttpContext ctx, HealthDataService svc) =>
     try
     {
         var json = await JsonDocument.ParseAsync(ctx.Request.Body);
-        string token = ctx.Request.Query["token"].ToString();
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            token = json.RootElement.TryGetProperty("token", out var t) ? t.GetString() ?? "" : "";
-        }
+        string token = ResolveToken(ctx, json.RootElement);
 
         var elderly = svc.GetElderlySession(token);
         if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
@@ -1409,6 +1473,16 @@ public class EmergencyAlert
     public bool IsResolved { get; set; }
 }
 
+public class UserState
+{
+    public string ElderlyId { get; set; } = "";
+    public string CurrentContext { get; set; } = "home";
+    public string ActiveTaskId { get; set; } = "";
+    public string ScreenPriority { get; set; } = "normal";
+    public bool IsAssistantActive { get; set; } = true;
+    public DateTime UpdatedAt { get; set; } = DateTime.Now;
+}
+
 // SERVICE
 public class HealthDataService
 {
@@ -1419,6 +1493,7 @@ public class HealthDataService
     private List<FamilyMember> familyMembers = new();
     private List<Medication> medications = new();
     private List<MoodRecord> moodRecords = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, UserState> userStates = new();
     private int medicationIdSeq = 1;
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, FamilyMember> FamilySessions = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, ElderlyUser> ElderlySessions = new();
@@ -1676,6 +1751,58 @@ public class HealthDataService
     public List<HealthRecord> GetRecentHealthRecords(string elderlyId, int days = 7) => healthRecords.Where(h => h.ElderlyId == elderlyId && h.RecordedAt >= DateTime.Now.AddDays(-days)).OrderByDescending(h => h.RecordedAt).ToList();
     public List<TaskItem> GetTaskHistory(string elderlyId, int days = 30) => tasks.Where(t => t.ElderlyId == elderlyId && t.CompletedTime >= DateTime.Now.AddDays(-days)).OrderByDescending(t => t.CompletedTime).ToList();
     public List<EmergencyAlert> GetActiveAlerts(string elderlyId) => emergencyAlerts.Where(a => a.ElderlyId == elderlyId && !a.IsResolved).OrderByDescending(a => a.OccurredAt).ToList();
+
+    public UserState GetUserState(string elderlyId)
+    {
+        if (string.IsNullOrWhiteSpace(elderlyId))
+        {
+            return new UserState();
+        }
+
+        return userStates.GetOrAdd(elderlyId, id =>
+        {
+            var now = DateTime.Now;
+            var currentContext = "home";
+            var screenPriority = "normal";
+
+            var time = now.Hour * 100 + now.Minute;
+            if (time >= 900 && time < 1100)
+            {
+                currentContext = "medication_time";
+                screenPriority = "medication";
+            }
+            else if (time >= 1200 && time < 1400)
+            {
+                currentContext = "meal_time";
+                screenPriority = "meal";
+            }
+            else if (time >= 1800 && time < 2200)
+            {
+                currentContext = "water_time";
+                screenPriority = "normal";
+            }
+
+            return new UserState
+            {
+                ElderlyId = id,
+                CurrentContext = currentContext,
+                ActiveTaskId = "",
+                ScreenPriority = screenPriority,
+                IsAssistantActive = true,
+                UpdatedAt = now
+            };
+        });
+    }
+
+    public UserState SetUserState(string elderlyId, UserState update)
+    {
+        if (string.IsNullOrWhiteSpace(elderlyId)) return update;
+
+        update.ElderlyId = elderlyId;
+        update.UpdatedAt = DateTime.Now;
+        userStates[elderlyId] = update;
+        return update;
+    }
 
     public (string Token, FamilyMember Member)? AuthenticateFamily(string email, string password)
     {
