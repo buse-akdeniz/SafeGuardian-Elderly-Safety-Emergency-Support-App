@@ -469,6 +469,55 @@ function handleVoiceCommand(command) {
     }
 }
 
+function readAssistantIntentFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const raw =
+        params.get('assistant') ||
+        params.get('intent') ||
+        params.get('voice') ||
+        params.get('command') ||
+        '';
+    return String(raw).toLowerCase().trim();
+}
+
+function triggerAssistantEmergencyIntent(source = 'assistant') {
+    const token = authTokenCache || localStorage.getItem('token');
+    if (!token) {
+        localStorage.setItem('pendingAssistantIntent', 'emergency');
+        showNotification('Sesli Komut Hazır', 'Acil komut alındı. Lütfen giriş yapın, ardından otomatik çalıştırılacak.', 'success');
+        return;
+    }
+
+    showScreen('homeScreen');
+    setTimeout(() => {
+        showNotification('Sesli Komut', `${source} üzerinden ACİL komutu algılandı. Onay ekranı açılıyor.`, 'success');
+        showEmergencyConfirm();
+    }, 300);
+}
+
+function handleAssistantIntentFromUrl() {
+    const intent = readAssistantIntentFromUrl();
+    if (!intent) return;
+
+    if (intent.includes('emergency') || intent.includes('sos') || intent.includes('acil') || intent.includes('yardim') || intent.includes('yardım')) {
+        triggerAssistantEmergencyIntent('Siri/Assistant');
+    }
+
+    // URL'i temiz tutalım
+    if (window.history && window.history.replaceState) {
+        const cleanUrl = `${window.location.origin}${window.location.pathname}`;
+        window.history.replaceState({}, document.title, cleanUrl);
+    }
+}
+
+function runPendingAssistantIntentIfAny() {
+    const pending = localStorage.getItem('pendingAssistantIntent');
+    if (pending === 'emergency') {
+        localStorage.removeItem('pendingAssistantIntent');
+        triggerAssistantEmergencyIntent('Bekleyen Sesli Komut');
+    }
+}
+
 function goHome() {
     if (!requireAuthToken()) return;
     showScreen('homeScreen');
@@ -641,6 +690,8 @@ function provideFeedback(message, pattern = [30]) {
 // =================== FORM IŞLEYENLER ===================
 
 document.addEventListener('DOMContentLoaded', async function () {
+    handleAssistantIntentFromUrl();
+
     initOfflineResilienceBridge();
 
     const a11yMenuBtn = document.getElementById('a11yMenuBtn');
@@ -787,6 +838,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (remember && token) {
         showScreen('homeScreen');
         updateGreeting();
+        runPendingAssistantIntentIfAny();
     }
 
     // Butonlara sesli geri bildirim
@@ -1026,6 +1078,7 @@ async function handleLogin(e) {
             showScreen('homeScreen');
             updateGreeting();
             speak(`Hoş geldiniz ${data.name}`);
+            runPendingAssistantIntentIfAny();
         } else {
             const message = data?.message || rawText || 'Giriş başarısız';
             showNotification('Hata', message, 'error');

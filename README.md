@@ -100,6 +100,7 @@
 
 - **Offline Functionality:** The app uses Service Workers + IndexedDB so elderly users can record vitals without active internet. Queued data is automatically synchronized via Background Sync once connectivity is restored.
 - **Authentication:** Supports standard login and is ready for **Sign in with Apple** to align with App Store Guideline 4.8 expectations.
+- **Emergency Voice Shortcut:** Supports assistant deep-link intent flow for emergency command handoff (Siri/Google Assistant trigger path).
 - **Data Safety:** Health data is stored in a SQLite persistence layer and transmitted over HTTPS/TLS in production deployments.
 - **Account Control:** Users can permanently delete account + personal data from in-app flows (GDPR/KVKK aligned).
 
