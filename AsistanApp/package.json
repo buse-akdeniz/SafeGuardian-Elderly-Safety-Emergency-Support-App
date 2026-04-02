@@ -6,7 +6,8 @@
   "scripts": {
     "cap:add:ios": "npx cap add ios",
     "cap:sync": "npx cap sync",
-    "cap:open:ios": "npx cap open ios"
+    "cap:open:ios": "npx cap open ios",
+    "cap:run:ios": "open -a Simulator && npx cap run ios"
   },
   "dependencies": {
     "@capacitor/core": "^6.0.0",

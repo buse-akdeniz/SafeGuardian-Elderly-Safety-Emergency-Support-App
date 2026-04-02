@@ -3,10 +3,39 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta http-equiv="refresh" content="0; url=elderly-ui/index.html" />
     <title>VitaGuard</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; }
+      .container { display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+      .content { background: white; border-radius: 12px; padding: 40px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 400px; }
+      h1 { color: #2563eb; margin-bottom: 20px; font-size: 28px; }
+      p { color: #666; margin-bottom: 20px; line-height: 1.6; }
+      .status { background: #e0f2fe; color: #0369a1; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; }
+      button { background: #2563eb; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; cursor: pointer; width: 100%; margin-bottom: 10px; }
+      button:hover { background: #1d4ed8; }
+      .secondary { background: #e5e7eb; color: #374151; }
+      .secondary:hover { background: #d1d5db; }
+    </style>
   </head>
   <body>
-    <p>Yönlendiriliyor...</p>
+    <div class="container">
+      <div class="content">
+        <h1>🏥 VitaGuard</h1>
+        <p>Yaşlı Bakım ve Sağlık Yönetim Sistemi</p>
+        <div class="status">✓ Uygulama başlatılıyor...</div>
+        <button onclick="loginElderly()">Yaşlı Girişi</button>
+        <button class="secondary" onclick="loginFamily()">Aile Girişi</button>
+      </div>
+    </div>
+    <script>
+      function loginElderly() {
+        window.location.href = '/elderly-ui/index.html';
+      }
+      function loginFamily() {
+        window.location.href = '/family-dashboard.html';
+      }
+      console.log('VitaGuard UI loaded');
+    </script>
   </body>
 </html>

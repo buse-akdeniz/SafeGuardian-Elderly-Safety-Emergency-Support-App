@@ -5,7 +5,187 @@
 
 // =================== EKRAN YÖNETIMI ===================
 
-const DEFAULT_API_BASE = 'http://localhost:5007';
+const DEFAULT_API_BASE = 'http://192.168.1.6:5007';
+
+// =================== DİL / I18N ===================
+const TRANSLATIONS = {
+    tr: {
+        emailLabel: 'E-POSTA', passwordLabel: 'ŞİFRE', rememberMeLabel: 'BENİ HATIRLA',
+        loginBtn: 'GİRİŞ YAP', registerBtn: 'KAYIT OL', forgotBtn: 'ŞİFREMİ UNUTTUM',
+        appleSignIn: 'Sign in with Apple',
+        registerTitle: 'KAYIT OL', backBtn: '← GERİ', fullNameLabel: 'AD SOYAD',
+        phoneLabel: 'TELEFON', birthDateLabel: 'DOĞUM TARİHİ', completeRegBtn: 'KAYDI TAMAMLA',
+        logoutBtn: 'ÇIKIŞ', medicationsLabel: 'İLAÇLARIM', familyLabel: 'AİLE', helpLabel: 'YARDIM',
+        emergencyBtn: '🚨 ACİL YARDIM', howAreYou: 'NASILSIN?',
+        moodGood: '😊 İYİYİM', moodOk: '😐 İDARE EDER', moodBad: '😟 İYİ DEĞİLİM',
+        moodLabel: 'RUH HALİ', cameraLabel: 'KAMERA', healthLabel: 'SAĞLIK',
+        doctorBtn: '🩺 DOKTORA GÖSTER', voiceBtn: '🎙️ DİNLE / SESİ TEKRARLA',
+        moodScreenTitle: 'RUH HALİ TAKIBI', healthScreenTitle: 'SAĞLIK KAYITLARI',
+        medicationsTitle: 'İLAÇLARIM', addMedBtn: '➕ YENİ İLAÇ EKLE',
+        addMedTitle: 'YENİ İLAÇ EKLE', medNameLabel: 'İLAÇ ADI', medNotesLabel: 'NOTLAR',
+        timesLabel: 'SAATLER', saveBtn: 'KAYDET',
+        familyTitle: 'AİLE ÜYELERİ', addFamilyBtn: '➕ AİLE ÜYESİ EKLE',
+        addFamilyTitle: 'AİLE ÜYESİ EKLE', nameLabel: 'AD', relationLabel: 'İLİŞKİ',
+        helpTitle: 'YARDIM', understoodBtn: 'ANLADIM',
+        emergencyModalTitle: 'Acil yardım çağrılıyor',
+        emergencyModalDesc: '5 saniye içinde onaylanacak. Aileye ve sağlık kuruluşlarına bildirim ile konum paylaşılır. İptal edebilirsiniz.',
+        confirmBtn: 'ONAYLA', cancelBtn: 'İPTAL',
+        voiceOnboardingTitle: 'Sesli Asistanı Başlat',
+        voiceOnboardingDesc: 'Mikrofona dokun ve konuş. İstersen "İlaçlarım", "Aile", "Yardım" diyebilirsin.',
+        voiceStartBtn: 'DİNLEMEYİ BAŞLAT', voiceSkipBtn: 'ŞİMDİ DEĞİL',
+        settingsBtn: '⚙️ AYARLAR', apiLabel: 'API ADRESİ',
+        apiSaveBtn: 'KAYDET', apiClearBtn: 'SIFIRLA',
+        largeTextOn: 'YAZIYI BÜYÜT', largeTextOff: 'YAZIYI KÜÇÜLT',
+        contrastOn: 'KONTRASTI ARTIR', contrastOff: 'KONTRASTI AZALT',
+        simpleModeOn: 'BASİT MOD', simpleModeOff: 'BASİT MOD KAPAT',
+        resetViewBtnLabel: 'GÖRÜNÜMÜ SIFIRLA', langLabel: 'DİL',
+        sessionExpired: 'Oturum Süresi Doldu', sessionExpiredMsg: 'Lütfen tekrar giriş yapın.',
+        connError: 'Bağlantı hatası. API adresini kontrol edin.',
+        loginFailed: 'Giriş başarısız. E-posta veya şifre hatalı.',
+        errorTitle: 'Hata', successTitle: 'Başarılı',
+        welcomeMsg: 'Hoş geldiniz',
+        homeGuidance: 'Ana sayfaya hoş geldiniz. Üç buton göreceksiniz: İlaçlarım, Aile, Yardım. Ses komutu kullanabilirsiniz.',
+        medicationGuidance: 'İlaçlarım sayfasındasınız. Aldığınız ilaçlar burada listelenir. Yeni ilaç eklemek için aşağıdaki butona basın.',
+        addMedGuidance: 'Yeni ilaç ekle formunda bulunuyorsunuz. İlaç adını ve saatlerini girin.',
+        familyGuidance: 'Aile üyeleri sayfasına hoş geldiniz. Sizinle iletişim kuran aile üyeleri burada listelenir.',
+        helpGuidance: 'Yardım sayfasında bulunuyorsunuz. Tüm özellikleri burada açıklıyoruz.',
+        loginGuidance: 'Giriş sayfasına hoş geldiniz. E-posta ve şifrenizi girin.',
+        simpleBannerText: 'Basit mod açık: Ek özellikler gizlendi.',
+        apiSaved: 'Kaydedildi', apiSavedMsg: 'API adresi güncellendi',
+        apiReset: 'Sıfırlandı', apiResetMsg: 'API adresi temizlendi',
+        demoHint: '💡 Demo: elderly@test.com / 123',
+        relationSelect: 'Seçin...',
+        relationChild: 'Çocuk', relationGrandchild: 'Torun', relationSpouse: 'Eş',
+        relationSibling: 'Kardeş', relationOther: 'Diğer',
+        accountBtn: '👤 HESAP',
+        profileTitle: '👤 HESAP',
+        subscriptionTitle: '💳 ABONELİK',
+        userFullName: 'AD SOYAD', userEmail: 'E-POSTA',
+        subscriptionStatus: 'ABONE DURUMU', daysRemaining: 'KALAN GÜN',
+        premiumPlan: '⭐ PREMIUM', standardPlan: '📦 STANDART',
+        upgradePremium: '⭐ PREMIUM KAPAT', subscriptionButton: '💳 ABONELİK KALAN',
+        editProfileBtn: '✏️ BİLGİ GÜNCELLE', logoutBtn: '🚪 ÇIKIŞ YAP',
+        packageInfo: 'PAKET BİLGİLERİ', currentPackage: '📦 MEVCUT PAKET',
+        endDate: '📅 BİTİŞ TARİHİ', features: '✨ ÖZELLİKLER',
+        basicFeatures: 'Temel İlaç Yönetimi\nAile Üyeleri\nSesli Asistan',
+        premiumFeatures: 'Video Doktor Konsültasyonu\nİnsan Asistanı (24/7)\nRuh Hali Analizi (AI)\nSağlık Trendleri',
+        profileUpdated: 'Adınız güncellendi',
+        profileUpdateMsg: 'İsminiz başarıyla güncellendi.',
+        premiumAlready: 'Premium Aktif',
+        premiumAlreadyMsg: 'Zaten premium aboneniz!',
+        premiumSelected: 'Premium Başarılı',
+        premiumSelectedMsg: 'Tekrardan hoş geldiniz!',
+        medNamePlaceholder: 'Örn: Aspirin',
+        medNotesPlaceholder: 'Yemekten sonra alınız',
+        presetBp: 'TANSİYON', presetSugar: 'ŞEKER', presetChol: 'KOLESTEROL',
+        helpMedTitle: '💊 İLAÇLARIM',
+        helpMedDesc: 'Günlük ilacınızı alıp almadığınızı takip etmek için bu sayfayı kullanın. İlacınızı aldığınız zaman "ALDI" butonuna basın.',
+        helpFamilyTitle: '👨‍👩‍👧 AİLE',
+        helpFamilyDesc: 'Çocuklarınız ve torununuz uzaktan bilgi almak için bu sayfada sizinle bağlanabilir.',
+        helpVoiceTitle: '🎤 SES KOMUTU',
+        helpVoiceDesc: 'Mikrofona konuşarak "İlaç ekle" veya "Ana sayfa" diyerek komut verebilirsiniz.',
+        helpEmergencyTitle: '📞 ACİL DURUMDA',
+        helpEmergencyDesc: 'Yardım almak için YARDIM butonuna basın ve aile üyeleriniz bilgilendirilecektir.',
+        medsEmpty: 'Henüz ilaç eklenmedi',
+        voiceHeard: 'Komut alındı',
+        voiceUnknown: 'Komutu anlayamadım. Lütfen tekrar edin.',
+        loginWelcome: 'Tekrar hoş geldiniz',
+        loginSub: 'Hızlı ve güvenli giriş yapın',
+        emailPlaceholder: 'ornek@mail.com',
+        passwordPlaceholder: 'Şifrenizi girin',
+    },
+    en: {
+        emailLabel: 'EMAIL', passwordLabel: 'PASSWORD', rememberMeLabel: 'REMEMBER ME',
+        loginBtn: 'SIGN IN', registerBtn: 'REGISTER', forgotBtn: 'FORGOT PASSWORD',
+        appleSignIn: 'Sign in with Apple',
+        registerTitle: 'REGISTER', backBtn: '← BACK', fullNameLabel: 'FULL NAME',
+        phoneLabel: 'PHONE', birthDateLabel: 'DATE OF BIRTH', completeRegBtn: 'COMPLETE REGISTRATION',
+        logoutBtn: 'LOGOUT', medicationsLabel: 'MY MEDICATIONS', familyLabel: 'FAMILY', helpLabel: 'HELP',
+        emergencyBtn: '🚨 EMERGENCY HELP', howAreYou: 'HOW ARE YOU?',
+        moodGood: '😊 FEELING GOOD', moodOk: '😐 SO SO', moodBad: '😟 NOT FEELING WELL',
+        moodLabel: 'MOOD', cameraLabel: 'CAMERA', healthLabel: 'HEALTH',
+        doctorBtn: '🩺 SHOW DOCTOR', voiceBtn: '🎙️ LISTEN / REPEAT',
+        moodScreenTitle: 'MOOD TRACKING', healthScreenTitle: 'HEALTH RECORDS',
+        medicationsTitle: 'MY MEDICATIONS', addMedBtn: '➕ ADD MEDICATION',
+        addMedTitle: 'ADD MEDICATION', medNameLabel: 'MEDICATION NAME', medNotesLabel: 'NOTES',
+        timesLabel: 'TIMES', saveBtn: 'SAVE',
+        familyTitle: 'FAMILY MEMBERS', addFamilyBtn: '➕ ADD FAMILY MEMBER',
+        addFamilyTitle: 'ADD FAMILY MEMBER', nameLabel: 'NAME', relationLabel: 'RELATION',
+        helpTitle: 'HELP', understoodBtn: 'GOT IT',
+        emergencyModalTitle: 'Calling emergency help',
+        emergencyModalDesc: 'Will be confirmed in 5 seconds. Location and notification will be shared with family and healthcare. You can cancel.',
+        confirmBtn: 'CONFIRM', cancelBtn: 'CANCEL',
+        voiceOnboardingTitle: 'Start Voice Assistant',
+        voiceOnboardingDesc: 'Tap the microphone and speak. You can say "Medications", "Family", "Help".',
+        voiceStartBtn: 'START LISTENING', voiceSkipBtn: 'NOT NOW',
+        settingsBtn: '⚙️ SETTINGS', apiLabel: 'API ADDRESS',
+        apiSaveBtn: 'SAVE', apiClearBtn: 'RESET',
+        largeTextOn: 'INCREASE TEXT SIZE', largeTextOff: 'DECREASE TEXT SIZE',
+        contrastOn: 'INCREASE CONTRAST', contrastOff: 'DECREASE CONTRAST',
+        simpleModeOn: 'SIMPLE MODE', simpleModeOff: 'SIMPLE MODE OFF',
+        resetViewBtnLabel: 'RESET DISPLAY', langLabel: 'LANGUAGE',
+        sessionExpired: 'Session Expired', sessionExpiredMsg: 'Please login again.',
+        connError: 'Connection error. Please check API address.',
+        loginFailed: 'Login failed. Please check your email and password.',
+        errorTitle: 'Error', successTitle: 'Success',
+        welcomeMsg: 'Welcome',
+        homeGuidance: 'Welcome to home screen. You will see three buttons: Medications, Family, Help.',
+        medicationGuidance: 'You are on the Medications page. Your medications are listed here.',
+        addMedGuidance: 'You are on the Add Medication form. Enter the medication name and times.',
+        familyGuidance: 'Welcome to the Family Members page.',
+        helpGuidance: 'You are on the Help page.',
+        loginGuidance: 'Welcome to the login page. Enter your email and password.',
+        simpleBannerText: 'Simple mode on: Extra features hidden.',
+        apiSaved: 'Saved', apiSavedMsg: 'API address updated',
+        apiReset: 'Reset', apiResetMsg: 'API address cleared',
+        demoHint: '💡 Demo: elderly@test.com / 123',
+        relationSelect: 'Select...',
+        relationChild: 'Child', relationGrandchild: 'Grandchild', relationSpouse: 'Spouse',
+        relationSibling: 'Sibling', relationOther: 'Other',
+        accountBtn: '👤 ACCOUNT',
+        profileTitle: '👤 ACCOUNT',
+        subscriptionTitle: '💳 SUBSCRIPTION',
+        userFullName: 'FULL NAME', userEmail: 'EMAIL',
+        subscriptionStatus: 'SUBSCRIPTION STATUS', daysRemaining: 'DAYS LEFT',
+        premiumPlan: '⭐ PREMIUM', standardPlan: '📦 STANDARD',
+        upgradePremium: '⭐ UPGRADE PREMIUM', subscriptionButton: '💳 VIEW SUBSCRIPTION',
+        editProfileBtn: '✏️ UPDATE INFO', logoutBtn: '🚪 LOGOUT',
+        packageInfo: 'PACKAGE INFO', currentPackage: '📦 CURRENT PLAN',
+        endDate: '📅 END DATE', features: '✨ FEATURES',
+        basicFeatures: 'Basic Medication Management\nFamily Members\nVoice Assistant',
+        premiumFeatures: 'Video Doctor Consultation\nHuman Assistant (24/7)\nAI Mood Analysis\nHealth Trends',
+        profileUpdated: 'Name Updated',
+        profileUpdateMsg: 'Your name was successfully updated.',
+        premiumAlready: 'Premium Active',
+        premiumAlreadyMsg: 'You are already a premium subscriber!',
+        premiumSelected: 'Premium Successful',
+        premiumSelectedMsg: 'Welcome back!',
+        medNamePlaceholder: 'e.g. Aspirin',
+        medNotesPlaceholder: 'Take after meal',
+        presetBp: 'BLOOD PRESSURE', presetSugar: 'BLOOD SUGAR', presetChol: 'CHOLESTEROL',
+        helpMedTitle: '💊 MY MEDICATIONS',
+        helpMedDesc: 'Use this page to track daily medicines. Tap "TAKEN" when you take your medicine.',
+        helpFamilyTitle: '👨‍👩‍👧 FAMILY',
+        helpFamilyDesc: 'Your family can connect and follow your status from this page.',
+        helpVoiceTitle: '🎤 VOICE COMMAND',
+        helpVoiceDesc: 'You can say commands like "Add medication" or "Home screen".',
+        helpEmergencyTitle: '📞 IN EMERGENCY',
+        helpEmergencyDesc: 'Press HELP button to alert your family members.',
+        medsEmpty: 'No medications added yet',
+        voiceHeard: 'Command received',
+        voiceUnknown: 'I could not understand the command. Please repeat.',
+        loginWelcome: 'Welcome back',
+        loginSub: 'Sign in quickly and securely',
+        emailPlaceholder: 'example@mail.com',
+        passwordPlaceholder: 'Enter your password',
+    }
+};
+
+let currentLang = localStorage.getItem('appLang') || 'tr';
+
+function t(key) {
+    return (TRANSLATIONS[currentLang] || TRANSLATIONS.tr)[key] || key;
+}
 
 function getApiBase() {
     const rawStored = localStorage.getItem('apiBaseUrl')?.trim();
@@ -53,8 +233,11 @@ const GeolocationPlugin = window.Capacitor?.Plugins?.Geolocation;
 let lastGuidanceText = '';
 let emergencyTimer = null;
 let ignoreNextA11yClose = false;
+let isEmergencyModalOpen = false;
 var speechRecognition = null;
 var isListening = false;
+let lastVoiceCommand = '';
+let lastVoiceCommandAt = 0;
 const MEDICATION_CONFIRM_WARNING_MS = 15 * 60 * 1000;
 const MEDICATION_CONFIRM_CRITICAL_MS = 30 * 60 * 1000;
 const medicationConfirmTimers = new Map();
@@ -145,11 +328,11 @@ function handleAuthExpired() {
     localStorage.removeItem('userId');
     localStorage.removeItem('userName');
     localStorage.removeItem('rememberMe');
-    showNotification('Oturum Süresi Doldu', 'Lütfen tekrar giriş yapın.', 'error');
+    showNotification(t('sessionExpired'), t('sessionExpiredMsg'), 'error');
     showScreen('loginScreen');
 }
 
-async function safeFetch(url, options) {
+async function safeFetch(url, options, fetchOpts = {}) {
     let finalUrl = url;
     let extractedToken = null;
     try {
@@ -161,7 +344,7 @@ async function safeFetch(url, options) {
         finalUrl = parsed.toString();
     } catch (error) {
         console.error('Geçersiz API adresi:', { url, apiBase: API_BASE, error });
-        showNotification('Hata', 'API adresi geçersiz. Lütfen ayarlardan güncelleyin.', 'error');
+        if (!fetchOpts.silent) showNotification(t('errorTitle'), 'API adresi geçersiz. Lütfen ayarlardan güncelleyin.', 'error');
         return null;
     }
 
@@ -183,7 +366,7 @@ async function safeFetch(url, options) {
         return response;
     } catch (error) {
         console.error('Bağlantı hatası:', { finalUrl, error });
-        showNotification('Hata', 'API bağlantısı kurulamadı. IP adresini kontrol edin.', 'error');
+        if (!fetchOpts.silent) showNotification(t('errorTitle'), t('connError'), 'error');
         return null;
     }
 }
@@ -235,32 +418,23 @@ async function ensurePremiumAccess(featureName) {
     return true;
 }
 
-async function ensurePremiumAccess(featureName) {
-    const token = requireAuthToken();
-    if (!token) return false;
-    if (!subscriptionCache) {
-        const response = await safeFetch(`${API_BASE}/api/subscription?token=${token}`);
-        if (!response) return false;
-        if (response.ok) {
-            subscriptionCache = await response.json();
-        }
-    }
-    const plan = subscriptionCache?.plan || subscriptionCache?.Plan || 'standard';
-    const isActive = subscriptionCache?.isActive ?? subscriptionCache?.IsActive ?? true;
-    const isPremium = String(plan).toLowerCase() === 'premium' && isActive;
-    if (!isPremium) {
-        showNotification('Abonelik Gerekli', `${featureName} için premium abonelik gerekir.`, 'error');
-        return false;
-    }
-    return true;
-}
+
 
 function showScreen(screenId) {
     if (!PUBLIC_SCREENS.has(screenId) && !hasAuthTokenSync()) {
         screenId = 'loginScreen';
     }
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(screenId).classList.add('active');
+    const targetScreen = document.getElementById(screenId);
+    if (!targetScreen) {
+        console.warn('Ekran bulunamadı:', screenId);
+        const fallback = document.getElementById('homeScreen') || document.getElementById('loginScreen');
+        if (!fallback) return;
+        fallback.classList.add('active');
+        triggerVoiceGuidance(fallback.id);
+        return;
+    }
+    targetScreen.classList.add('active');
 
     // Her ekrana giriş yapılırken otomatik sesli rehberlik
     triggerVoiceGuidance(screenId);
@@ -268,12 +442,12 @@ function showScreen(screenId) {
 
 function triggerVoiceGuidance(screenId) {
     const guidance = {
-        'homeScreen': 'Ana sayfaya hoş geldiniz. Üç buton göreceksiniz: İlaçlarım, Aile, Yardım. Ses komutu kullanabilirsiniz.',
-        'medicationScreen': 'İlaçlarım sayfasındasınız. Aldığınız ilaçlar burada listelenir. Yeni ilaç eklemek için aşağıdaki butonuna basın.',
-        'addMedicationScreen': 'Yeni ilaç ekle formunda bulunuyorsunuz. İlaç adını ve saatlerini girin.',
-        'familyScreen': 'Aile üyeleri sayfasına hoş geldiniz. Sizinle iletişim kuran aile üyeleri burada listelenir.',
-        'helpScreen': 'Yardım sayfasında bulunuyorsunuz. Tüm özellikleri burada açıklıyoruz.',
-        'loginScreen': 'Giriş sayfasına hoş geldiniz. E-posta ve şifrenizi girin.'
+        'homeScreen': t('homeGuidance'),
+        'medicationScreen': t('medicationGuidance'),
+        'addMedicationScreen': t('addMedGuidance'),
+        'familyScreen': t('familyGuidance'),
+        'helpScreen': t('helpGuidance'),
+        'loginScreen': t('loginGuidance'),
     };
 
     if (guidance[screenId]) {
@@ -309,6 +483,60 @@ function toggleA11yMenu(event) {
 }
 
 // Debug: force menu open if still blocked
+function applyTranslations() {
+    const tr = TRANSLATIONS[currentLang] || TRANSLATIONS.tr;
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (tr[key] !== undefined) el.textContent = tr[key];
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (tr[key] !== undefined) el.setAttribute('placeholder', tr[key]);
+    });
+
+    // Dil butonlarının aktif/pasif durumunu güncelle (login + ayarlar menüsü)
+    ['tr', 'en'].forEach(lang => {
+        document.querySelectorAll(`[data-lang-btn="${lang}"]`).forEach(btn => {
+            btn.classList.toggle('active', lang === currentLang);
+        });
+    });
+
+    // Dinamik toggle butonlarını güncelle
+    const a11yToggle = document.getElementById('a11yToggle');
+    if (a11yToggle) {
+        const isLarge = document.body.classList.contains('large-text');
+        a11yToggle.textContent = isLarge ? tr.largeTextOff : tr.largeTextOn;
+    }
+    const contrastToggle = document.getElementById('contrastToggle');
+    if (contrastToggle) {
+        const isHighContrast = document.body.classList.contains('high-contrast');
+        contrastToggle.textContent = isHighContrast ? tr.contrastOff : tr.contrastOn;
+    }
+    const simpleHomeToggle = document.getElementById('simpleHomeToggle');
+    if (simpleHomeToggle) {
+        const isSimple = document.body.classList.contains('simple-home');
+        simpleHomeToggle.textContent = isSimple ? tr.simpleModeOff : tr.simpleModeOn;
+    }
+
+    // HTML lang attribute
+    document.documentElement.lang = currentLang;
+    updateGreeting();
+}
+
+function setLanguage(lang) {
+    if (!TRANSLATIONS[lang]) return;
+    currentLang = lang;
+    localStorage.setItem('appLang', lang);
+    if (speechRecognition) {
+        speechRecognition.lang = currentLang === 'en' ? 'en-GB' : 'tr-TR';
+    }
+    applyTranslations();
+}
+
+// Inline onclick çağrıları için global erişim
+window.setLanguage = setLanguage;
+window.applyTranslations = applyTranslations;
+
 function forceOpenA11yMenu() {
     const a11yMenuBtn = document.getElementById('a11yMenuBtn');
     const a11yMenu = document.getElementById('a11yMenu');
@@ -332,7 +560,7 @@ function initSpeechRecognition() {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'tr-TR';
+    recognition.lang = currentLang === 'en' ? 'en-GB' : 'tr-TR';
     recognition.continuous = true;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
@@ -357,7 +585,18 @@ function initSpeechRecognition() {
         const transcript = event?.results?.[event.resultIndex]?.[0]?.transcript || '';
         const command = transcript.toLowerCase().trim();
         if (!command) return;
-        console.log('Gelen komut:', command);
+
+        // Aynı komutun kısa sürede tekrar gelmesini engelle (iOS'da spam log azaltma)
+        const now = Date.now();
+        if (command === lastVoiceCommand && (now - lastVoiceCommandAt) < 1200) {
+            return;
+        }
+        lastVoiceCommand = command;
+        lastVoiceCommandAt = now;
+
+        if (command !== 'test') {
+            console.log('Gelen komut:', command);
+        }
         handleVoiceCommand(command);
     };
 
@@ -375,7 +614,11 @@ function updateVoiceStatus(text) {
 function startVoiceCommand() {
     const recognition = initSpeechRecognition();
     if (!recognition) {
-        showNotification('Uyarı', 'Tarayıcı ses tanımayı desteklemiyor', 'error');
+        if (typeof window.voiceAssistantStart === 'function') {
+            window.voiceAssistantStart();
+            return;
+        }
+        showNotification('Uyarı', 'Bu cihazda ses tanıma desteklenmiyor', 'error');
         return;
     }
     if (isListening) return;
@@ -428,45 +671,61 @@ async function shareDoctorReport() {
 }
 
 function handleVoiceCommand(command) {
-    if (command.includes('ilaç')) {
+    const cmd = String(command || '').toLowerCase().trim();
+    if (!cmd) {
+        speak(t('voiceUnknown'));
+        return;
+    }
+
+    if (cmd.includes('ilaç') || cmd.includes('ilac') || cmd.includes('medicine') || cmd.includes('medication') || cmd.includes('drug') || cmd.includes('pill')) {
+        speak(t('voiceHeard'));
         goToMedications();
         return;
     }
 
-    if (command.includes('aile') || command.includes('kızımı') || command.includes('oğlumu') || command.includes('oğlumu') || command.includes('kızımı ara')) {
+    if (cmd.includes('aile') || cmd.includes('family') || cmd.includes('daughter') || cmd.includes('son') || cmd.includes('call my daughter') || cmd.includes('call my son') || cmd.includes('kızımı') || cmd.includes('oğlumu') || cmd.includes('kızımı ara') || cmd.includes('oğlumu ara')) {
+        speak(t('voiceHeard'));
         goToFamily();
         return;
     }
 
-    if (command.includes('yardım') || command.includes('acil')) {
+    if (cmd.includes('yardım') || cmd.includes('yardim') || cmd.includes('acil') || cmd.includes('help') || cmd.includes('emergency') || cmd.includes('sos')) {
+        speak(t('voiceHeard'));
         showEmergencyConfirm();
         return;
     }
 
-    if (command.includes('ana sayfa') || command.includes('ev') || command.includes('anasayfa')) {
+    if (cmd.includes('ana sayfa') || cmd.includes('anasayfa') || cmd.includes('ev') || cmd.includes('home')) {
+        speak(t('voiceHeard'));
         goHome();
         return;
     }
 
-    if (command.includes('ruh hali') || command.includes('mod')) {
+    if (cmd.includes('ruh hali') || cmd.includes('mod') || cmd.includes('mood')) {
+        speak(t('voiceHeard'));
         goToMoodDashboard();
         return;
     }
 
-    if (command.includes('sağlık')) {
+    if (cmd.includes('sağlık') || cmd.includes('saglik') || cmd.includes('health')) {
+        speak(t('voiceHeard'));
         goToHealthRecords();
         return;
     }
 
-    if (command.includes('kayıt ol')) {
+    if (cmd.includes('kayıt ol') || cmd.includes('kayit ol') || cmd.includes('register') || cmd.includes('sign up')) {
+        speak(t('voiceHeard'));
         goToRegister();
         return;
     }
 
-    if (command.includes('çıkış')) {
+    if (cmd.includes('çıkış') || cmd.includes('cikis') || cmd.includes('logout') || cmd.includes('log out') || cmd.includes('sign out')) {
+        speak(t('voiceHeard'));
         logout();
         return;
     }
+
+    speak(t('voiceUnknown'));
 }
 
 function readAssistantIntentFromUrl() {
@@ -549,8 +808,8 @@ function goToMoodDashboard() {
 }
 
 function goToMedicationVision() {
-    // Yeni sekme aç
-    window.open('medication-vision.html', '_blank');
+    // iOS WebView'de yeni sekme yerine aynı sekmede aç
+    window.location.href = 'medication-vision.html';
 }
 
 function goToHealthRecords() {
@@ -579,6 +838,76 @@ function logout() {
     subscriptionCache = null;
     localStorage.removeItem('userPlan');
     showScreen('loginScreen');
+}
+
+// =================== HESAP / PROFİL YÖNETIMI ===================
+
+function updateProfileScreen() {
+    const userId = localStorage.getItem('userId') || 'elderly-001';
+    const userName = localStorage.getItem('userName') || 'Kullanıcı';
+    const userEmail = localStorage.getItem('userEmail') || localStorage.getItem('rememberedEmail') || 'test@email.com';
+    const userPlan = localStorage.getItem('userPlan') || 'Standart';
+    const subscriptionEnd = localStorage.getItem('subscriptionEnd') || '2025-12-31';
+    const registrationDate = localStorage.getItem('registrationDate') || new Date().toLocaleDateString('tr-TR');
+
+    // Kalan günleri hesapla
+    const endDate = new Date(subscriptionEnd);
+    const today = new Date();
+    const daysLeft = Math.max(0, Math.ceil((endDate - today) / (1000 * 60 * 60 * 24)));
+    const daysLeftText = daysLeft > 0 ? `${daysLeft} GÜN` : 'KATILAŞMIŞ';
+
+    document.getElementById('profileName').textContent = userName;
+    document.getElementById('profileEmail').textContent = userEmail;
+    document.getElementById('profilePlan').textContent = userPlan === 'Premium' ? '⭐ PREMIUM' : '📦 STANDART';
+    document.getElementById('profileDaysLeft').textContent = daysLeftText;
+}
+
+function updateSubscriptionScreen() {
+    const userPlan = localStorage.getItem('userPlan') || 'Standart';
+    const subscriptionEnd = localStorage.getItem('subscriptionEnd') || '2025-12-31';
+    const isPremium = userPlan === 'Premium';
+
+    document.getElementById('subCurrentPlan').textContent = isPremium ? '⭐ PREMIUM (Tüm Özellikler)' : '📦 STANDART';
+    document.getElementById('subEndDate').textContent = subscriptionEnd;
+
+    if (isPremium) {
+        document.getElementById('premiumFeatures').innerHTML = `
+            <div>✓ Video Doktor Konsültasyonu</div>
+            <div>✓ İnsan Asistanı (24/7)</div>
+            <div>✓ Ruh Hali Analizi (AI)</div>
+            <div>✓ Sağlık Trendleri</div>
+        `;
+    }
+}
+
+function editProfile() {
+    const newName = prompt('Yeni ad soyadınız:', localStorage.getItem('userName') || '');
+    if (newName && newName.trim()) {
+        localStorage.setItem('userName', newName.trim());
+        updateProfileScreen();
+        speak('Adınız güncellendi', 'tr-TR');
+    }
+}
+
+function goToSubscription() {
+    updateSubscriptionScreen();
+    showScreen('subscriptionScreen');
+    speak('Abone durumu sayfasında bulunuyorsunuz', 'tr-TR');
+}
+
+function goToPremium() {
+    const isPremium = localStorage.getItem('userPlan') === 'Premium';
+    if (isPremium) {
+        showNotification('Premium Aktif', 'Zaten premium aboneniz!');
+    } else {
+        speak('Premium paket seçildi. Ödemedikten sonra tüm özellikler aktif olur.', 'tr-TR');
+        localStorage.setItem('userPlan', 'Premium');
+        const today = new Date();
+        const nextYear = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
+        localStorage.setItem('subscriptionEnd', nextYear.toISOString().split('T')[0]);
+        showNotification('Premium Başarılı', 'Tekrardan hoş geldiniz!');
+        updateProfileScreen();
+    }
 }
 
 // =================== BİLDİRİM ===================
@@ -636,7 +965,7 @@ function showGracefulOfflineState(message, type = 'offline') {
     document.body.appendChild(banner);
 
     if (navigator.vibrate) {
-        try { navigator.vibrate(isSuccess ? [50, 40, 50] : [120, 80, 120]); } catch {}
+        try { navigator.vibrate(isSuccess ? [50, 40, 50] : [120, 80, 120]); } catch { }
     }
 
     setTimeout(() => {
@@ -749,14 +1078,14 @@ document.addEventListener('DOMContentLoaded', async function () {
             const value = apiBaseInput.value.trim();
             if (!value) return;
             localStorage.setItem('apiBaseUrl', value);
-            showNotification('Kaydedildi', 'API adresi güncellendi', 'success');
+            showNotification(t('apiSaved'), t('apiSavedMsg'), 'success');
         });
     }
     if (apiBaseClear && apiBaseInput) {
         apiBaseClear.addEventListener('click', () => {
             localStorage.removeItem('apiBaseUrl');
             apiBaseInput.value = '';
-            showNotification('Sıfırlandı', 'API adresi temizlendi', 'success');
+            showNotification(t('apiReset'), t('apiResetMsg'), 'success');
         });
     }
 
@@ -765,7 +1094,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         const isLarge = localStorage.getItem('largeText') === 'true';
         document.body.classList.toggle('large-text', isLarge);
         a11yToggle.setAttribute('aria-pressed', String(isLarge));
-        a11yToggle.textContent = isLarge ? 'YAZIYI KÜÇÜLT' : 'YAZIYI BÜYÜT';
+        a11yToggle.textContent = isLarge ? t('largeTextOff') : t('largeTextOn');
         a11yToggle.addEventListener('click', () => toggleLargeText(a11yToggle));
         a11yToggle.addEventListener('touchstart', (event) => {
             event.stopPropagation();
@@ -778,7 +1107,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         const isHighContrast = localStorage.getItem('highContrast') === 'true';
         document.body.classList.toggle('high-contrast', isHighContrast);
         contrastToggle.setAttribute('aria-pressed', String(isHighContrast));
-        contrastToggle.textContent = isHighContrast ? 'KONTRASTI AZALT' : 'KONTRASTI ARTIR';
+        contrastToggle.textContent = isHighContrast ? t('contrastOff') : t('contrastOn');
         contrastToggle.addEventListener('click', () => toggleHighContrast(contrastToggle));
         contrastToggle.addEventListener('touchstart', (event) => {
             event.stopPropagation();
@@ -791,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         const isSimpleHome = localStorage.getItem('simpleHome') === 'true';
         document.body.classList.toggle('simple-home', isSimpleHome);
         simpleHomeToggle.setAttribute('aria-pressed', String(isSimpleHome));
-        simpleHomeToggle.textContent = isSimpleHome ? 'BASİT MOD KAPAT' : 'BASİT MOD';
+        simpleHomeToggle.textContent = isSimpleHome ? t('simpleModeOff') : t('simpleModeOn');
         simpleHomeToggle.addEventListener('click', () => toggleSimpleHome(simpleHomeToggle));
         simpleHomeToggle.addEventListener('touchstart', (event) => {
             event.stopPropagation();
@@ -832,6 +1161,10 @@ document.addEventListener('DOMContentLoaded', async function () {
         registerFormElement.addEventListener('submit', handleRegister);
     }
 
+    // Dil ve çevirileri her açılışta uygula
+    currentLang = localStorage.getItem('appLang') || 'tr';
+    applyTranslations();
+
     // Otomatik giriş (Beni Hatırla)
     const remember = localStorage.getItem('rememberMe') === 'true';
     const token = await getStoredToken();
@@ -839,16 +1172,23 @@ document.addEventListener('DOMContentLoaded', async function () {
         showScreen('homeScreen');
         updateGreeting();
         runPendingAssistantIntentIfAny();
+
+        // Kayıtlı e-posta ve dil ayarını uygula
+        const savedEmail = localStorage.getItem('rememberedEmail');
+        const emailInput = document.getElementById('email');
+        const rememberCheckbox = document.getElementById('rememberMe');
+        if (remember && savedEmail && emailInput) {
+            emailInput.value = savedEmail;
+            if (rememberCheckbox) rememberCheckbox.checked = true;
+        }
+
+        // Kayıtlı dil ayarı zaten yukarıda uygulandı
     }
 
     // Butonlara sesli geri bildirim
     document.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => {
             provideFeedback('', [20]);
-            const label = btn.getAttribute('aria-label') || btn.textContent.trim();
-            if (label) {
-                speak(label);
-            }
         });
     });
 
@@ -1038,55 +1378,67 @@ async function handleLogin(e) {
     const password = document.getElementById('password').value.trim();
     const remember = document.getElementById('rememberMe')?.checked;
 
+    // Sunucuya bağlanmayı dene (sessiz hata modunda)
     try {
         const response = await safeFetch(`${API_BASE}/api/elderly/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
-        });
+        }, { silent: true });
 
-        if (!response) {
+        if (response) {
+            const rawText = await response.text();
+            let data = null;
+            try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+
+            if (response.ok && data?.token) {
+                await setStoredToken(data.token);
+                localStorage.setItem('userId', data.userId || '');
+                localStorage.setItem('userName', data.name || email);
+                localStorage.setItem('rememberMe', remember ? 'true' : 'false');
+                if (remember) localStorage.setItem('rememberedEmail', email);
+                localStorage.removeItem('userPlan');
+                subscriptionCache = null;
+                safeFetch(`${API_BASE}/api/subscription?token=${data.token}`)
+                    .then(res => res ? safeReadJson(res, null) : null)
+                    .then(sub => {
+                        if (!sub) return;
+                        subscriptionCache = sub;
+                        const plan = sub?.plan || sub?.Plan;
+                        if (plan) localStorage.setItem('userPlan', String(plan).toLowerCase());
+                    })
+                    .catch(() => { });
+                showScreen('homeScreen');
+                updateGreeting();
+                speak(`${t('welcomeMsg')} ${data.name}`);
+                runPendingAssistantIntentIfAny();
+                return;
+            }
+            // Sunucu hata döndürdü (yanlış şifre vs.)
+            const message = data?.message || t('loginFailed');
+            showNotification(t('errorTitle'), message, 'error');
             return;
         }
-
-        const rawText = await response.text();
-        console.log('Gelen yanıt:', rawText);
-
-        let data = null;
-        try {
-            data = rawText ? JSON.parse(rawText) : null;
-        } catch (parseError) {
-            console.warn('Yanıt JSON değil:', parseError);
-        }
-
-        if (response.ok && data?.token) {
-            await setStoredToken(data.token);
-            localStorage.setItem('userId', data.userId);
-            localStorage.setItem('userName', data.name);
-            localStorage.setItem('rememberMe', remember ? 'true' : 'false');
-            localStorage.removeItem('userPlan');
-            subscriptionCache = null;
-            safeFetch(`${API_BASE}/api/subscription?token=${data.token}`)
-                .then(res => res ? safeReadJson(res, null) : null)
-                .then(sub => {
-                    if (!sub) return;
-                    subscriptionCache = sub;
-                    const plan = sub?.plan || sub?.Plan;
-                    if (plan) localStorage.setItem('userPlan', String(plan).toLowerCase());
-                })
-                .catch(() => {});
-            showScreen('homeScreen');
-            updateGreeting();
-            speak(`Hoş geldiniz ${data.name}`);
-            runPendingAssistantIntentIfAny();
-        } else {
-            const message = data?.message || rawText || 'Giriş başarısız';
-            showNotification('Hata', message, 'error');
-        }
     } catch (error) {
-        console.error('Giriş hatası:', { error, apiBase: API_BASE, email });
-        showNotification('Hata', 'Bağlantı hatası. API adresini kontrol edin.', 'error');
+        console.error('Login error:', { error, apiBase: API_BASE, email });
     }
+
+    // Demo / Offline mod: sunucuya ulaşılamadığında test hesabıyla giriş
+    if (email === 'elderly@test.com' && password === '123') {
+        await setStoredToken('demo-offline-token');
+        localStorage.setItem('userId', 'demo-user');
+        localStorage.setItem('userName', currentLang === 'en' ? 'Demo User' : 'Demo Kullanıcı');
+        localStorage.setItem('rememberMe', remember ? 'true' : 'false');
+        if (remember) localStorage.setItem('rememberedEmail', email);
+        subscriptionCache = null;
+        showScreen('homeScreen');
+        updateGreeting();
+        speak(t('welcomeMsg'));
+        runPendingAssistantIntentIfAny();
+        return;
+    }
+
+    showNotification(t('errorTitle'), t('connError'), 'error');
 }
 
 async function handleForgotPassword() {
@@ -1128,6 +1480,14 @@ async function handleForgotPassword() {
         console.error('Şifre sıfırlama hatası:', error);
         showNotification('Hata', 'Bağlantı hatası', 'error');
     }
+}
+
+function setMedicationPreset(name) {
+    const medNameInput = document.getElementById('medName');
+    if (!medNameInput) return;
+    medNameInput.value = name;
+    medNameInput.focus();
+    speak(`${name}`);
 }
 
 async function handleAddMedication(e) {
@@ -1228,10 +1588,18 @@ async function loadMedications() {
         const response = await safeFetch(`${API_BASE}/api/medications?token=${token}`);
         if (!response) return;
         if (response.ok) {
-            const medications = await safeReadJson(response, []);
-            currentMedicationsCache = Array.isArray(medications) ? medications : [];
+            const payload = await safeReadJson(response, []);
+            const medications = Array.isArray(payload)
+                ? payload
+                : (Array.isArray(payload?.items) ? payload.items : (Array.isArray(payload?.medications) ? payload.medications : []));
+            currentMedicationsCache = medications;
             console.log('Gelen Veri (ilaçlar):', medications);
             const container = document.getElementById('medicationsList');
+            if (!container) return;
+            if (!medications.length) {
+                container.innerHTML = `<div style="font-size:24px;color:#ffff00;text-align:center;padding:24px;">${t('medsEmpty')}</div>`;
+                return;
+            }
             container.innerHTML = medications.map(med => `
                 <div style="background: rgba(255,255,0,0.1); border-left: 5px solid #ffff00; padding: 20px; margin-bottom: 20px; border-radius: 10px;">
                     <div style="font-size: 32px; color: #ffff00; font-weight: bold; margin-bottom: 10px;">${med.name}</div>
@@ -1385,16 +1753,49 @@ function updateGreeting() {
     const name = localStorage.getItem('userName') || 'Arkadaş';
     const greeting = document.getElementById('greeting');
     if (greeting) {
-        greeting.textContent = `Hoş geldiniz, ${name}`;
+        greeting.textContent = `${t('welcomeMsg')}, ${name}`;
     }
 }
 
+function pickPreferredVoice(langCode) {
+    if (!('speechSynthesis' in window)) return null;
+    const voices = speechSynthesis.getVoices() || [];
+    if (!voices.length) return null;
+
+    if (langCode === 'en-GB') {
+        return voices.find(v => /^en-GB$/i.test(v.lang))
+            || voices.find(v => /^en-/i.test(v.lang) && /google|samantha|serena|daniel|karen/i.test(v.name))
+            || voices.find(v => /^en-/i.test(v.lang))
+            || null;
+    }
+
+    return voices.find(v => /^tr-TR$/i.test(v.lang))
+        || voices.find(v => /^tr/i.test(v.lang))
+        || null;
+}
+
 function speak(text) {
+    if (!text || typeof text !== 'string') return;
     if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'tr-TR';
-        utterance.rate = 0.85;
-        speechSynthesis.speak(utterance);
+        try {
+            speechSynthesis.cancel();
+            const cleanedText = String(text)
+                .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (!cleanedText) return;
+
+            const voiceLang = currentLang === 'en' ? 'en-GB' : 'tr-TR';
+            const utterance = new SpeechSynthesisUtterance(cleanedText);
+            utterance.lang = voiceLang;
+            utterance.voice = pickPreferredVoice(voiceLang);
+            utterance.rate = 0.85;
+            utterance.volume = 1;
+            utterance.pitch = currentLang === 'en' ? 1.05 : 1;
+            speechSynthesis.speak(utterance);
+        } catch (error) {
+            console.warn('Konuşma sentezi hatası:', error);
+        }
     }
 }
 
@@ -1421,8 +1822,14 @@ async function triggerEmergencyCall() {
 }
 
 function showEmergencyConfirm() {
+    if (isEmergencyModalOpen) return;
+    isEmergencyModalOpen = true;
+
     ensurePremiumAccess('SOS').then(hasAccess => {
-        if (!hasAccess) return;
+        if (!hasAccess) {
+            isEmergencyModalOpen = false;
+            return;
+        }
         const modal = document.getElementById('emergencyModal');
         if (modal) {
             modal.classList.add('show');
@@ -1430,8 +1837,15 @@ function showEmergencyConfirm() {
             if (emergencyTimer) {
                 clearTimeout(emergencyTimer);
             }
-            emergencyTimer = setTimeout(() => confirmEmergency(), 5000);
+            emergencyTimer = setTimeout(() => {
+                if (isEmergencyModalOpen) {
+                    confirmEmergency();
+                }
+            }, 5000);
         }
+    }).catch(error => {
+        console.error('Emergency check error:', error);
+        isEmergencyModalOpen = false;
     });
 }
 
@@ -1444,10 +1858,14 @@ function cancelEmergency() {
     if (modal) {
         modal.classList.remove('show');
     }
+    isEmergencyModalOpen = false;
     showNotification('İptal', 'Acil çağrı iptal edildi', 'success');
 }
 
 async function confirmEmergency() {
+    if (!isEmergencyModalOpen) return;
+    isEmergencyModalOpen = false;
+
     if (emergencyTimer) {
         clearTimeout(emergencyTimer);
         emergencyTimer = null;

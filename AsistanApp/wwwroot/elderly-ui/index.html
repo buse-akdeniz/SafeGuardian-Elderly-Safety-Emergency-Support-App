@@ -10,84 +10,43 @@
     <link rel="stylesheet" href="mood-theme.css">
 </head>
 <body>
-    <!-- =================== GİRİŞ EKRANI =================== -->
-    <div id="loginScreen" class="screen active">
-        <div class="logo-area">
-            <div class="logo">👴</div>
-            <h1>VITAGUARD</h1>
-        </div>
-
-        <form id="loginForm" class="form-container">
-            <div class="input-group">
-                <label for="email">E-POSTA</label>
-                <input type="email" id="email" required>
-            </div>
-
-            <div class="input-group">
-                <label for="password">ŞİFRE</label>
-                <input type="password" id="password" required>
-            </div>
-
-            <label class="remember-row">
-                <input type="checkbox" id="rememberMe" />
-                <span>BENİ HATIRLA</span>
-            </label>
-
-            <button type="submit" class="btn-giant btn-blue">
-                GİRİŞ YAP
-            </button>
-
-            <button type="button" class="btn-giant btn-green" onclick="goToRegister()" style="margin-top: 10px;">
-                KAYIT OL
-            </button>
-
-            <button type="button" class="btn-small btn-gray" onclick="handleForgotPassword()" style="margin-top: 12px; width: 100%;">
-                ŞİFREMİ UNUTTUM
-            </button>
-
-            <button type="button" class="btn-giant btn-apple" onclick="handleAppleSignInPreview()" style="margin-top: 12px;">
-                <span class="apple-logo" aria-hidden="true"></span>
-                <span>Sign in with Apple</span>
-            </button>
-
-            <p class="hint-text" id="testHint" style="display: none;">Test: elderly@test.com / 123</p>
-        </form>
-    </div>
-
     <!-- =================== KAYIT OL =================== -->
     <div id="registerScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-back" onclick="showScreen('loginScreen')">← GERİ</button>
-            <h1>KAYIT OL</h1>
+            <button class="btn-small btn-back" onclick="showScreen('loginScreen')" data-i18n="backBtn">← GERİ</button>
+            <h1 data-i18n="registerTitle">KAYIT OL</h1>
         </div>
 
         <form id="registerForm" class="form-container" style="margin-top: 20px;">
             <div class="input-group">
-                <label for="regFullName">AD SOYAD</label>
+                <label for="regFullName" data-i18n="fullNameLabel">AD SOYAD</label>
                 <input type="text" id="regFullName" placeholder="Örn: Ayşe Yılmaz" required>
             </div>
             <div class="input-group">
-                <label for="regPhone">TELEFON</label>
+                <label for="regPhone" data-i18n="phoneLabel">TELEFON</label>
                 <input type="tel" id="regPhone" placeholder="05xx xxx xx xx" required>
             </div>
             <div class="input-group">
-                <label for="regEmail">E-POSTA</label>
+                <label for="regEmail" data-i18n="emailLabel">E-POSTA</label>
                 <input type="email" id="regEmail" placeholder="ayse@mail.com" required>
             </div>
             <div class="input-group">
-                <label for="regBirthDate">DOĞUM TARİHİ</label>
+                <label for="regBirthDate" data-i18n="birthDateLabel">DOĞUM TARİHİ</label>
                 <input type="date" id="regBirthDate" required>
             </div>
 
-            <button type="submit" class="btn-giant btn-green">KAYDI TAMAMLA</button>
+            <button type="submit" class="btn-giant btn-green" data-i18n="completeRegBtn">KAYDI TAMAMLA</button>
         </form>
     </div>
 
     <!-- =================== ANA SAYFA - 3 BUTON =================== -->
     <div id="homeScreen" class="screen">
-        <div class="top-bar">
+        <div class="top-bar home-top-bar">
             <h1 id="greeting">Hoş Geldiniz</h1>
-            <button class="btn-small btn-red" onclick="logout()">ÇIKIŞ</button>
+            <div class="home-actions" style="display: flex; gap: 8px;">
+                <button class="btn-small btn-blue" onclick="showScreen('profileScreen')" style="font-size: 16px;" data-i18n="accountBtn">HESAP</button>
+                <button class="btn-small btn-red" onclick="logout()" data-i18n="logoutBtn">ÇIKIŞ</button>
+            </div>
         </div>
 
         <div class="main-area">
@@ -99,24 +58,24 @@
                 <!-- BUTON 1: İLAÇLAR -->
                 <button class="btn-mega btn-medicine" onclick="goToMedications()" aria-label="İlaçlarım">
                     <span class="btn-icon">💊</span>
-                    <span class="btn-text">İLAÇLARIM</span>
+                    <span class="btn-text" data-i18n="medicationsLabel">İLAÇLARIM</span>
                 </button>
 
                 <!-- BUTON 2: AİLE -->
                 <button class="btn-mega btn-family" onclick="goToFamily()" aria-label="Aile üyeleri">
                     <span class="btn-icon">👨‍👩‍👧</span>
-                    <span class="btn-text">AİLE</span>
+                    <span class="btn-text" data-i18n="familyLabel">AİLE</span>
                 </button>
 
                 <!-- BUTON 3: YARDIM -->
                 <button class="btn-mega btn-help" onclick="showHelp()" aria-label="Yardım">
                     <span class="btn-icon">🆘</span>
-                    <span class="btn-text">YARDIM</span>
+                    <span class="btn-text" data-i18n="helpLabel">YARDIM</span>
                 </button>
             </div>
 
             <button class="btn-giant btn-red emergency-main" onclick="showEmergencyConfirm()" aria-label="Acil yardım çağır">
-                🚨 ACİL YARDIM
+                <span data-i18n="emergencyBtn">🚨 ACİL YARDIM</span>
             </button>
 
             <!-- EKLENTI BUTONLARI -->
@@ -125,16 +84,16 @@
             </div>
 
             <div class="mood-quick" aria-live="polite">
-                <div class="mood-quick-title">NASILSIN?</div>
+                <div class="mood-quick-title" data-i18n="howAreYou">NASILSIN?</div>
                 <div class="mood-quick-buttons">
                     <button class="btn-giant btn-green mood-quick-btn" onclick="submitMood(8)" aria-label="İyiyim">
-                        😊 İYİYİM
+                        <span data-i18n="moodGood">😊 İYİYİM</span>
                     </button>
                     <button class="btn-giant btn-yellow mood-quick-btn" onclick="submitMood(5)" aria-label="İdare eder">
-                        😐 İDARE EDER
+                        <span data-i18n="moodOk">😐 İDARE EDER</span>
                     </button>
                     <button class="btn-giant btn-red mood-quick-btn" onclick="submitMood(2)" aria-label="Kötüyüm">
-                        😟 KÖTÜYÜM
+                        <span data-i18n="moodBad">😟 İYİ DEĞİLİM</span>
                     </button>
                 </div>
             </div>
@@ -143,27 +102,27 @@
                 <!-- Ruh Hali Dashboard -->
                 <button class="btn-mega btn-mood" onclick="goToMoodDashboard()" aria-label="Ruh Hali Takibi">
                     <span class="btn-icon">😊</span>
-                    <span class="btn-text">RUH HALİ</span>
+                    <span class="btn-text" data-i18n="moodLabel">RUH HALİ</span>
                 </button>
 
                 <!-- Kamera (İlaç Tanıma) -->
                 <button class="btn-mega btn-camera" onclick="goToMedicationVision()" aria-label="Kamera ile İlaç Tanıma">
                     <span class="btn-icon">📷</span>
-                    <span class="btn-text">KAMERA</span>
+                    <span class="btn-text" data-i18n="cameraLabel">KAMERA</span>
                 </button>
 
                 <button class="btn-mega" style="background: linear-gradient(135deg, #f093fb, #f5576c);" onclick="goToHealthRecords()" aria-label="Sağlık Kayıtları">
                     <span class="btn-icon">📊</span>
-                    <span class="btn-text">SAĞLIK</span>
+                    <span class="btn-text" data-i18n="healthLabel">SAĞLIK</span>
                 </button>
             </div>
 
             <button class="btn-giant btn-blue" onclick="shareDoctorReport()" aria-label="Doktora rapor göster">
-                🩺 DOKTORA GÖSTER
+                <span data-i18n="doctorBtn">🩺 DOKTORA GÖSTER</span>
             </button>
 
             <button id="repeatGuidanceBtn" class="btn-giant btn-blue" onclick="toggleListening()">
-                🎙️ DİNLE / SESİ TEKRARLA
+                <span data-i18n="voiceBtn">🎙️ DİNLE / SESİ TEKRARLA</span>
             </button>
 
             <!-- SES DURUMU -->
@@ -174,8 +133,8 @@
     <!-- =================== RUH HALİ DASHBOARD =================== -->
     <div id="moodScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-back" onclick="showScreen('homeScreen')">← GERİ</button>
-            <h1>RUH HALİ TAKIBI</h1>
+            <button class="btn-small btn-back" onclick="showScreen('homeScreen')" data-i18n="backBtn">← GERİ</button>
+            <h1 data-i18n="moodScreenTitle">RUH HALİ TAKIBI</h1>
         </div>
 
         <div class="main-area">
@@ -191,8 +150,8 @@
     <!-- =================== SAĞLIK KAYITLARI =================== -->
     <div id="healthRecordsScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-back" onclick="showScreen('homeScreen')">← GERİ</button>
-            <h1>SAĞLIK KAYITLARI</h1>
+            <button class="btn-small btn-back" onclick="showScreen('homeScreen')" data-i18n="backBtn">← GERİ</button>
+            <h1 data-i18n="healthScreenTitle">SAĞLIK KAYITLARI</h1>
         </div>
 
         <div class="main-area">
@@ -208,8 +167,8 @@
     <!-- =================== İLAÇ YÖNETIMI =================== -->
     <div id="medicationScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-back" onclick="showScreen('homeScreen')">← GERİ</button>
-            <h1>İLAÇLARIM</h1>
+            <button class="btn-small btn-back" onclick="showScreen('homeScreen')" data-i18n="backBtn">← GERİ</button>
+            <h1 data-i18n="medicationsTitle">İLAÇLARIM</h1>
         </div>
 
         <div class="main-area">
@@ -218,7 +177,7 @@
             </div>
 
             <button class="btn-giant btn-green" onclick="goToAddMedication()" style="margin-top: 20px;">
-                ➕ YENİ İLAÇ EKLE
+                <span data-i18n="addMedBtn">➕ YENİ İLAÇ EKLE</span>
             </button>
         </div>
     </div>
@@ -226,23 +185,28 @@
     <!-- =================== İLAÇ EKLEME =================== -->
     <div id="addMedicationScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-back" onclick="showScreen('homeScreen')">← GERİ</button>
-            <h1>YENİ İLAÇ EKLE</h1>
+            <button class="btn-small btn-back" onclick="showScreen('homeScreen')" data-i18n="backBtn">← GERİ</button>
+            <h1 data-i18n="addMedTitle">YENİ İLAÇ EKLE</h1>
         </div>
 
         <form id="addMedicationForm" class="form-container">
             <div class="input-group">
-                <label for="medName">İLAÇ ADI</label>
-                <input type="text" id="medName" placeholder="Örn: Aspirin" required>
+                <label for="medName" data-i18n="medNameLabel">İLAÇ ADI</label>
+                <input type="text" id="medName" data-i18n-placeholder="medNamePlaceholder" placeholder="Örn: Aspirin" required>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                    <button type="button" class="btn-small btn-blue" onclick="setMedicationPreset('Tansiyon İlacı')" data-i18n="presetBp">TANSİYON</button>
+                    <button type="button" class="btn-small btn-blue" onclick="setMedicationPreset('Şeker İlacı')" data-i18n="presetSugar">ŞEKER</button>
+                    <button type="button" class="btn-small btn-blue" onclick="setMedicationPreset('Kolesterol İlacı')" data-i18n="presetChol">KOLESTEROL</button>
+                </div>
             </div>
 
             <div class="input-group">
-                <label for="medNotes">NOTLAR</label>
-                <input type="text" id="medNotes" placeholder="Yemekten sonra alınız">
+                <label for="medNotes" data-i18n="medNotesLabel">NOTLAR</label>
+                <input type="text" id="medNotes" data-i18n-placeholder="medNotesPlaceholder" placeholder="Yemekten sonra alınız">
             </div>
 
             <div class="input-group">
-                <label>SAATLER</label>
+                <label data-i18n="timesLabel">SAATLER</label>
                 <div class="time-grid">
                     <input type="time" class="med-time" placeholder="09:00">
                     <input type="time" class="med-time" placeholder="14:00">
@@ -250,15 +214,15 @@
                 </div>
             </div>
 
-            <button type="submit" class="btn-giant btn-green">KAYDET</button>
+            <button type="submit" class="btn-giant btn-green" data-i18n="saveBtn">KAYDET</button>
         </form>
     </div>
 
     <!-- =================== AİLE ÜYELERİ =================== -->
     <div id="familyScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-back" onclick="showScreen('homeScreen')">← GERİ</button>
-            <h1>AİLE ÜYELERİ</h1>
+            <button class="btn-small btn-back" onclick="showScreen('homeScreen')" data-i18n="backBtn">← GERİ</button>
+            <h1 data-i18n="familyTitle">AİLE ÜYELERİ</h1>
         </div>
 
         <div class="main-area">
@@ -267,81 +231,204 @@
             </div>
 
             <button class="btn-giant btn-green" onclick="goToAddFamily()" style="margin-top: 20px;">
-                ➕ AILE ÜYESİ EKLE
+                <span data-i18n="addFamilyBtn">➕ AİLE ÜYESİ EKLE</span>
             </button>
         </div>
     </div>
 
-    <!-- =================== AILE ÜYESİ EKLEME =================== -->
-    <div id="addFamilyScreen" class="screen">
-        <div class="top-bar">
-            <button type="button" class="btn-small btn-back" onclick="goToFamily()">← GERİ</button>
-            <h1>AILE ÜYESİ EKLE</h1>
+    <!-- =================== GİRİŞ EKRANI =================== -->
+    <div id="loginScreen" class="screen active">
+        <div class="logo-area">
+            <h1>VITAGUARD</h1>
+            <p class="logo-subtitle" data-i18n="loginWelcome">Tekrar hoş geldiniz</p>
+            <p class="logo-caption" data-i18n="loginSub">Hızlı ve güvenli giriş yapın</p>
         </div>
 
-        <form id="addFamilyForm" class="form-container">
+        <div class="lang-selector">
+            <button onclick="setLanguage('tr')" id="langBtnTr" data-lang-btn="tr" class="btn-lang active" aria-label="Türkçe">🇹🇷 TR</button>
+            <button onclick="setLanguage('en')" id="langBtnEn" data-lang-btn="en" class="btn-lang" aria-label="English">🇬🇧 EN</button>
+        </div>
+
+        <form id="loginForm" class="form-container">
             <div class="input-group">
-                <label for="familyName">AD</label>
-                <input type="text" id="familyName" placeholder="Örn: Ali" required>
+                <label for="email" data-i18n="emailLabel">E-POSTA</label>
+                <input type="email" id="email" data-i18n-placeholder="emailPlaceholder" placeholder="ornek@mail.com" required>
             </div>
 
             <div class="input-group">
-                <label for="familyPhone">TELEFON</label>
-                <input type="tel" id="familyPhone" placeholder="Telefon Numarası (05XX...)" class="form-control">
+                <label for="password" data-i18n="passwordLabel">ŞİFRE</label>
+                <input type="password" id="password" data-i18n-placeholder="passwordPlaceholder" placeholder="Şifrenizi girin" required>
             </div>
 
-            <div class="input-group">
-                <label for="familyEmail">E-POSTA</label>
-                <input type="email" id="familyEmail" placeholder="ali@example.com" required>
-            </div>
+            <label class="remember-row">
+                <input type="checkbox" id="rememberMe" />
+                <span data-i18n="rememberMeLabel">BENİ HATIRLA</span>
+            </label>
 
-            <div class="input-group">
-                <label for="familyRelation">İLİŞKİ</label>
-                <select id="familyRelation" required>
-                    <option value="">Seçin...</option>
-                    <option value="Çocuk">Çocuk</option>
-                    <option value="Torun">Torun</option>
-                    <option value="Eş">Eş</option>
-                    <option value="Kardeş">Kardeş</option>
-                    <option value="Diğer">Diğer</option>
-                </select>
-            </div>
+            <button type="submit" class="btn-giant btn-blue" data-i18n="loginBtn">
+                GİRİŞ YAP
+            </button>
 
-            <button type="submit" class="btn-giant btn-green">KAYDET</button>
+            <button type="button" class="btn-giant btn-green" onclick="goToRegister()" style="margin-top: 10px;" data-i18n="registerBtn">
+                KAYIT OL
+            </button>
+
+            <button type="button" class="btn-small btn-gray" onclick="handleForgotPassword()" style="margin-top: 12px; width: 100%;" data-i18n="forgotBtn">
+                ŞİFREMİ UNUTTUM
+            </button>
+
+            <button type="button" class="btn-giant btn-apple" onclick="handleAppleSignInPreview()" style="margin-top: 12px;">
+                <span class="apple-logo" aria-hidden="true"></span>
+                <span data-i18n="appleSignIn">Sign in with Apple</span>
+            </button>
+
+            <p class="hint-text" id="testHint" data-i18n="demoHint" style="display:block;">💡 Demo: elderly@test.com / 123</p>
         </form>
     </div>
 
-    <!-- =================== YARDIM SAYFASI =================== -->
+    <!-- =================== AİLE ÜYESİ EKLE =================== -->
+    <div id="addFamilyScreen" class="screen">
+        <div class="top-bar">
+            <button class="btn-small btn-back" onclick="showScreen('familyScreen')" data-i18n="backBtn">← GERİ</button>
+            <h1 data-i18n="addFamilyTitle">AİLE ÜYESİ EKLE</h1>
+        </div>
 
+        <form id="addFamilyForm" class="form-container" style="margin-top: 20px;">
+            <div class="input-group">
+                <label for="familyName" data-i18n="nameLabel">AD</label>
+                <input type="text" id="familyName" required>
+            </div>
+            <div class="input-group">
+                <label for="familyRelation" data-i18n="relationLabel">İLİŞKİ</label>
+                <select id="familyRelation" required>
+                    <option value="" data-i18n="relationSelect">Seçin...</option>
+                    <option value="Çocuk" data-i18n="relationChild">Çocuk</option>
+                    <option value="Torun" data-i18n="relationGrandchild">Torun</option>
+                    <option value="Eş" data-i18n="relationSpouse">Eş</option>
+                    <option value="Kardeş" data-i18n="relationSibling">Kardeş</option>
+                    <option value="Diğer" data-i18n="relationOther">Diğer</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label for="familyEmail" data-i18n="emailLabel">E-POSTA</label>
+                <input type="email" id="familyEmail" required>
+            </div>
+            <div class="input-group">
+                <label for="familyPhone" data-i18n="phoneLabel">TELEFON</label>
+                <input type="tel" id="familyPhone" placeholder="05xx xxx xx xx">
+            </div>
+
+            <button type="submit" class="btn-giant btn-green" data-i18n="saveBtn">KAYDET</button>
+        </form>
+    </div>
+
+    <!-- =================== YARDIM =================== -->
     <div id="helpScreen" class="screen">
         <div class="top-bar">
-            <button class="btn-small btn-back" onclick="showScreen('homeScreen')">← GERİ</button>
-            <h1>YARDIM</h1>
+            <button class="btn-small btn-back" onclick="showScreen('homeScreen')" data-i18n="backBtn">← GERİ</button>
+            <h1 data-i18n="helpTitle">YARDIM</h1>
         </div>
 
         <div class="main-area">
             <div class="help-content">
                 <div class="help-section">
-                    <h2>💊 İLAÇLARIM</h2>
-                    <p>Günlük ilacınızı alıp almadığınızı takip etmek için bu sayfayı kullanın. İlacınızı aldığınız zaman "ALDI" butonuna basın.</p>
+                    <h2 data-i18n="helpMedTitle">💊 İLAÇLARIM</h2>
+                    <p data-i18n="helpMedDesc">Günlük ilacınızı alıp almadığınızı takip etmek için bu sayfayı kullanın. İlacınızı aldığınız zaman "ALDI" butonuna basın.</p>
                 </div>
 
                 <div class="help-section">
-                    <h2>👨‍👩‍👧 AİLE</h2>
-                    <p>Çocuklarınız ve torununuz uzaktan bilgi almak için bu sayfada sizinle bağlanabilir.</p>
+                    <h2 data-i18n="helpFamilyTitle">👨‍👩‍👧 AİLE</h2>
+                    <p data-i18n="helpFamilyDesc">Çocuklarınız ve torununuz uzaktan bilgi almak için bu sayfada sizinle bağlanabilir.</p>
                 </div>
 
                 <div class="help-section">
-                    <h2>🎤 SES KOMUTU</h2>
-                    <p>Mikrofona konuşarak "İlaç ekle" veya "Ana sayfa" diyerek komut verebilirsiniz.</p>
+                    <h2 data-i18n="helpVoiceTitle">🎤 SES KOMUTU</h2>
+                    <p data-i18n="helpVoiceDesc">Mikrofona konuşarak "İlaç ekle" veya "Ana sayfa" diyerek komut verebilirsiniz.</p>
                 </div>
 
                 <div class="help-section">
-                    <h2>📞 ACİL DURUMDA</h2>
-                    <p>Yardım almak için YARDIM butonuna basın ve aile üyeleriniz bilgilendirilecektir.</p>
+                    <h2 data-i18n="helpEmergencyTitle">📞 ACİL DURUMDA</h2>
+                    <p data-i18n="helpEmergencyDesc">Yardım almak için YARDIM butonuna basın ve aile üyeleriniz bilgilendirilecektir.</p>
                 </div>
 
-                <button class="btn-giant btn-blue" onclick="goHome()" style="margin-top: 30px;">ANLADIM</button>
+                <button class="btn-giant btn-blue" onclick="goHome()" style="margin-top: 30px;" data-i18n="understoodBtn">ANLADIM</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================== HESAP / PROFİL =================== -->
+    <div id="profileScreen" class="screen">
+        <div class="top-bar">
+            <button class="btn-small btn-back" onclick="showScreen('homeScreen')" data-i18n="backBtn">← GERİ</button>
+            <h1>👤 HESAP</h1>
+        </div>
+
+        <div class="main-area">
+            <div id="profileInfo" style="background: #000; border: 3px solid #ffff00; padding: 20px; border-radius: 12px; color: #ffff00;">
+                <div style="font-size: 28px; font-weight: 700; margin-bottom: 20px; text-align: center;">👤 KULLANICIBAŞI</div>
+                
+                <div style="font-size: 20px; margin-bottom: 15px;">
+                    <strong>AD SOYAD:</strong>
+                    <div id="profileName" style="color: #00ffff; font-size: 24px; margin-top: 5px;">-</div>
+                </div>
+
+                <div style="font-size: 20px; margin-bottom: 15px;">
+                    <strong>E-POSTA:</strong>
+                    <div id="profileEmail" style="color: #00ffff; font-size: 20px; margin-top: 5px;">-</div>
+                </div>
+
+                <div style="font-size: 20px; margin-bottom: 15px;">
+                    <strong>ABONE DURUMU:</strong>
+                    <div id="profilePlan" style="color: #00ffff; font-size: 24px; margin-top: 5px; font-weight: 700;">-</div>
+                </div>
+
+                <div style="font-size: 20px; margin-bottom: 15px;">
+                    <strong>KALAN GÜN:</strong>
+                    <div id="profileDaysLeft" style="color: #00ffff; font-size: 24px; margin-top: 5px; font-weight: 700;">-</div>
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <button class="btn-giant btn-blue" onclick="goToPremium()" style="font-size: 24px;">⭐ PREMIUM KAPAT</button>
+                <button class="btn-giant btn-green" onclick="goToSubscription()" style="font-size: 24px;">💳 ABONELİK KALAN</button>
+                <button class="btn-giant btn-yellow" onclick="editProfile()" style="font-size: 24px; color: #000;">✏️ BİLGİ GÜNCELLE</button>
+                <button class="btn-giant btn-red" onclick="logout()" style="font-size: 24px;">🚪 ÇIKIŞ YAP</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================== ABONE DURUMU =================== -->
+    <div id="subscriptionScreen" class="screen">
+        <div class="top-bar">
+            <button class="btn-small btn-back" onclick="showScreen('profileScreen')" data-i18n="backBtn">← GERİ</button>
+            <h1>💳 ABONELİK</h1>
+        </div>
+
+        <div class="main-area">
+            <div id="subscriptionContent" style="background: #000; border: 3px solid #00ffff; padding: 20px; border-radius: 12px; color: #00ffff;">
+                <div style="font-size: 26px; font-weight: 700; margin-bottom: 20px;">PAKET BİLGİLERİ</div>
+                
+                <div style="background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="font-size: 24px; color: #ffff00; font-weight: 700; margin-bottom: 10px;">📦 MEVCUT PAKET</div>
+                    <div id="subCurrentPlan" style="font-size: 22px; color: #fff;">Standart</div>
+                </div>
+
+                <div style="background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="font-size: 24px; color: #ffff00; font-weight: 700; margin-bottom: 10px;">📅 BİTİŞ TARİHİ</div>
+                    <div id="subEndDate" style="font-size: 22px; color: #fff;">-</div>
+                </div>
+
+                <div style="background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <div style="font-size: 24px; color: #ffff00; font-weight: 700; margin-bottom: 10px;">✨ ÖZELLİKLER</div>
+                    <div style="font-size: 18px; color: #e0e0e0;">
+                        <div>✓ Temel İlaç Yönetimi</div>
+                        <div>✓ Aile Üyeleri</div>
+                        <div>✓ Sesli Asistan</div>
+                        <div id="premiumFeatures"></div>
+                    </div>
+                </div>
+
+                <button class="btn-giant btn-blue" onclick="showScreen('profileScreen')" style="font-size: 22px;">← KAPAT</button>
             </div>
         </div>
     </div>
@@ -349,11 +436,11 @@
     <!-- =================== ACİL DURUM ONAY =================== -->
     <div id="emergencyModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="emergencyTitle">
         <div class="modal-content">
-            <h2 id="emergencyTitle">Acil yardım çağrılıyor</h2>
-            <p>5 saniye içinde onaylanacak. Aileye ve sağlık kuruluşlarına bildirim ile konum paylaşılır. İptal edebilirsiniz.</p>
+            <h2 id="emergencyTitle" data-i18n="emergencyModalTitle">Acil yardım çağrılıyor</h2>
+            <p data-i18n="emergencyModalDesc">5 saniye içinde onaylanacak. Aileye ve sağlık kuruluşlarına bildirim ile konum paylaşılır. İptal edebilirsiniz.</p>
             <div class="modal-actions">
-                <button class="btn-giant btn-red" onclick="confirmEmergency()">ONAYLA</button>
-                <button class="btn-giant btn-gray" onclick="cancelEmergency()">İPTAL</button>
+                <button class="btn-giant btn-red" onclick="confirmEmergency()" data-i18n="confirmBtn">ONAYLA</button>
+                <button class="btn-giant btn-gray" onclick="cancelEmergency()" data-i18n="cancelBtn">İPTAL</button>
             </div>
         </div>
     </div>
@@ -362,25 +449,32 @@
     <div id="voiceOnboarding" class="voice-onboarding" role="dialog" aria-modal="true" aria-labelledby="voiceOnboardingTitle" aria-describedby="voiceOnboardingDesc">
         <div class="voice-onboarding-card">
             <div class="voice-onboarding-icon" aria-hidden="true">🎙️</div>
-            <h2 id="voiceOnboardingTitle">Sesli Asistanı Başlat</h2>
-            <p id="voiceOnboardingDesc">Mikrofona dokun ve konuş. İstersen “İlaçlarım”, “Aile”, “Yardım” diyebilirsin.</p>
+            <h2 id="voiceOnboardingTitle" data-i18n="voiceOnboardingTitle">Sesli Asistanı Başlat</h2>
+            <p id="voiceOnboardingDesc" data-i18n="voiceOnboardingDesc">Mikrofona dokun ve konuş. İstersen "İlaçlarım", "Aile", "Yardım" diyebilirsin.</p>
             <div class="voice-onboarding-actions">
-                <button id="voiceOnboardingStart" class="btn-giant btn-green">DİNLEMEYİ BAŞLAT</button>
-                <button id="voiceOnboardingSkip" class="btn-giant btn-gray">ŞİMDİ DEĞİL</button>
+                <button id="voiceOnboardingStart" class="btn-giant btn-green" data-i18n="voiceStartBtn">DİNLEMEYİ BAŞLAT</button>
+                <button id="voiceOnboardingSkip" class="btn-giant btn-gray" data-i18n="voiceSkipBtn">ŞİMDİ DEĞİL</button>
             </div>
         </div>
     </div>
 
     <div class="a11y-controls" aria-label="Erişilebilirlik ayarları">
         <button id="a11yMenuBtn" class="btn-small btn-yellow a11y-menu-btn" aria-expanded="false" aria-controls="a11yMenu" onclick="toggleA11yMenu(event)">
-            ⚙️ AYARLAR
+            <span data-i18n="settingsBtn">⚙️ AYARLAR</span>
         </button>
         <div id="a11yMenu" class="a11y-menu" hidden>
             <div class="a11y-group">
-                <label for="apiBaseInput" class="a11y-label">API ADRESİ</label>
+                <label for="apiBaseInput" class="a11y-label" data-i18n="apiLabel">API ADRESİ</label>
                 <input id="apiBaseInput" class="a11y-input" type="url" placeholder="http://192.168.1.10:5007" />
-                <button id="apiBaseSave" class="btn-small btn-yellow a11y-btn">KAYDET</button>
-                <button id="apiBaseClear" class="btn-small btn-gray a11y-btn">SIFIRLA</button>
+                <button id="apiBaseSave" class="btn-small btn-yellow a11y-btn" data-i18n="apiSaveBtn">KAYDET</button>
+                <button id="apiBaseClear" class="btn-small btn-gray a11y-btn" data-i18n="apiClearBtn">SIFIRLA</button>
+            </div>
+            <div class="a11y-group">
+                <label class="a11y-label" data-i18n="langLabel">DİL</label>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <button onclick="setLanguage('tr')" id="langMenuBtnTr" data-lang-btn="tr" class="btn-small btn-lang" style="font-size:18px;">🇹🇷 TR</button>
+                    <button onclick="setLanguage('en')" id="langMenuBtnEn" data-lang-btn="en" class="btn-small btn-lang" style="font-size:18px;">🇬🇧 EN</button>
+                </div>
             </div>
             <button id="a11yToggle" type="button" class="btn-small btn-yellow a11y-btn" aria-pressed="false" onclick="toggleLargeText(this)">
                 YAZIYI BÜYÜT
@@ -391,14 +485,14 @@
             <button id="simpleHomeToggle" type="button" class="btn-small btn-yellow a11y-btn" aria-pressed="false" onclick="toggleSimpleHome(this)">
                 BASİT MOD
             </button>
-            <button id="resetViewBtn" type="button" class="btn-small btn-gray a11y-btn" onclick="resetViewSettings()">
+            <button id="resetViewBtn" type="button" class="btn-small btn-gray a11y-btn" onclick="resetViewSettings()" data-i18n="resetViewBtnLabel">
                 GÖRÜNÜMÜ SIFIRLA
             </button>
         </div>
     </div>
 
-    <script src="config.js"></script>
-    <script src="elderly.js"></script>
-    <script src="voice-assistant.js"></script>
+    <script src="config.js?v=20260402"></script>
+    <script src="elderly.js?v=20260402"></script>
+    <script src="voice-assistant.js?v=20260402"></script>
 </body>
 </html>

@@ -1,5 +1,10 @@
 {
   "appId": "com.buse.vitaguard",
   "appName": "VitaGuard",
-  "webDir": "wwwroot"
+  "webDir": "wwwroot",
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
 }

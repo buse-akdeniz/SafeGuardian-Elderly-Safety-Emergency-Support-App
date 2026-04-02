@@ -26,9 +26,4 @@
     <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="7.1.2" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Exclude AsistanApp folder from root project compilation to prevent conflicts -->
-    <Compile Remove="AsistanApp/**" />
-  </ItemGroup>
-
 </Project>

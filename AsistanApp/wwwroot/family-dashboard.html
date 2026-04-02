@@ -102,6 +102,12 @@
             margin-bottom: 0;
         }
 
+        .back-btn {
+            background: #6b7280;
+            margin-top: 12px;
+            margin-bottom: 0;
+        }
+
         /* DASHBOARD STYLES */
         .dashboard-header {
             background: white;
@@ -304,6 +310,8 @@
 
             <button type="submit">Giriş Yap</button>
 
+            <button type="button" class="back-btn" onclick="goHome()">← Ana Ekrana Dön</button>
+
             <p style="text-align: center; color: #666; margin-top: 20px; font-size: 14px;">
                 Test: ali@example.com / 1234
             </p>
@@ -332,6 +340,7 @@
             <div style="text-align: right;">
                 <div id="elderlyStatus" class="status-badge">Iyi ✓</div>
                 <button class="logout-btn" onclick="logout()">Çıkış Yap</button>
+                <button class="back-btn" onclick="goHome()">← Ana Ekrana Dön</button>
             </div>
         </div>
 
@@ -356,11 +365,25 @@
         const DEFAULT_API_BASE = 'http://localhost:5007/api';
 
         function getApiBase() {
-            const stored = localStorage.getItem('apiBaseUrl');
-            if (stored) return `${stored.replace(/\/$/, '')}/api`;
-            if (window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
-                return `${window.location.origin}/api`;
+            const stored = localStorage.getItem('apiBaseUrl')?.trim();
+            const protocol = window.location?.protocol || '';
+            const origin = window.location?.origin || '';
+            const isHttpOrigin = /^https?:/i.test(protocol) && /^https?:\/\//i.test(origin);
+            const isCapacitorRuntime = Boolean(window.Capacitor);
+
+            if (stored) {
+                return `${stored.replace(/\/$/, '')}/api`;
             }
+
+            if (isHttpOrigin) {
+                return `${origin}/api`;
+            }
+
+            if (isCapacitorRuntime) {
+                // iOS Simulator / Android Emulator geliştirme için güvenli varsayılan
+                return 'http://localhost:5007/api';
+            }
+
             return DEFAULT_API_BASE;
         }
 
@@ -553,6 +576,10 @@
             showLogin();
             document.getElementById('loginForm').reset();
             history.replaceState({ view: 'login' }, '', window.location.href);
+        }
+
+        function goHome() {
+            window.location.href = '/index.html';
         }
 
         // Sayfa açılırken kontrol et
