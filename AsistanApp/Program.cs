@@ -235,13 +235,21 @@ app.MapPost("/api/emergency-alert", async (HttpContext ctx, HealthDataService sv
         using var reader = new System.IO.StreamReader(ctx.Request.Body);
         var body = await reader.ReadToEndAsync();
         var json = System.Text.Json.JsonDocument.Parse(body).RootElement;
-        string elderlyId = json.TryGetProperty("elderlyId", out var e) ? e.GetString() ?? "elderly-001" : "elderly-001";
+
+        var token = ResolveToken(ctx, json);
+        var elderlySession = svc.GetElderlySession(token);
+        if (elderlySession == null)
+        {
+            return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
+        }
+
+        string elderlyId = elderlySession.Id;
         string alertType = json.TryGetProperty("alertType", out var a) ? a.GetString() ?? "emergency_call" : "emergency_call";
         string location = json.TryGetProperty("location", out var l) ? l.GetString() ?? "Unknown" : "Unknown";
         svc.AddEmergencyAlert(elderlyId, alertType, "Acil durum!");
         await hub.Clients.All.SendAsync("ReceiveEmergencyAlert", new { elderlyId, alertType });
 
-        var elderly = svc.GetUser(elderlyId);
+        var elderly = svc.GetUser(elderlyId) ?? elderlySession;
         var elderName = elderly?.Name ?? "Yaşlı kullanıcı";
         var message = $"Acil yardım çağrısı: {elderName}. Konum: {location}";
 
@@ -458,13 +466,43 @@ app.MapPost("/api/emergency-broadcast", async (HttpContext ctx, HealthDataServic
         var body = await reader.ReadToEndAsync();
         var json = System.Text.Json.JsonDocument.Parse(body).RootElement;
         string elderlyId = json.TryGetProperty("elderlyId", out var e) ? e.GetString() ?? "elderly-001" : "elderly-001";
+
+        string locationText = "Unknown";
+        if (json.TryGetProperty("location", out var loc))
+        {
+            if (loc.ValueKind == JsonValueKind.String)
+            {
+                locationText = loc.GetString() ?? "Unknown";
+            }
+            else if (loc.ValueKind == JsonValueKind.Object)
+            {
+                if (loc.TryGetProperty("mapsUrl", out var mapsUrl) && mapsUrl.ValueKind == JsonValueKind.String)
+                {
+                    locationText = mapsUrl.GetString() ?? "Unknown";
+                }
+                else
+                {
+                    var lat = loc.TryGetProperty("latitude", out var latEl) && latEl.ValueKind == JsonValueKind.Number
+                        ? latEl.GetDouble().ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture)
+                        : null;
+                    var lng = loc.TryGetProperty("longitude", out var lngEl) && lngEl.ValueKind == JsonValueKind.Number
+                        ? lngEl.GetDouble().ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture)
+                        : null;
+
+                    if (!string.IsNullOrWhiteSpace(lat) && !string.IsNullOrWhiteSpace(lng))
+                    {
+                        locationText = $"{lat},{lng}";
+                    }
+                }
+            }
+        }
         
         var broadcastData = new 
         {
             elderlyId,
             timestamp = DateTime.Now,
             status = "CRITICAL",
-            location = json.TryGetProperty("location", out var l) ? l.GetString() : "Unknown",
+            location = locationText,
             healthData = new {
                 bloodPressure = json.TryGetProperty("bloodPressure", out var bp) ? bp.GetString() : "N/A",
                 heartRate = json.TryGetProperty("heartRate", out var hr) ? hr.GetInt32() : 0,
@@ -1377,13 +1415,35 @@ app.MapPost("/api/medications/{id}/taken", (HttpContext ctx, int id, HealthDataS
 
     return Results.Json(new { success = true, medication, stockCount = medication.StockCount });
 });
-app.MapGet("/api/health-records", (HttpContext ctx, HealthDataService svc) =>
+app.MapGet("/api/health-records", (HttpContext ctx, HealthDataService svc, AppDbContext db) =>
 {
     var token = ResolveToken(ctx);
     var elderly = svc.GetElderlySession(token);
     if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
 
-    var records = svc.GetHealthRecords(elderly.Id, 30)
+    var dbRecords = db.HealthRecords
+        .AsNoTracking()
+        .Where(r => r.ElderlyId == elderly.Id && r.RecordedAt >= DateTime.UtcNow.AddDays(-30))
+        .OrderByDescending(r => r.RecordedAt)
+        .ToList();
+
+    var records = (dbRecords.Any()
+            ? dbRecords.Select(r => new HealthRecord
+            {
+                ElderlyId = r.ElderlyId,
+                MetricType = r.MetricType,
+                Value = r.Value,
+                Systolic = r.Systolic,
+                Diastolic = r.Diastolic,
+                Glucose = r.Glucose,
+                HeartRate = r.HeartRate,
+                HealthStatus = r.HealthStatus,
+                Notes = r.Notes,
+                RecordedAt = DateTime.SpecifyKind(r.RecordedAt, DateTimeKind.Utc).ToLocalTime(),
+                Timestamp = DateTime.SpecifyKind(r.RecordedAt, DateTimeKind.Utc).ToLocalTime(),
+                Status = r.HealthStatus
+            })
+            : svc.GetHealthRecords(elderly.Id, 30))
         .OrderByDescending(r => r.Timestamp ?? r.RecordedAt)
         .Select(r =>
         {
@@ -1447,7 +1507,7 @@ app.MapGet("/api/health-records", (HttpContext ctx, HealthDataService svc) =>
 
     return Results.Json(records);
 });
-app.MapPost("/api/health-records", async (HttpContext ctx, HealthDataService svc) =>
+app.MapPost("/api/health-records", async (HttpContext ctx, HealthDataService svc, AppDbContext db) =>
 {
     try
     {
@@ -1467,6 +1527,17 @@ app.MapPost("/api/health-records", async (HttpContext ctx, HealthDataService svc
         }
 
         svc.AddHealthRecord(elderly.Id, recordType, value);
+
+        db.HealthRecords.Add(new StoredHealthRecord
+        {
+            ElderlyId = elderly.Id,
+            MetricType = recordType,
+            Value = value,
+            HealthStatus = "normal",
+            RecordedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
         return Results.Json(new { success = true, healthStatus = "normal", alertLevel = "normal" });
     }
     catch

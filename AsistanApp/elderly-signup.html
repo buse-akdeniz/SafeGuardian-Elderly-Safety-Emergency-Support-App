@@ -509,6 +509,7 @@
                     
                     // Otomatik giriş
                     localStorage.setItem(`elderly_${result.deviceId}`, JSON.stringify(result.user));
+                    localStorage.setItem('elderly_device_id', result.deviceId);
                     localStorage.setItem('lastDeviceId', result.deviceId);
                     sessionStorage.setItem('auto_login_device', result.deviceId);
                 }, 1000);

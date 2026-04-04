@@ -337,36 +337,36 @@
 <div class="middle-zone">
     <div class="task-card medication active">
         <div class="task-icon">💊</div>
-        <div class="task-title">İLAÇ VAKTİ!</div>
-        <div class="task-description">Tansiyon İlacı</div>
-        <div class="hidden-status">Şimdi almanız gerekiyor</div>
+        <div class="task-title" data-i18n="medication">İLAÇ VAKTİ!</div>
+        <div class="task-description" data-i18n="medication_desc">Tansiyon İlacı</div>
+        <div class="hidden-status" data-i18n="medication_desc">Şimdi almanız gerekiyor</div>
     </div>
 
     <div class="task-card health-check">
         <div class="task-icon">🩺</div>
-        <div class="task-title">SAĞLIK KONTROLÜ</div>
-        <div class="task-description">Şeker Ölçümü</div>
-        <div class="hidden-status">Lütfen şekerinizi ölçün</div>
+        <div class="task-title" data-i18n="health_check">SAĞLIK KONTROLÜ</div>
+        <div class="task-description" data-i18n="health_check_desc">Şeker Ölçümü</div>
+        <div class="hidden-status" data-i18n="health_check_desc">Lütfen şekerinizi ölçün</div>
     </div>
 
     <div class="task-card" id="noTaskMessage" style="text-align: center; color: #ffd700; font-size: 40px; font-weight: bold;">
-        💤 Şu an görev yok<br>
-        <span style="font-size: 30px; opacity: 0.8;">Rahatça bekleyebilirsiniz</span>
+        💤 <span data-i18n="no_task">Şu an görev yok</span><br>
+        <span style="font-size: 30px; opacity: 0.8;" data-i18n="rest_time">Rahatça bekleyebilirsiniz</span>
     </div>
 </div>
 
 <!-- BUTONLAR BÖLGESI -->
 <div class="button-zone">
-    <button class="btn-main btn-confirm" id="confirmBtn" onclick="completeTask()">✅ İÇTİM</button>
-    <button class="btn-main btn-skip" id="skipBtn" onclick="skipTask()">⏭️ SONRA</button>
-    <button class="btn-main btn-help" id="helpBtn" onclick="triggerEmergency()">🆘 YARDIM</button>
+    <button class="btn-main btn-confirm" id="confirmBtn" onclick="completeTask()">✅ <span data-i18n="btn_confirm">İÇTİM</span></button>
+    <button class="btn-main btn-skip" id="skipBtn" onclick="skipTask()">⏭️ <span data-i18n="btn_skip">SONRA</span></button>
+    <button class="btn-main btn-help" id="helpBtn" onclick="triggerEmergency()">🆘 <span data-i18n="btn_help">YARDIM</span></button>
     <button class="btn-main" style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); margin-top: 15px;" 
             onclick="window.location.href='/elderly-signup.html'">📝 YENİ KAYDOL</button>
 </div>
 
 <!-- ACİL DURUM EKRANI -->
 <div class="emergency-screen" id="emergencyScreen">
-    <div class="emergency-text">YARDIM GELİYOR!</div>
+    <div class="emergency-text" data-i18n="help_coming">YARDIM GELİYOR!</div>
     <button class="emergency-button" onclick="closeEmergency()">✓</button>
 </div>
 
@@ -385,14 +385,18 @@
 
     // ========== OTOMATIK GİRİŞ KONTROL (Yaşlı Self-Enrollment) ==========
     function checkAutoLogin() {
-        const deviceId = localStorage.getItem('elderly_device_id');
+        const deviceId =
+            localStorage.getItem('elderly_device_id') ||
+            localStorage.getItem('lastDeviceId') ||
+            sessionStorage.getItem('auto_login_device');
         if (deviceId) {
             // Otomatik olarak giriş yaptı, kullanıcı verilerini yükle
             const userData = localStorage.getItem(`elderly_${deviceId}`);
             if (userData) {
                 const user = JSON.parse(userData);
-                console.log('✅ Otomatik giriş başarılı:', user.fullName);
-                document.querySelector('.greeting').textContent = `👋 Merhaba ${user.fullName}`;
+                const displayName = user.fullName || user.name || 'Kullanıcı';
+                console.log('✅ Otomatik giriş başarılı:', displayName);
+                document.querySelector('.greeting').textContent = `👋 Merhaba ${displayName}`;
                 
                 // Subscription kontrolü yap
                 if (user.token) {
@@ -414,6 +418,24 @@
 
     // Sayfa yüklendiğinde otomatik giriş kontrolü yap
     window.addEventListener('load', checkAutoLogin);
+
+    // ========== MİKROFON İZNİ (İLK AÇILIŞ) ==========
+    async function requestMicrophonePermission() {
+        const permissionKey = 'mic_permission_requested';
+        if (localStorage.getItem(permissionKey) === 'true') return;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => track.stop());
+        } catch (error) {
+            console.warn('Mikrofon izni verilmedi veya alınamadı:', error);
+        } finally {
+            localStorage.setItem(permissionKey, 'true');
+        }
+    }
+
+    window.addEventListener('load', requestMicrophonePermission);
 
     // ========== SAATİ GÜNCELLE ===========
     function updateClock() {
@@ -458,11 +480,23 @@
         emergency.classList.add('active');
         speak('Aileni aradığımızı duydu. Yardım geliyor!', true);
 
+        const storedUser = localStorage.getItem('elderly_user');
+        let token = '';
+        if (storedUser) {
+            try {
+                token = JSON.parse(storedUser)?.token || '';
+            } catch {}
+        }
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
         fetch('/api/emergency-alert', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
-                elderlyId: 'elderly-001',
                 alertType: 'emergency_call'
             })
         });
