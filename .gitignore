@@ -29,3 +29,6 @@ AsistanApp/ios/DerivedData/
 
 # Local database
 *.db
+
+# Local env
+AsistanApp/.env
