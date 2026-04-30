@@ -28,21 +28,76 @@ if (builder.Environment.IsDevelopment())
 {
     builder.WebHost.UseUrls("http://0.0.0.0:5007");
 }
+else
+{
+    // Railway (and other cloud hosts) inject PORT env var
+    var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
+string FirstNonEmpty(params string?[] values)
+{
+    return values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim() ?? string.Empty;
+}
+
+Dictionary<string, string> LoadAppEnvFile()
+{
+    var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    try
+    {
+        var path = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), ".env");
+        if (!System.IO.File.Exists(path)) return result;
+
+        foreach (var line in System.IO.File.ReadAllLines(path))
+        {
+            var trimmed = line.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith("#", StringComparison.Ordinal)) continue;
+
+            var idx = trimmed.IndexOf('=');
+            if (idx <= 0) continue;
+
+            var key = trimmed[..idx].Trim();
+            var value = trimmed[(idx + 1)..].Trim();
+            if (!result.ContainsKey(key)) result[key] = value;
+        }
+    }
+    catch
+    {
+        // ignore .env parsing failures here; readiness will simply report missing config
+    }
+
+    return result;
+}
 
 builder.Services.AddScoped<HealthDataService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<ISmsSender, SmsSender>();
+builder.Services.AddHostedService<FamilyContactReminderService>();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
-var sqliteConnection = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=asistanapp.db";
+builder.Services.AddHealthChecks();
+var sqliteConnection = FirstNonEmpty(
+    Environment.GetEnvironmentVariable("DEFAULT_CONNECTION"),
+    builder.Configuration.GetConnectionString("DefaultConnection"),
+    "Data Source=asistanapp.db");
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqliteConnection));
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+        if (configuredOrigins.Length > 0)
+        {
+            policy.WithOrigins(configuredOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        }
+        else
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        }
     });
 });
 
@@ -76,6 +131,61 @@ CREATE TABLE IF NOT EXISTS ElderlyUsers (
     HasEmergencyIntegration INTEGER NOT NULL
 );");
     db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_ElderlyUsers_Email ON ElderlyUsers (Email);");
+    db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS FamilyMembers (
+    Id TEXT NOT NULL PRIMARY KEY,
+    ElderlyId TEXT NOT NULL,
+    Name TEXT NOT NULL,
+    Email TEXT NOT NULL,
+    Relationship TEXT NULL,
+    PhoneNumber TEXT NULL
+);");
+    db.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS IX_FamilyMembers_ElderlyId_Email ON FamilyMembers (ElderlyId, Email);");
+    db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS Medications (
+    Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ElderlyId TEXT NOT NULL,
+    Name TEXT NOT NULL,
+    Notes TEXT NULL,
+    ScheduleTimesJson TEXT NOT NULL,
+    StockCount INTEGER NULL,
+    LastTakenAt TEXT NULL,
+    CreatedAt TEXT NOT NULL
+);");
+    db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS MoodRecords (
+    Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ElderlyId TEXT NOT NULL,
+    MoodScore INTEGER NOT NULL,
+    Timestamp TEXT NOT NULL,
+    Source TEXT NOT NULL
+);");
+    db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS EmergencyAlerts (
+    Id TEXT NOT NULL PRIMARY KEY,
+    ElderlyId TEXT NOT NULL,
+    AlertType TEXT NOT NULL,
+    OccurredAt TEXT NOT NULL,
+    Description TEXT NOT NULL,
+    IsResolved INTEGER NOT NULL
+);");
+    db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS TaskItems (
+    Id TEXT NOT NULL PRIMARY KEY,
+    ElderlyId TEXT NOT NULL,
+    Type TEXT NOT NULL,
+    Description TEXT NOT NULL,
+    ScheduledTime TEXT NOT NULL,
+    CompletedTime TEXT NULL,
+    IsCompleted INTEGER NOT NULL,
+    CompletionMethod TEXT NULL
+);");
+    db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS FamilyContacts (
+    ElderlyId TEXT NOT NULL PRIMARY KEY,
+    LastContactAt TEXT NOT NULL,
+    LastReminderSentAt TEXT NULL
+);");
 }
 
 // Rate Limiting Middleware
@@ -150,6 +260,8 @@ if (!app.Environment.IsDevelopment())
 app.UseCors("AllowAll");
 app.UseStaticFiles();
 app.MapControllers();
+app.MapHealthChecks("/health/live");
+app.MapHealthChecks("/health/ready");
 
 string ResolveToken(HttpContext ctx, JsonElement? body = null)
 {
@@ -169,6 +281,178 @@ string ResolveToken(HttpContext ctx, JsonElement? body = null)
     return ctx.Request.Query["token"].ToString();
 }
 
+ElderlyUser? ResolveAuthenticatedElderly(HttpContext ctx, HealthDataService svc, JsonElement? body = null)
+{
+    var token = ResolveToken(ctx, body);
+    return svc.GetElderlySession(token);
+}
+
+string ResolveElderlyId(HttpContext ctx, HealthDataService svc, JsonElement body, string fallback = "elderly-001")
+{
+    if (body.TryGetProperty("elderlyId", out var elderlyIdProp))
+    {
+        var elderlyId = elderlyIdProp.GetString() ?? "";
+        if (!string.IsNullOrWhiteSpace(elderlyId))
+        {
+            return elderlyId;
+        }
+    }
+
+    var elderly = ResolveAuthenticatedElderly(ctx, svc, body);
+    if (!string.IsNullOrWhiteSpace(elderly?.Id))
+    {
+        return elderly!.Id;
+    }
+
+    return fallback;
+}
+
+bool IsConfiguredValue(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) return false;
+
+    var normalized = value.Trim();
+    var upper = normalized.ToUpperInvariant();
+    return !upper.Contains("CHANGE_ME", StringComparison.Ordinal) &&
+           !upper.Contains("YOUR_", StringComparison.Ordinal) &&
+           !upper.EndsWith("_HERE", StringComparison.Ordinal) &&
+           !string.Equals(normalized, "null", StringComparison.OrdinalIgnoreCase);
+}
+
+bool IsPremiumPlan(string? plan)
+{
+    return string.Equals(plan, "premium", StringComparison.OrdinalIgnoreCase);
+}
+
+Subscription NormalizeSubscriptionState(Subscription? subscription, string userId)
+{
+    var now = DateTime.UtcNow;
+    var current = subscription ?? new Subscription
+    {
+        UserId = userId,
+        Plan = "standard",
+        StartDate = now,
+        ExpiresAt = now,
+        IsActive = false,
+        HasEmergencyIntegration = true
+    };
+
+    var normalizedPlan = IsPremiumPlan(current.Plan) ? "premium" : "standard";
+    var startDate = current.StartDate == default ? now : current.StartDate;
+    var expiresAt = current.ExpiresAt == default ? now : current.ExpiresAt;
+    var isActive = normalizedPlan == "premium"
+        ? (current.IsActive || expiresAt > now)
+        : current.IsActive;
+
+    return new Subscription
+    {
+        UserId = string.IsNullOrWhiteSpace(current.UserId) ? userId : current.UserId,
+        Plan = normalizedPlan,
+        StartDate = startDate,
+        ExpiresAt = expiresAt,
+        IsActive = isActive,
+        HasAIAnalysis = normalizedPlan == "premium" && isActive,
+        HasFallDetection = normalizedPlan == "premium" && isActive,
+        HasLiveLocation = normalizedPlan == "premium" && isActive,
+        HasEmergencyIntegration = true
+    };
+}
+
+app.MapGet("/api/system/readiness", (IConfiguration config, IWebHostEnvironment env, AppDbContext db) =>
+{
+    bool databaseReady;
+    try
+    {
+        databaseReady = db.Database.CanConnect();
+    }
+    catch
+    {
+        databaseReady = false;
+    }
+
+    var emailSection = config.GetSection("Email");
+    var smsSection = config.GetSection("Sms");
+    var subscriptionSection = config.GetSection("Subscriptions");
+    var envFile = LoadAppEnvFile();
+    var warnings = new List<string>();
+
+    var emailSmtp = FirstNonEmpty(emailSection["SmtpServer"], Environment.GetEnvironmentVariable("EMAIL_SMTP_SERVER"), envFile.GetValueOrDefault("EMAIL_SMTP_SERVER"));
+    var emailFrom = FirstNonEmpty(emailSection["FromAddress"], Environment.GetEnvironmentVariable("EMAIL_FROM_ADDRESS"), envFile.GetValueOrDefault("EMAIL_FROM_ADDRESS"));
+    var emailUsername = FirstNonEmpty(emailSection["Username"], Environment.GetEnvironmentVariable("EMAIL_USERNAME"), envFile.GetValueOrDefault("EMAIL_USERNAME"));
+    var emailPassword = FirstNonEmpty(emailSection["Password"], Environment.GetEnvironmentVariable("EMAIL_PASSWORD"), envFile.GetValueOrDefault("EMAIL_PASSWORD"));
+    var emailConfigured = IsConfiguredValue(emailSmtp) && IsConfiguredValue(emailFrom) && IsConfiguredValue(emailUsername) && IsConfiguredValue(emailPassword);
+
+    var smsProvider = FirstNonEmpty(smsSection["Provider"], Environment.GetEnvironmentVariable("SMS_PROVIDER"), envFile.GetValueOrDefault("SMS_PROVIDER"), "twilio");
+    var smsSid = FirstNonEmpty(smsSection["Twilio:AccountSid"], Environment.GetEnvironmentVariable("TWILIO_ACCOUNT_SID"), envFile.GetValueOrDefault("TWILIO_ACCOUNT_SID"));
+    var smsToken = FirstNonEmpty(smsSection["Twilio:AuthToken"], Environment.GetEnvironmentVariable("TWILIO_AUTH_TOKEN"), envFile.GetValueOrDefault("TWILIO_AUTH_TOKEN"));
+    var smsFromNumber = FirstNonEmpty(smsSection["FromNumber"], Environment.GetEnvironmentVariable("TWILIO_PHONE_NUMBER"), envFile.GetValueOrDefault("TWILIO_PHONE_NUMBER"));
+    var emergencyServicesNumber = FirstNonEmpty(smsSection["EmergencyServicesNumber"], Environment.GetEnvironmentVariable("EMERGENCY_SERVICES_NUMBER"), envFile.GetValueOrDefault("EMERGENCY_SERVICES_NUMBER"));
+    var smsConfigured = string.Equals(smsProvider, "twilio", StringComparison.OrdinalIgnoreCase) &&
+        IsConfiguredValue(smsSid) &&
+        IsConfiguredValue(smsToken) &&
+        IsConfiguredValue(smsFromNumber);
+    var emergencyRouteConfigured = IsConfiguredValue(emergencyServicesNumber);
+
+    var billingConfigured =
+        IsConfiguredValue(FirstNonEmpty(subscriptionSection["AppleSharedSecret"], Environment.GetEnvironmentVariable("APPLE_SHARED_SECRET"), envFile.GetValueOrDefault("APPLE_SHARED_SECRET"))) ||
+        IsConfiguredValue(FirstNonEmpty(subscriptionSection["AppStoreServerApiKey"], Environment.GetEnvironmentVariable("APP_STORE_SERVER_API_KEY"), envFile.GetValueOrDefault("APP_STORE_SERVER_API_KEY")));
+
+    var familyPortalConfigured = IsConfiguredValue(FirstNonEmpty(config["FamilyPortal:SharedPassword"], Environment.GetEnvironmentVariable("FAMILY_PORTAL_PASSWORD"), envFile.GetValueOrDefault("FAMILY_PORTAL_PASSWORD")));
+    var demoDataEnabled = config.GetValue<bool?>("SeedData:Enabled") ?? env.IsDevelopment();
+
+    if (!databaseReady) warnings.Add("Database connection is not ready.");
+    if (!emailConfigured) warnings.Add("SMTP email settings are incomplete.");
+    if (!smsConfigured) warnings.Add("Twilio SMS settings are incomplete.");
+    if (!emergencyRouteConfigured) warnings.Add("Emergency services number is not configured.");
+    if (!billingConfigured) warnings.Add("Apple subscription verification is not configured.");
+    if (!familyPortalConfigured) warnings.Add("Family portal shared password is missing or still a placeholder.");
+    if (env.IsProduction() && demoDataEnabled) warnings.Add("Seed data is enabled in production.");
+
+    return Results.Json(new
+    {
+        environment = env.EnvironmentName,
+        databaseReady,
+        emailConfigured,
+        smsConfigured,
+        emergencyRouteConfigured,
+        billingConfigured,
+        familyPortalConfigured,
+        demoDataEnabled,
+        emergencyDeliveryReady = smsConfigured && emergencyRouteConfigured,
+        warnings
+    });
+});
+
+app.MapPost("/api/system/run-family-reminder", async (HealthDataService svc, ISmsSender smsSender) =>
+{
+    var now = DateTime.UtcNow;
+    var sent = 0;
+
+    foreach (var elderly in svc.GetAllUsers())
+    {
+        if (!elderly.IsActive) continue;
+        if (!svc.ShouldSendFamilyReminder(elderly.Id, now)) continue;
+
+        var familyNumbers = svc.GetFamilyMembers(elderly.Id)
+            .Select(m => m.PhoneNumber)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (!familyNumbers.Any()) continue;
+
+        var message = $"📞 Hatırlatma: {elderly.Name} bugün henüz aile tarafından aranmadı/görüşülmedi. Lütfen en kısa sürede iletişime geçin.";
+        foreach (var phone in familyNumbers)
+        {
+            if (await smsSender.SendAsync(phone, message)) sent++;
+        }
+
+        svc.MarkFamilyReminderSent(elderly.Id, now);
+    }
+
+    return Results.Json(new { success = true, sent });
+});
+
 app.MapGet("/", async (HttpContext ctx) =>
 {
     ctx.Response.ContentType = "text/html; charset=utf-8";
@@ -183,6 +467,21 @@ app.MapGet("/family", async (HttpContext ctx) =>
     return Results.File(System.IO.File.ReadAllBytes(filePath), "text/html");
 });
 
+app.MapGet("/elderly-signup.html", async (HttpContext ctx) =>
+{
+    ctx.Response.ContentType = "text/html; charset=utf-8";
+    var filePath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "elderly-signup.html");
+    if (!System.IO.File.Exists(filePath))
+    {
+        filePath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", "elderly-signup.html");
+    }
+    if (!System.IO.File.Exists(filePath))
+    {
+        return Results.NotFound(new { success = false, message = "elderly-signup.html bulunamadı" });
+    }
+    return Results.File(System.IO.File.ReadAllBytes(filePath), "text/html");
+});
+
 app.MapFallback(async (HttpContext ctx) =>
 {
     ctx.Response.ContentType = "text/html; charset=utf-8";
@@ -194,7 +493,7 @@ app.MapFallback(async (HttpContext ctx) =>
 app.MapStateEndpoints();
 
 // APIs
-app.MapPost("/api/complete-task", async (HttpContext ctx, HealthDataService svc, IHubContext<HealthReportHub> hub) =>
+app.MapPost("/api/complete-task", async (HttpContext ctx, HealthDataService svc, IHubContext<HealthReportHub> hub, ISmsSender smsSender) =>
 {
     try
     {
@@ -206,12 +505,27 @@ app.MapPost("/api/complete-task", async (HttpContext ctx, HealthDataService svc,
         string elderlyId = json.TryGetProperty("elderlyId", out var e) ? e.GetString() ?? "elderly-001" : "elderly-001";
         svc.CompleteTask(taskId, method);
         await hub.Clients.All.SendAsync("ReceiveTaskUpdate", new { elderlyId, taskId, status = "completed" });
+
+        var elderly = svc.GetUser(elderlyId);
+        var elderName = elderly?.Name ?? elderlyId;
+        var message = $"✅ {elderName} görevini tamamladı (görev: {taskId}).";
+        var familyNumbers = svc.GetFamilyMembers(elderlyId)
+            .Select(m => m.PhoneNumber)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var phone in familyNumbers)
+        {
+            try { await smsSender.SendAsync(phone, message); } catch { }
+        }
+
         return Results.Json(new { success = true });
     }
     catch { return Results.Json(new { success = false }, statusCode: 500); }
 });
 
-app.MapPost("/api/health-data", async (HttpContext ctx, HealthDataService svc, IHubContext<HealthReportHub> hub) =>
+app.MapPost("/api/health-data", async (HttpContext ctx, HealthDataService svc, IHubContext<HealthReportHub> hub, ISmsSender smsSender) =>
 {
     try
     {
@@ -223,6 +537,28 @@ app.MapPost("/api/health-data", async (HttpContext ctx, HealthDataService svc, I
         double value = json.GetProperty("value").GetDouble();
         svc.AddHealthRecord(elderlyId, metricType, value);
         await hub.Clients.All.SendAsync("ReceiveHealthUpdate", new { elderlyId, metricType, value });
+
+        var elderly = svc.GetUser(elderlyId);
+        var elderName = elderly?.Name ?? elderlyId;
+        var metricLabel = metricType switch
+        {
+            "blood_pressure" => "Tansiyon",
+            "glucose" => "Şeker",
+            "heart_rate" => "Nabız",
+            _ => metricType
+        };
+        var message = $"📊 {elderName} yeni sağlık verisi girdi: {metricLabel} = {value}.";
+        var familyNumbers = svc.GetFamilyMembers(elderlyId)
+            .Select(m => m.PhoneNumber)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var phone in familyNumbers)
+        {
+            try { await smsSender.SendAsync(phone, message); } catch { }
+        }
+
         return Results.Json(new { success = true });
     }
     catch { return Results.Json(new { success = false }, statusCode: 500); }
@@ -286,7 +622,7 @@ app.MapPost("/api/ai-health-check", async (HttpContext ctx, HealthDataService sv
         using var reader = new System.IO.StreamReader(ctx.Request.Body);
         var body = await reader.ReadToEndAsync();
         var json = System.Text.Json.JsonDocument.Parse(body).RootElement;
-        string elderlyId = json.TryGetProperty("elderlyId", out var e) ? e.GetString() ?? "elderly-001" : "elderly-001";
+        string elderlyId = ResolveElderlyId(ctx, svc, json);
         
         // Health threshold check (Critical: >180/110 for BP, >180 for glucose, <50 or >120 for heart rate)
         string healthStatus = json.TryGetProperty("healthStatus", out var h) ? h.GetString() ?? "normal" : "normal";
@@ -303,14 +639,14 @@ app.MapPost("/api/ai-health-check", async (HttpContext ctx, HealthDataService sv
     catch { return Results.Json(new { success = false }, statusCode: 500); }
 });
 
-app.MapPost("/api/ai-fall-detection", async (HttpContext ctx, HealthDataService svc, IHubContext<HealthReportHub> hub) =>
+app.MapPost("/api/ai-fall-detection", async (HttpContext ctx, HealthDataService svc, IHubContext<HealthReportHub> hub, ISmsSender smsSender) =>
 {
     try
     {
         using var reader = new System.IO.StreamReader(ctx.Request.Body);
         var body = await reader.ReadToEndAsync();
         var json = System.Text.Json.JsonDocument.Parse(body).RootElement;
-        string elderlyId = json.TryGetProperty("elderlyId", out var e) ? e.GetString() ?? "elderly-001" : "elderly-001";
+        string elderlyId = ResolveElderlyId(ctx, svc, json);
         double accelerationMagnitude = json.GetProperty("accelerationMagnitude").GetDouble();
         
         // Fall detection threshold: sudden acceleration > 25 m/s²
@@ -337,8 +673,36 @@ app.MapPost("/api/ai-fall-detection", async (HttpContext ctx, HealthDataService 
             await hub.Clients.Group("family:all").SendAsync("ReceiveFamilyAlert", familyAlert);
             await hub.Clients.Group($"family:{elderlyId}").SendAsync("ReceiveFamilyAlert", familyAlert);
             svc.AddEmergencyAlert(elderlyId, "fall_detected", $"Düşme algılandı: {accelerationMagnitude:F2} m/s²");
-            
-            return Results.Json(new { success = true, fallDetected = true, initiateVoiceCheck = true, timeoutSeconds = 15 });
+
+            // --- SMS bildirimleri ---
+            var elderly = svc.GetUser(elderlyId);
+            string elderName = elderly?.Name ?? elderlyId;
+            string smsMessage = $"⚠️ DÜŞME ALARMI: {elderName} adlı yaşlı bireyde düşme algılandı. Lütfen hemen kontrol edin. ({accelerationMagnitude:F2} m/s²) - VitaGuard";
+
+            // Aileye SMS (kayıtlı aile üyelerinin telefon numaralarına)
+            var familyNumbers = svc.GetFamilyMembers(elderlyId)
+                .Select(m => m.PhoneNumber)
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var phone in familyNumbers)
+            {
+                try { await smsSender.SendAsync(phone, smsMessage); } catch { /* SMS hatası kritik değil */ }
+            }
+
+            // Acil sağlık hattına SMS (DoctorPhone öncelikli, yoksa EMERGENCY_SERVICES_NUMBER)
+            var emergencyTarget = !string.IsNullOrWhiteSpace(elderly?.DoctorPhone)
+                ? elderly!.DoctorPhone
+                : smsSender.EmergencyServicesNumber;
+
+            if (!string.IsNullOrWhiteSpace(emergencyTarget))
+            {
+                string emergencySms = $"🚨 ACİL DÜŞME: {elderName} düşme yaşadı. Tel: {elderly?.PhoneNumber ?? "Bilinmiyor"}. - VitaGuard";
+                try { await smsSender.SendAsync(emergencyTarget, emergencySms); } catch { /* SMS hatası kritik değil */ }
+            }
+
+            return Results.Json(new { success = true, fallDetected = true, initiateVoiceCheck = true, timeoutSeconds = 15, smsSent = true, familyNotified = familyNumbers.Count, emergencyNotified = !string.IsNullOrWhiteSpace(emergencyTarget) });
         }
         
         return Results.Json(new { success = true, fallDetected = false });
@@ -354,7 +718,7 @@ app.MapPost("/api/family-alert", async (HttpContext ctx, HealthDataService svc, 
         var body = await reader.ReadToEndAsync();
         var json = System.Text.Json.JsonDocument.Parse(body).RootElement;
 
-        string elderlyId = json.TryGetProperty("elderlyId", out var e) ? e.GetString() ?? "elderly-001" : "elderly-001";
+        string elderlyId = ResolveElderlyId(ctx, svc, json);
         string title = json.TryGetProperty("title", out var t) ? t.GetString() ?? "Aile Uyarısı" : "Aile Uyarısı";
         string message = json.TryGetProperty("message", out var m) ? m.GetString() ?? "Yeni uyarı var" : "Yeni uyarı var";
         string severity = json.TryGetProperty("severity", out var s) ? s.GetString() ?? "warning" : "warning";
@@ -387,7 +751,7 @@ app.MapPost("/api/ai-voice-check", async (HttpContext ctx, HealthDataService svc
         using var reader = new System.IO.StreamReader(ctx.Request.Body);
         var body = await reader.ReadToEndAsync();
         var json = System.Text.Json.JsonDocument.Parse(body).RootElement;
-        string elderlyId = json.TryGetProperty("elderlyId", out var e) ? e.GetString() ?? "elderly-001" : "elderly-001";
+        string elderlyId = ResolveElderlyId(ctx, svc, json);
         string voiceInput = json.TryGetProperty("voiceInput", out var v) ? v.GetString() ?? "" : "";
         double emotionScore = json.TryGetProperty("emotionScore", out var o) ? o.GetDouble() : 0.5;
         
@@ -433,7 +797,7 @@ app.MapPost("/api/ai-silence-monitor", async (HttpContext ctx, HealthDataService
         using var reader = new System.IO.StreamReader(ctx.Request.Body);
         var body = await reader.ReadToEndAsync();
         var json = System.Text.Json.JsonDocument.Parse(body).RootElement;
-        string elderlyId = json.TryGetProperty("elderlyId", out var e) ? e.GetString() ?? "elderly-001" : "elderly-001";
+        string elderlyId = ResolveElderlyId(ctx, svc, json);
         int silenceDurationSeconds = json.GetProperty("silenceDurationSeconds").GetInt32();
         
         // Silence timeout: 15 seconds
@@ -465,7 +829,7 @@ app.MapPost("/api/emergency-broadcast", async (HttpContext ctx, HealthDataServic
         using var reader = new System.IO.StreamReader(ctx.Request.Body);
         var body = await reader.ReadToEndAsync();
         var json = System.Text.Json.JsonDocument.Parse(body).RootElement;
-        string elderlyId = json.TryGetProperty("elderlyId", out var e) ? e.GetString() ?? "elderly-001" : "elderly-001";
+        string elderlyId = ResolveElderlyId(ctx, svc, json);
 
         string locationText = "Unknown";
         if (json.TryGetProperty("location", out var loc))
@@ -516,7 +880,7 @@ app.MapPost("/api/emergency-broadcast", async (HttpContext ctx, HealthDataServic
         await hub.Clients.All.SendAsync("ReceiveEmergencyBroadcast", broadcastData);
         svc.AddEmergencyAlert(elderlyId, "emergency_broadcast", "Acil durum - Aile ve sağlık kuruluşları bilgilendirildi");
 
-        var elderly = svc.GetUser(elderlyId);
+        var elderly = svc.GetUser(elderlyId) ?? ResolveAuthenticatedElderly(ctx, svc, json);
         var elderName = elderly?.Name ?? "Yaşlı kullanıcı";
         var location = broadcastData.location ?? "Unknown";
         var message = $"ACİL DURUM: {elderName}. Konum: {location}";
@@ -582,8 +946,46 @@ app.MapPost("/api/elderly-self-enroll", async (HttpContext ctx, HealthDataServic
         string medicalConditions = json.TryGetProperty("medicalConditions", out var mc) ? mc.GetString() ?? "" : "";
         string allergies = json.TryGetProperty("allergies", out var a) ? a.GetString() ?? "" : "";
         string doctorPhone = json.TryGetProperty("doctorPhone", out var dp) ? dp.GetString() ?? "" : "";
+        string emergencyContact1Name = json.TryGetProperty("emergencyContact1Name", out var ec1n) ? ec1n.GetString() ?? "" : "";
+        string emergencyContact1Phone = json.TryGetProperty("emergencyContact1Phone", out var ec1p) ? ec1p.GetString() ?? "" : "";
+        string emergencyContact2Name = json.TryGetProperty("emergencyContact2Name", out var ec2n) ? ec2n.GetString() ?? "" : "";
+        string emergencyContact2Phone = json.TryGetProperty("emergencyContact2Phone", out var ec2p) ? ec2p.GetString() ?? "" : "";
         string plan = json.TryGetProperty("plan", out var pl) ? pl.GetString() ?? "standard" : "standard";
         string requestedPassword = json.TryGetProperty("password", out var pw) ? pw.GetString() ?? "" : "";
+
+        static string NormalizePhone(string phoneRaw)
+        {
+            var cleaned = new string((phoneRaw ?? string.Empty).Where(c => char.IsDigit(c) || c == '+').ToArray());
+            if (string.IsNullOrWhiteSpace(cleaned)) return string.Empty;
+            if (cleaned.StartsWith("00")) cleaned = "+" + cleaned.Substring(2);
+            if (cleaned.StartsWith("+")) return cleaned;
+            if (cleaned.StartsWith("0") && cleaned.Length == 11) return "+90" + cleaned.Substring(1);
+            if (cleaned.Length == 10) return "+90" + cleaned;
+            if (cleaned.Length >= 8 && cleaned.Length <= 15) return "+" + cleaned;
+            return cleaned;
+        }
+
+        static string BuildFamilyEmail(string userId, int index)
+            => $"family{index}.{userId}@vitaguard.local";
+
+        phone = NormalizePhone(phone);
+        doctorPhone = NormalizePhone(doctorPhone);
+        emergencyContact1Phone = NormalizePhone(emergencyContact1Phone);
+        emergencyContact2Phone = NormalizePhone(emergencyContact2Phone);
+
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            email = $"{deviceId.ToLowerInvariant()}@vitaguard.local";
+        }
+        else
+        {
+            email = email.Trim().ToLowerInvariant();
+        }
+
+        if (string.IsNullOrWhiteSpace(emergencyContact1Name))
+        {
+            emergencyContact1Name = "Aile Üyesi";
+        }
         string finalPassword = requestedPassword;
         bool isTempPassword = false;
         if (string.IsNullOrWhiteSpace(finalPassword))
@@ -599,10 +1001,20 @@ app.MapPost("/api/elderly-self-enroll", async (HttpContext ctx, HealthDataServic
         }
         
         // Phone format validation (Turkish format)
-        var phoneRegex = new System.Text.RegularExpressions.Regex(@"^(\+90|0)?[1-9]\d{9}$");
-        if (!phoneRegex.IsMatch(phone.Replace(" ", "").Replace("-", "")))
+        var phoneRegex = new System.Text.RegularExpressions.Regex(@"^\+[1-9]\d{7,14}$");
+        if (!phoneRegex.IsMatch(phone))
         {
-            return Results.Json(new { success = false, message = "Geçersiz telefon numarası formatı" }, statusCode: 400);
+            return Results.Json(new { success = false, message = "Geçersiz telefon numarası formatı. Örnek: +905551234567" }, statusCode: 400);
+        }
+
+        if (!string.IsNullOrWhiteSpace(emergencyContact1Phone) && !phoneRegex.IsMatch(emergencyContact1Phone))
+        {
+            return Results.Json(new { success = false, message = "Aile üyesi 1 telefon formatı geçersiz. Örnek: +905551234567" }, statusCode: 400);
+        }
+
+        if (!string.IsNullOrWhiteSpace(emergencyContact2Phone) && !phoneRegex.IsMatch(emergencyContact2Phone))
+        {
+            return Results.Json(new { success = false, message = "Aile üyesi 2 telefon formatı geçersiz. Örnek: +905551234567" }, statusCode: 400);
         }
         
         // Create elderly user record
@@ -637,6 +1049,32 @@ app.MapPost("/api/elderly-self-enroll", async (HttpContext ctx, HealthDataServic
         
         // Add to system
         svc.AddUser(newElderly);
+
+        if (!string.IsNullOrWhiteSpace(emergencyContact1Phone))
+        {
+            svc.AddFamilyMember(new FamilyMember
+            {
+                Id = $"fm-{deviceId}-1",
+                ElderlyId = deviceId,
+                Name = emergencyContact1Name,
+                Email = BuildFamilyEmail(deviceId, 1),
+                Relationship = "Aile",
+                PhoneNumber = emergencyContact1Phone
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(emergencyContact2Phone))
+        {
+            svc.AddFamilyMember(new FamilyMember
+            {
+                Id = $"fm-{deviceId}-2",
+                ElderlyId = deviceId,
+                Name = string.IsNullOrWhiteSpace(emergencyContact2Name) ? "Aile Üyesi 2" : emergencyContact2Name,
+                Email = BuildFamilyEmail(deviceId, 2),
+                Relationship = "Aile",
+                PhoneNumber = emergencyContact2Phone
+            });
+        }
         
         return Results.Json(new 
         { 
@@ -676,19 +1114,21 @@ app.MapGet("/api/subscription/{userId}", (string userId, HealthDataService svc) 
         return Results.Json(new { success = false, message = "Kullanıcı bulunamadı" }, statusCode: 404);
     }
     
+    var subscriptionState = NormalizeSubscriptionState(user.Subscription, userId);
     var subscription = new 
     {
         userId,
-        plan = user.Subscription?.Plan ?? "standard",
-        isPremium = user.Subscription?.Plan == "premium",
-        expiresAt = user.Subscription?.ExpiresAt ?? DateTime.Now.AddYears(1),
-        isActive = user.Subscription?.IsActive ?? false,
+        plan = subscriptionState.Plan,
+        isPremium = subscriptionState.Plan == "premium",
+        expiresAt = subscriptionState.ExpiresAt,
+        isActive = subscriptionState.IsActive,
+        provider = "manual",
         features = new 
         {
-            aiVoiceAnalysis = user.Subscription?.HasAIAnalysis ?? false,
-            fallDetection = user.Subscription?.HasFallDetection ?? false,
-            liveLocation = user.Subscription?.HasLiveLocation ?? false,
-            emergencyIntegration = user.Subscription?.HasEmergencyIntegration ?? true
+            aiVoiceAnalysis = subscriptionState.HasAIAnalysis,
+            fallDetection = subscriptionState.HasFallDetection,
+            liveLocation = subscriptionState.HasLiveLocation,
+            emergencyIntegration = subscriptionState.HasEmergencyIntegration
         }
     };
     return Results.Json(new { success = true, subscription });
@@ -1313,8 +1753,330 @@ app.MapGet("/api/subscription", (HttpContext ctx, HealthDataService svc) =>
     var token = ResolveToken(ctx);
     var elderly = svc.GetElderlySession(token);
     if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
-    var sub = elderly.Subscription ?? new Subscription { UserId = elderly.Id, Plan = "standard", IsActive = false };
-    return Results.Json(new { plan = sub.Plan, isActive = sub.IsActive, userId = elderly.Id });
+    var sub = NormalizeSubscriptionState(elderly.Subscription, elderly.Id);
+    return Results.Json(new
+    {
+        success = true,
+        userId = elderly.Id,
+        plan = sub.Plan,
+        isActive = sub.IsActive,
+        expiresAt = sub.ExpiresAt,
+        features = new
+        {
+            aiVoiceAnalysis = sub.HasAIAnalysis,
+            fallDetection = sub.HasFallDetection,
+            liveLocation = sub.HasLiveLocation,
+            emergencyIntegration = sub.HasEmergencyIntegration
+        },
+        provider = "manual"
+    });
+});
+app.MapPost("/api/subscription/restore", (HttpContext ctx, HealthDataService svc) =>
+{
+    var token = ResolveToken(ctx);
+    var elderly = svc.GetElderlySession(token);
+    if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
+    var sub = NormalizeSubscriptionState(elderly.Subscription, elderly.Id);
+    return Results.Json(new
+    {
+        success = true,
+        restored = sub.IsActive,
+        subscription = new
+        {
+            userId = elderly.Id,
+            plan = sub.Plan,
+            isActive = sub.IsActive,
+            expiresAt = sub.ExpiresAt,
+            features = new
+            {
+                aiVoiceAnalysis = sub.HasAIAnalysis,
+                fallDetection = sub.HasFallDetection,
+                liveLocation = sub.HasLiveLocation,
+                emergencyIntegration = sub.HasEmergencyIntegration
+            },
+            provider = "manual"
+        }
+    });
+});
+app.MapPost("/api/subscription/cancel", (HttpContext ctx, HealthDataService svc) =>
+{
+    var token = ResolveToken(ctx);
+    var elderly = svc.GetElderlySession(token);
+    if (elderly == null) return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
+
+    var current = NormalizeSubscriptionState(elderly.Subscription, elderly.Id);
+    var remainsActiveUntilExpiry = IsPremiumPlan(current.Plan) && current.ExpiresAt > DateTime.UtcNow;
+
+    var updated = new Subscription
+    {
+        UserId = elderly.Id,
+        Plan = current.Plan,
+        StartDate = current.StartDate,
+        ExpiresAt = current.ExpiresAt,
+        IsActive = remainsActiveUntilExpiry,
+        HasAIAnalysis = IsPremiumPlan(current.Plan) && remainsActiveUntilExpiry,
+        HasFallDetection = IsPremiumPlan(current.Plan) && remainsActiveUntilExpiry,
+        HasLiveLocation = IsPremiumPlan(current.Plan) && remainsActiveUntilExpiry,
+        HasEmergencyIntegration = true
+    };
+
+    svc.UpdateUserSubscription(elderly.Id, updated);
+    var normalizedUpdated = NormalizeSubscriptionState(updated, elderly.Id);
+
+    return Results.Json(new
+    {
+        success = true,
+        message = "Abonelik yenilemesi iptal edildi. Mevcut erişim dönem sonuna kadar devam eder.",
+        subscription = new
+        {
+            userId = elderly.Id,
+            plan = normalizedUpdated.Plan,
+            isActive = normalizedUpdated.IsActive,
+            expiresAt = normalizedUpdated.ExpiresAt
+        }
+    });
+});
+app.MapPost("/api/subscription/apple/verify", async (HttpContext ctx, HealthDataService svc, IHttpClientFactory httpClientFactory, IConfiguration config) =>
+{
+    try
+    {
+        var body = await JsonDocument.ParseAsync(ctx.Request.Body);
+        var token = ResolveToken(ctx, body.RootElement);
+        var elderly = svc.GetElderlySession(token);
+        if (elderly == null)
+        {
+            return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
+        }
+
+        var envFile = LoadAppEnvFile();
+        var receiptData = body.RootElement.TryGetProperty("receiptData", out var rd) ? rd.GetString() ?? "" : "";
+        var transactionId = body.RootElement.TryGetProperty("transactionId", out var tx) ? tx.GetString() ?? "" : "";
+
+        if (string.IsNullOrWhiteSpace(receiptData) && string.IsNullOrWhiteSpace(transactionId))
+        {
+            return Results.Json(new { success = false, message = "receiptData veya transactionId zorunludur" }, statusCode: 400);
+        }
+
+        var sharedSecret = FirstNonEmpty(
+            config["Subscriptions:AppleSharedSecret"],
+            Environment.GetEnvironmentVariable("APPLE_SHARED_SECRET"),
+            envFile.GetValueOrDefault("APPLE_SHARED_SECRET"));
+
+        var appStoreServerApiKey = FirstNonEmpty(
+            config["Subscriptions:AppStoreServerApiKey"],
+            Environment.GetEnvironmentVariable("APP_STORE_SERVER_API_KEY"),
+            envFile.GetValueOrDefault("APP_STORE_SERVER_API_KEY"));
+
+        if (string.IsNullOrWhiteSpace(sharedSecret) && string.IsNullOrWhiteSpace(appStoreServerApiKey))
+        {
+            return Results.Json(new { success = false, message = "Apple Shared Secret veya App Store Server API key yapılandırılmamış" }, statusCode: 503);
+        }
+
+        async Task<(int Status, JsonDocument? Payload)> VerifyReceiptAsync(string url)
+        {
+            var client = httpClientFactory.CreateClient();
+            var payload = JsonSerializer.Serialize(new
+            {
+                receipt_data = receiptData,
+                password = sharedSecret,
+                exclude_old_transactions = true
+            });
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = new StringContent(payload, Encoding.UTF8, "application/json")
+            };
+
+            using var res = await client.SendAsync(req);
+            var jsonText = await res.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(jsonText)) return (-1, null);
+            var parsed = JsonDocument.Parse(jsonText);
+            var status = parsed.RootElement.TryGetProperty("status", out var s) ? s.GetInt32() : -1;
+            return (status, parsed);
+        }
+
+        async Task<(bool Success, JsonDocument? Payload, string Message)> GetTransactionInfoAsync(string baseUrl)
+        {
+            var client = httpClientFactory.CreateClient();
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/inApps/v1/transactions/{Uri.EscapeDataString(transactionId)}");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", appStoreServerApiKey);
+
+            using var res = await client.SendAsync(req);
+            var jsonText = await res.Content.ReadAsStringAsync();
+            if (!res.IsSuccessStatusCode)
+            {
+                return (false, null, $"Apple Server API başarısız: {(int)res.StatusCode}");
+            }
+
+            if (string.IsNullOrWhiteSpace(jsonText))
+            {
+                return (false, null, "Apple Server API boş yanıt döndürdü");
+            }
+
+            return (true, JsonDocument.Parse(jsonText), "ok");
+        }
+
+        static DateTime? ParseAppleMillis(JsonElement payload, string propName)
+        {
+            if (!payload.TryGetProperty(propName, out var value)) return null;
+
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var numberMs))
+            {
+                return DateTimeOffset.FromUnixTimeMilliseconds(numberMs).UtcDateTime;
+            }
+
+            if (value.ValueKind == JsonValueKind.String)
+            {
+                var str = value.GetString() ?? "";
+                if (long.TryParse(str, out var strMs))
+                {
+                    return DateTimeOffset.FromUnixTimeMilliseconds(strMs).UtcDateTime;
+                }
+            }
+
+            return null;
+        }
+
+        DateTime? expiresAt = null;
+        string productId = "";
+        bool verificationSucceeded = false;
+        JsonDocument? verification = null;
+
+        if (!string.IsNullOrWhiteSpace(receiptData) && !string.IsNullOrWhiteSpace(sharedSecret))
+        {
+            var (status, receiptVerification) = await VerifyReceiptAsync("https://buy.itunes.apple.com/verifyReceipt");
+            verification = receiptVerification;
+            if (status == 21007)
+            {
+                verification?.Dispose();
+                (status, verification) = await VerifyReceiptAsync("https://sandbox.itunes.apple.com/verifyReceipt");
+            }
+
+            if (verification == null || status != 0)
+            {
+                verification?.Dispose();
+                return Results.Json(new { success = false, message = $"Apple doğrulama başarısız. status={status}" }, statusCode: 400);
+            }
+
+            verificationSucceeded = true;
+
+            if (verification.RootElement.TryGetProperty("latest_receipt_info", out var latestInfo) && latestInfo.ValueKind == JsonValueKind.Array)
+            {
+                var latest = latestInfo.EnumerateArray().LastOrDefault();
+                if (latest.ValueKind == JsonValueKind.Object)
+                {
+                    productId = latest.TryGetProperty("product_id", out var pid) ? pid.GetString() ?? "" : "";
+                    var expiresMs = latest.TryGetProperty("expires_date_ms", out var ems) ? ems.GetString() ?? "" : "";
+                    if (long.TryParse(expiresMs, out var ms))
+                    {
+                        expiresAt = DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime;
+                    }
+                }
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(transactionId) && !string.IsNullOrWhiteSpace(appStoreServerApiKey))
+        {
+            var (ok, transactionResult, message) = await GetTransactionInfoAsync("https://api.storekit.itunes.apple.com");
+            if (!ok)
+            {
+                (ok, transactionResult, message) = await GetTransactionInfoAsync("https://api.storekit-sandbox.itunes.apple.com");
+            }
+
+            if (!ok || transactionResult == null)
+            {
+                transactionResult?.Dispose();
+                return Results.Json(new { success = false, message }, statusCode: 400);
+            }
+
+            verificationSucceeded = true;
+            verification = transactionResult;
+
+            var signedTransaction = verification.RootElement.TryGetProperty("signedTransactionInfo", out var sti)
+                ? sti.GetString() ?? ""
+                : "";
+
+            if (string.IsNullOrWhiteSpace(signedTransaction))
+            {
+                verification.Dispose();
+                return Results.Json(new { success = false, message = "Apple Server API signedTransactionInfo içermiyor" }, statusCode: 400);
+            }
+
+            var segments = signedTransaction.Split('.');
+            if (segments.Length < 2)
+            {
+                verification.Dispose();
+                return Results.Json(new { success = false, message = "Apple signedTransactionInfo formatı geçersiz" }, statusCode: 400);
+            }
+
+            var payloadSegment = segments[1]
+                .Replace('-', '+')
+                .Replace('_', '/');
+
+            var mod4 = payloadSegment.Length % 4;
+            if (mod4 > 0)
+            {
+                payloadSegment = payloadSegment.PadRight(payloadSegment.Length + (4 - mod4), '=');
+            }
+
+            var payloadJson = Encoding.UTF8.GetString(Convert.FromBase64String(payloadSegment));
+            using var payloadDoc = JsonDocument.Parse(payloadJson);
+            var payload = payloadDoc.RootElement;
+
+            productId = payload.TryGetProperty("productId", out var p) ? p.GetString() ?? "" : "";
+            expiresAt = ParseAppleMillis(payload, "expiresDate");
+        }
+        else
+        {
+            return Results.Json(new
+            {
+                success = false,
+                message = "receiptData doğrulaması için APPLE_SHARED_SECRET gerekir. APP_STORE_SERVER_API_KEY ile doğrulama için transactionId gönderin."
+            }, statusCode: 400);
+        }
+
+        if (!verificationSucceeded || !expiresAt.HasValue)
+        {
+            verification?.Dispose();
+            return Results.Json(new { success = false, message = "Abonelik bitiş tarihi alınamadı" }, statusCode: 400);
+        }
+
+        var now = DateTime.UtcNow;
+        var active = expiresAt.Value > now;
+        var isPremium = productId.Contains("premium", StringComparison.OrdinalIgnoreCase) || productId.Contains("pro", StringComparison.OrdinalIgnoreCase);
+        var plan = isPremium ? "premium" : "standard";
+
+        svc.UpdateUserSubscription(elderly.Id, new Subscription
+        {
+            UserId = elderly.Id,
+            Plan = plan,
+            StartDate = elderly.Subscription?.StartDate ?? now,
+            ExpiresAt = expiresAt.Value,
+            IsActive = active,
+            HasAIAnalysis = isPremium && active,
+            HasFallDetection = isPremium && active,
+            HasLiveLocation = isPremium && active,
+            HasEmergencyIntegration = true
+        });
+
+        verification?.Dispose();
+
+        return Results.Json(new
+        {
+            success = true,
+            subscription = new
+            {
+                userId = elderly.Id,
+                plan,
+                isActive = active,
+                expiresAt = expiresAt.Value,
+                provider = string.IsNullOrWhiteSpace(receiptData) ? "apple-server-api" : "apple"
+            }
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { success = false, message = $"Apple doğrulama hatası: {ex.Message}" }, statusCode: 500);
+    }
 });
 app.MapGet("/api/family-members", (HttpContext ctx, HealthDataService svc) =>
 {
@@ -1527,16 +2289,6 @@ app.MapPost("/api/health-records", async (HttpContext ctx, HealthDataService svc
         }
 
         svc.AddHealthRecord(elderly.Id, recordType, value);
-
-        db.HealthRecords.Add(new StoredHealthRecord
-        {
-            ElderlyId = elderly.Id,
-            MetricType = recordType,
-            Value = value,
-            HealthStatus = "normal",
-            RecordedAt = DateTime.UtcNow
-        });
-        await db.SaveChangesAsync();
 
         return Results.Json(new { success = true, healthStatus = "normal", alertLevel = "normal" });
     }
@@ -1773,43 +2525,22 @@ public class HealthDataService
 
     private readonly IConfiguration _configuration;
     private readonly AppDbContext _db;
+    private readonly IHostEnvironment _environment;
+    private readonly ILogger<HealthDataService> _logger;
+    private readonly string _sharedFamilyPassword;
 
-    public HealthDataService(IConfiguration configuration, AppDbContext db)
+    public HealthDataService(IConfiguration configuration, AppDbContext db, IHostEnvironment environment, ILogger<HealthDataService> logger)
     {
         _configuration = configuration;
         _db = db;
+        _environment = environment;
+        _logger = logger;
+        _sharedFamilyPassword = ResolveFamilyPortalPassword();
+
         LoadUsersFromDb();
-
-        if (!_users.Any())
-        {
-            var seeded = new ElderlyUser
-            {
-                Id = "elderly-001",
-                Name = "Buse",
-                Email = "elderly@test.com",
-                Password = string.Empty,
-                PasswordHash = PasswordSecurity.HashPassword("123"),
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                Subscription = new Subscription
-                {
-                    UserId = "elderly-001",
-                    Plan = "premium",
-                    StartDate = DateTime.UtcNow,
-                    ExpiresAt = DateTime.UtcNow.AddYears(1),
-                    IsActive = true,
-                    HasAIAnalysis = true,
-                    HasFallDetection = true,
-                    HasLiveLocation = true,
-                    HasEmergencyIntegration = true
-                }
-            };
-
-            _users.Add(seeded);
-            UpsertUser(seeded);
-        }
-
-        InitializeSampleData();
+        LoadOperationalDataFromDb();
+        SeedDemoDataIfEnabled();
+        medicationIdSeq = medications.Any() ? medications.Max(m => m.Id) + 1 : 1;
     }
 
     private void LoadUsersFromDb()
@@ -1834,6 +2565,7 @@ public class HealthDataService
             Id = s.Id,
             Name = s.Name,
             Email = s.Email,
+            Password = string.Empty,
             PasswordHash = s.PasswordHash,
             PhoneNumber = s.PhoneNumber,
             BirthDate = s.BirthDate,
@@ -1856,6 +2588,108 @@ public class HealthDataService
                 HasEmergencyIntegration = s.HasEmergencyIntegration
             }
         }).ToList();
+    }
+
+    private void LoadOperationalDataFromDb()
+    {
+        try
+        {
+            familyMembers = _db.FamilyMembers
+                .AsNoTracking()
+                .OrderBy(x => x.Name)
+                .Select(x => new FamilyMember
+                {
+                    Id = x.Id,
+                    ElderlyId = x.ElderlyId,
+                    Name = x.Name,
+                    Email = x.Email,
+                    Relationship = x.Relationship,
+                    PhoneNumber = x.PhoneNumber
+                })
+                .ToList();
+
+            medications = _db.Medications
+                .AsNoTracking()
+                .OrderBy(x => x.Id)
+                .Select(x => new Medication
+                {
+                    Id = x.Id,
+                    ElderlyId = x.ElderlyId,
+                    Name = x.Name,
+                    Notes = x.Notes,
+                    ScheduleTimes = DeserializeScheduleTimes(x.ScheduleTimesJson),
+                    StockCount = x.StockCount,
+                    LastTakenAt = x.LastTakenAt
+                })
+                .ToList();
+
+            moodRecords = _db.MoodRecords
+                .AsNoTracking()
+                .OrderBy(x => x.Timestamp)
+                .Select(x => new MoodRecord
+                {
+                    ElderlyId = x.ElderlyId,
+                    MoodScore = x.MoodScore,
+                    Timestamp = x.Timestamp,
+                    Source = x.Source
+                })
+                .ToList();
+
+            emergencyAlerts = _db.EmergencyAlerts
+                .AsNoTracking()
+                .OrderByDescending(x => x.OccurredAt)
+                .Select(x => new EmergencyAlert
+                {
+                    Id = x.Id,
+                    ElderlyId = x.ElderlyId,
+                    AlertType = x.AlertType,
+                    OccurredAt = x.OccurredAt,
+                    Description = x.Description,
+                    IsResolved = x.IsResolved
+                })
+                .ToList();
+
+            tasks = _db.TaskItems
+                .AsNoTracking()
+                .OrderBy(x => x.ScheduledTime)
+                .Select(x => new TaskItem
+                {
+                    Id = x.Id,
+                    ElderlyId = x.ElderlyId,
+                    Type = x.Type,
+                    Description = x.Description,
+                    ScheduledTime = x.ScheduledTime,
+                    CompletedTime = x.CompletedTime,
+                    IsCompleted = x.IsCompleted,
+                    CompletionMethod = x.CompletionMethod
+                })
+                .ToList();
+
+            healthRecords = _db.HealthRecords
+                .AsNoTracking()
+                .OrderBy(x => x.RecordedAt)
+                .Select(x => new HealthRecord
+                {
+                    Id = x.Id.ToString(CultureInfo.InvariantCulture),
+                    ElderlyId = x.ElderlyId,
+                    MetricType = x.MetricType,
+                    Value = x.Value,
+                    Systolic = x.Systolic,
+                    Diastolic = x.Diastolic,
+                    Glucose = x.Glucose,
+                    HeartRate = x.HeartRate,
+                    HealthStatus = x.HealthStatus,
+                    Notes = x.Notes,
+                    RecordedAt = x.RecordedAt,
+                    Timestamp = x.RecordedAt,
+                    Status = x.HealthStatus
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Operational data could not be loaded from database.");
+        }
     }
 
     private void UpsertUser(ElderlyUser user)
@@ -1890,128 +2724,284 @@ public class HealthDataService
         _db.SaveChanges();
     }
 
-    private void InitializeSampleData()
+    private void SeedDemoDataIfEnabled()
     {
-        // Sample user (elderly)
-        if (!_users.Any(u => u.Id == "elderly-001"))
+        if (!IsDemoDataEnabled())
         {
-            _users.Add(new ElderlyUser 
-        { 
-            Id = "elderly-001", 
-            Name = "Ahmet Amca", 
-            Email = "elderly@test.com", 
-            Password = string.Empty,
-            PasswordHash = PasswordSecurity.HashPassword("123"),
-            PhoneNumber = "+90 555 123 4567",
-            BirthDate = "1948-04-12",
-            CreatedAt = DateTime.Now,
-            Subscription = new Subscription
-            {
-                UserId = "elderly-001",
-                Plan = "premium",
-                StartDate = DateTime.Now.AddMonths(-1),
-                ExpiresAt = DateTime.Now.AddMonths(11),
-                IsActive = true,
-                HasAIAnalysis = true,
-                HasFallDetection = true,
-                HasLiveLocation = true,
-                HasEmergencyIntegration = true
-            }
-            });
-
-            var seededUser = _users.FirstOrDefault(u => u.Id == "elderly-001");
-            if (seededUser != null)
-            {
-                UpsertUser(seededUser);
-            }
+            return;
         }
-        
-        familyMembers.AddRange(new[] {
-            new FamilyMember { Id = "f1", ElderlyId = "elderly-001", Name = "Fatih (Oğlu)", Email = "fatih@test.com", Relationship = "Oğlu", PhoneNumber = "+905551112233" },
-            new FamilyMember { Id = "f2", ElderlyId = "elderly-001", Name = "Ayşe (Kızı)", Email = "ayse@test.com", Relationship = "Kızı", PhoneNumber = "+905554445566" }
-        });
-        
-        var now = DateTime.Now;
-        tasks.AddRange(new[] {
-            new TaskItem { Id = "t1", ElderlyId = "elderly-001", Type = "medication", Description = "Tansiyon İlacı", ScheduledTime = now.AddHours(2), IsCompleted = false },
-            new TaskItem { Id = "t2", ElderlyId = "elderly-001", Type = "health_check", Description = "Şeker Kontrolü", ScheduledTime = now.AddHours(4), IsCompleted = false }
-        });
 
-        medications.AddRange(new[]
+        const string demoUserId = "elderly-001";
+        if (!_users.Any(u => u.Id == demoUserId))
         {
-            new Medication
+            var seededUser = new ElderlyUser
             {
-                Id = medicationIdSeq++,
-                ElderlyId = "elderly-001",
-                Name = "Tansiyon İlacı",
-                Notes = "Yemekten sonra",
-                ScheduleTimes = new List<string> { "09:00", "21:00" },
-                StockCount = 20,
-                LastTakenAt = null
-            },
-            new Medication
-            {
-                Id = medicationIdSeq++,
-                ElderlyId = "elderly-001",
-                Name = "Şeker İlacı",
-                Notes = "Sabah",
-                ScheduleTimes = new List<string> { "08:30" },
-                StockCount = 12,
-                LastTakenAt = null
-            }
-        });
+                Id = demoUserId,
+                Name = "Ahmet Amca",
+                Email = "elderly@test.com",
+                Password = string.Empty,
+                PasswordHash = PasswordSecurity.HashPassword("123"),
+                PhoneNumber = "+90 555 123 4567",
+                BirthDate = "1948-04-12",
+                CreatedAt = DateTime.UtcNow,
+                Subscription = new Subscription
+                {
+                    UserId = demoUserId,
+                    Plan = "premium",
+                    StartDate = DateTime.UtcNow.AddMonths(-1),
+                    ExpiresAt = DateTime.UtcNow.AddMonths(11),
+                    IsActive = true,
+                    HasAIAnalysis = true,
+                    HasFallDetection = true,
+                    HasLiveLocation = true,
+                    HasEmergencyIntegration = true
+                },
+                IsActive = true
+            };
 
-        moodRecords.AddRange(new[]
-        {
-            new MoodRecord { ElderlyId = "elderly-001", MoodScore = 6, Timestamp = now.AddDays(-4), Source = "auto" },
-            new MoodRecord { ElderlyId = "elderly-001", MoodScore = 7, Timestamp = now.AddDays(-3), Source = "auto" },
-            new MoodRecord { ElderlyId = "elderly-001", MoodScore = 7, Timestamp = now.AddDays(-2), Source = "auto" },
-            new MoodRecord { ElderlyId = "elderly-001", MoodScore = 8, Timestamp = now.AddDays(-1), Source = "auto" },
-            new MoodRecord { ElderlyId = "elderly-001", MoodScore = 7, Timestamp = now, Source = "auto" }
-        });
-        
-        // Sample health records (7 gün gerçekçi veri)
-        var healthData = new[] {
-            (date: now.AddDays(-6), sys: 125, dia: 80, glucose: 110, hr: 72, status: "normal"),
-            (date: now.AddDays(-5), sys: 130, dia: 82, glucose: 115, hr: 75, status: "normal"),
-            (date: now.AddDays(-4), sys: 135, dia: 85, glucose: 118, hr: 70, status: "warning"),
-            (date: now.AddDays(-3), sys: 128, dia: 80, glucose: 105, hr: 68, status: "normal"),
-            (date: now.AddDays(-2), sys: 132, dia: 84, glucose: 112, hr: 73, status: "warning"),
-            (date: now.AddDays(-1), sys: 126, dia: 81, glucose: 108, hr: 71, status: "normal"),
-            (date: now, sys: 129, dia: 82, glucose: 110, hr: 72, status: "normal")
-        };
-        
-        foreach (var (date, sys, dia, glucose, hr, status) in healthData)
-        {
-            healthRecords.Add(new HealthRecord
-            {
-                Id = Guid.NewGuid().ToString(),
-                ElderlyId = "elderly-001",
-                Systolic = sys,
-                Diastolic = dia,
-                Glucose = glucose,
-                HeartRate = hr,
-                HealthStatus = status,
-                Status = status,
-                Timestamp = date,
-                RecordedAt = date,
-                MetricType = "comprehensive"
-            });
+            _users.Add(seededUser);
+            UpsertUser(seededUser);
         }
-        
-        // Legacy format uyumluluğu
-        healthRecords.AddRange(new[] {
-            new HealthRecord { Id = "h1", ElderlyId = "elderly-001", MetricType = "blood_pressure", Value = 125, RecordedAt = DateTime.Now.AddDays(-1), Status = "normal" },
-            new HealthRecord { Id = "h2", ElderlyId = "elderly-001", MetricType = "glucose", Value = 110, RecordedAt = DateTime.Now.AddDays(-1), Status = "normal" }
+
+        SeedDemoOperationalData(demoUserId);
+    }
+
+    private void SeedDemoOperationalData(string elderlyId)
+    {
+        var now = DateTime.UtcNow;
+
+        if (!familyMembers.Any(f => f.ElderlyId == elderlyId))
+        {
+            AddFamilyMember(new FamilyMember { Id = "f1", ElderlyId = elderlyId, Name = "Fatih (Oğlu)", Email = "fatih@test.com", Relationship = "Oğlu", PhoneNumber = "+905551112233" });
+            AddFamilyMember(new FamilyMember { Id = "f2", ElderlyId = elderlyId, Name = "Ayşe (Kızı)", Email = "ayse@test.com", Relationship = "Kızı", PhoneNumber = "+905554445566" });
+        }
+
+        if (!tasks.Any(t => t.ElderlyId == elderlyId))
+        {
+            AddOrUpdateTask(new TaskItem { Id = "t1", ElderlyId = elderlyId, Type = "medication", Description = "Tansiyon İlacı", ScheduledTime = now.AddHours(2), IsCompleted = false });
+            AddOrUpdateTask(new TaskItem { Id = "t2", ElderlyId = elderlyId, Type = "health_check", Description = "Şeker Kontrolü", ScheduledTime = now.AddHours(4), IsCompleted = false });
+        }
+
+        if (!medications.Any(m => m.ElderlyId == elderlyId))
+        {
+            AddMedication(elderlyId, "Tansiyon İlacı", "Yemekten sonra", new List<string> { "09:00", "21:00" }, 20);
+            AddMedication(elderlyId, "Şeker İlacı", "Sabah", new List<string> { "08:30" }, 12);
+        }
+
+        if (!moodRecords.Any(m => m.ElderlyId == elderlyId))
+        {
+            AddMoodRecord(elderlyId, 6, "auto", now.AddDays(-4));
+            AddMoodRecord(elderlyId, 7, "auto", now.AddDays(-3));
+            AddMoodRecord(elderlyId, 7, "auto", now.AddDays(-2));
+            AddMoodRecord(elderlyId, 8, "auto", now.AddDays(-1));
+            AddMoodRecord(elderlyId, 7, "auto", now);
+        }
+
+        if (!_db.HealthRecords.AsNoTracking().Any(r => r.ElderlyId == elderlyId))
+        {
+            var healthData = new[] {
+                (date: now.AddDays(-6), sys: 125, dia: 80, glucose: 110, hr: 72, status: "normal"),
+                (date: now.AddDays(-5), sys: 130, dia: 82, glucose: 115, hr: 75, status: "normal"),
+                (date: now.AddDays(-4), sys: 135, dia: 85, glucose: 118, hr: 70, status: "warning"),
+                (date: now.AddDays(-3), sys: 128, dia: 80, glucose: 105, hr: 68, status: "normal"),
+                (date: now.AddDays(-2), sys: 132, dia: 84, glucose: 112, hr: 73, status: "warning"),
+                (date: now.AddDays(-1), sys: 126, dia: 81, glucose: 108, hr: 71, status: "normal"),
+                (date: now, sys: 129, dia: 82, glucose: 110, hr: 72, status: "normal")
+            };
+
+            foreach (var (date, sys, dia, glucose, hr, status) in healthData)
+            {
+                PersistHealthRecord(new HealthRecord
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    ElderlyId = elderlyId,
+                    Systolic = sys,
+                    Diastolic = dia,
+                    Glucose = glucose,
+                    HeartRate = hr,
+                    HealthStatus = status,
+                    Status = status,
+                    Timestamp = date,
+                    RecordedAt = date,
+                    MetricType = "comprehensive"
+                });
+            }
+
+            PersistHealthRecord(new HealthRecord { Id = Guid.NewGuid().ToString(), ElderlyId = elderlyId, MetricType = "blood_pressure", Value = 125, RecordedAt = now.AddDays(-1), Timestamp = now.AddDays(-1), Status = "normal", HealthStatus = "normal" });
+            PersistHealthRecord(new HealthRecord { Id = Guid.NewGuid().ToString(), ElderlyId = elderlyId, MetricType = "glucose", Value = 110, RecordedAt = now.AddDays(-1), Timestamp = now.AddDays(-1), Status = "normal", HealthStatus = "normal" });
+        }
+    }
+
+    private bool IsDemoDataEnabled()
+    {
+        return _configuration.GetValue<bool?>("SeedData:Enabled") ?? _environment.IsDevelopment();
+    }
+
+    private string ResolveFamilyPortalPassword()
+    {
+        var configured = _configuration["FamilyPortal:SharedPassword"];
+        if (!string.IsNullOrWhiteSpace(configured)) return configured.Trim();
+
+        var envPassword = Environment.GetEnvironmentVariable("FAMILY_PORTAL_PASSWORD");
+        if (!string.IsNullOrWhiteSpace(envPassword)) return envPassword.Trim();
+
+        return _environment.IsDevelopment() ? "1234" : string.Empty;
+    }
+
+    private static string SerializeScheduleTimes(List<string>? scheduleTimes)
+    {
+        return JsonSerializer.Serialize(scheduleTimes ?? new List<string>());
+    }
+
+    private static List<string> DeserializeScheduleTimes(string? scheduleTimesJson)
+    {
+        if (string.IsNullOrWhiteSpace(scheduleTimesJson)) return new List<string>();
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(scheduleTimesJson) ?? new List<string>();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
+    private void UpsertFamilyMember(FamilyMember member)
+    {
+        var existing = _db.FamilyMembers.FirstOrDefault(x => x.Id == member.Id);
+        if (existing == null)
+        {
+            existing = new StoredFamilyMember { Id = member.Id };
+            _db.FamilyMembers.Add(existing);
+        }
+
+        existing.ElderlyId = member.ElderlyId;
+        existing.Name = member.Name;
+        existing.Email = member.Email;
+        existing.Relationship = member.Relationship;
+        existing.PhoneNumber = member.PhoneNumber;
+        _db.SaveChanges();
+    }
+
+    private void UpsertMedication(Medication medication)
+    {
+        var existing = _db.Medications.FirstOrDefault(x => x.Id == medication.Id);
+        if (existing == null)
+        {
+            existing = new StoredMedication();
+            _db.Medications.Add(existing);
+        }
+
+        existing.ElderlyId = medication.ElderlyId;
+        existing.Name = medication.Name;
+        existing.Notes = medication.Notes;
+        existing.ScheduleTimesJson = SerializeScheduleTimes(medication.ScheduleTimes);
+        existing.StockCount = medication.StockCount;
+        existing.LastTakenAt = medication.LastTakenAt;
+        existing.CreatedAt = existing.CreatedAt == default ? DateTime.UtcNow : existing.CreatedAt;
+        _db.SaveChanges();
+
+        medication.Id = existing.Id;
+    }
+
+    private void AddOrUpdateTask(TaskItem task)
+    {
+        var existing = _db.TaskItems.FirstOrDefault(x => x.Id == task.Id);
+        if (existing == null)
+        {
+            existing = new StoredTaskItem { Id = task.Id };
+            _db.TaskItems.Add(existing);
+        }
+
+        existing.ElderlyId = task.ElderlyId;
+        existing.Type = task.Type;
+        existing.Description = task.Description;
+        existing.ScheduledTime = task.ScheduledTime;
+        existing.CompletedTime = task.CompletedTime;
+        existing.IsCompleted = task.IsCompleted;
+        existing.CompletionMethod = task.CompletionMethod;
+        _db.SaveChanges();
+
+        var index = tasks.FindIndex(x => x.Id == task.Id);
+        if (index >= 0) tasks[index] = task;
+        else tasks.Add(task);
+    }
+
+    private void PersistMoodRecord(MoodRecord moodRecord)
+    {
+        _db.MoodRecords.Add(new StoredMoodRecord
+        {
+            ElderlyId = moodRecord.ElderlyId,
+            MoodScore = moodRecord.MoodScore,
+            Timestamp = moodRecord.Timestamp,
+            Source = moodRecord.Source
         });
+        _db.SaveChanges();
+    }
+
+    private void PersistEmergencyAlert(EmergencyAlert alert)
+    {
+        var existing = _db.EmergencyAlerts.FirstOrDefault(x => x.Id == alert.Id);
+        if (existing == null)
+        {
+            existing = new StoredEmergencyAlert { Id = alert.Id };
+            _db.EmergencyAlerts.Add(existing);
+        }
+
+        existing.ElderlyId = alert.ElderlyId;
+        existing.AlertType = alert.AlertType;
+        existing.OccurredAt = alert.OccurredAt;
+        existing.Description = alert.Description;
+        existing.IsResolved = alert.IsResolved;
+        _db.SaveChanges();
+    }
+
+    private void PersistHealthRecord(HealthRecord record)
+    {
+        healthRecords.Add(record);
+        _db.HealthRecords.Add(new StoredHealthRecord
+        {
+            ElderlyId = record.ElderlyId,
+            MetricType = record.MetricType,
+            Value = record.Value,
+            Systolic = record.Systolic,
+            Diastolic = record.Diastolic,
+            Glucose = record.Glucose,
+            HeartRate = record.HeartRate,
+            HealthStatus = record.HealthStatus ?? record.Status ?? "normal",
+            Notes = record.Notes ?? string.Empty,
+            RecordedAt = record.Timestamp ?? record.RecordedAt
+        });
+        _db.SaveChanges();
     }
 
     public List<TaskItem> GetPendingTasks(string elderlyId) => tasks.Where(t => t.ElderlyId == elderlyId && !t.IsCompleted).ToList();
-    public void CompleteTask(string taskId, string method) { var t = tasks.FirstOrDefault(x => x.Id == taskId); if (t != null) { t.IsCompleted = true; t.CompletedTime = DateTime.Now; t.CompletionMethod = method; } }
+    public void CompleteTask(string taskId, string method)
+    {
+        var task = tasks.FirstOrDefault(x => x.Id == taskId);
+        if (task == null) return;
+
+        task.IsCompleted = true;
+        task.CompletedTime = DateTime.UtcNow;
+        task.CompletionMethod = method;
+        AddOrUpdateTask(task);
+    }
     
     // Eski AddHealthRecord metodu (geriye uyumluluk)
-    public void AddHealthRecord(string elderlyId, string metricType, double value) => 
-        healthRecords.Add(new HealthRecord { Id = Guid.NewGuid().ToString(), ElderlyId = elderlyId, MetricType = metricType, Value = value, RecordedAt = DateTime.Now, Timestamp = DateTime.Now, Status = "normal" });
+    public void AddHealthRecord(string elderlyId, string metricType, double value)
+    {
+        PersistHealthRecord(new HealthRecord
+        {
+            Id = Guid.NewGuid().ToString(),
+            ElderlyId = elderlyId,
+            MetricType = metricType,
+            Value = value,
+            RecordedAt = DateTime.UtcNow,
+            Timestamp = DateTime.UtcNow,
+            Status = "normal",
+            HealthStatus = "normal"
+        });
+    }
     
     // Yeni AddComprehensiveHealthRecord metodu (kan şekeri, tansiyon, nabız)
     public void AddComprehensiveHealthRecord(string elderlyId, int? systolic, int? diastolic, int? glucose, int? heartRate, string healthStatus, string notes = "")
@@ -2026,11 +3016,11 @@ public class HealthDataService
             HeartRate = heartRate,
             HealthStatus = healthStatus,
             Notes = notes,
-            RecordedAt = DateTime.Now,
-            Timestamp = DateTime.Now,
+            RecordedAt = DateTime.UtcNow,
+            Timestamp = DateTime.UtcNow,
             Status = healthStatus
         };
-        healthRecords.Add(record);
+        PersistHealthRecord(record);
     }
     
     // Sağlık kayıtlarını getir (son N gün)
@@ -2042,12 +3032,40 @@ public class HealthDataService
             .ToList();
     }
     
-    public void AddEmergencyAlert(string elderlyId, string alertType, string desc) => emergencyAlerts.Add(new EmergencyAlert { Id = Guid.NewGuid().ToString(), ElderlyId = elderlyId, AlertType = alertType, OccurredAt = DateTime.Now, Description = desc, IsResolved = false });
+    public void AddEmergencyAlert(string elderlyId, string alertType, string desc)
+    {
+        var alert = new EmergencyAlert
+        {
+            Id = Guid.NewGuid().ToString(),
+            ElderlyId = elderlyId,
+            AlertType = alertType,
+            OccurredAt = DateTime.UtcNow,
+            Description = desc,
+            IsResolved = false
+        };
+        emergencyAlerts.Add(alert);
+        PersistEmergencyAlert(alert);
+    }
     public ElderlyUser? GetUser(string userId) => _users.FirstOrDefault(u => u.Id == userId);
     public ElderlyUser? GetUserByEmail(string email) => _users.FirstOrDefault(u => u.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
+    public void UpdateUserSubscription(string userId, Subscription subscription)
+    {
+        var user = _users.FirstOrDefault(u => u.Id == userId);
+        if (user == null) return;
+
+        user.Subscription = subscription;
+        UpsertUser(user);
+
+        foreach (var sessionToken in ElderlySessions.Where(kvp => kvp.Value.Id == userId).Select(kvp => kvp.Key).ToList())
+        {
+            ElderlySessions[sessionToken] = user;
+        }
+    }
     public void AddUser(ElderlyUser user)
     {
-        _users.Add(user);
+        var existing = _users.FindIndex(x => x.Id == user.Id || x.Email.Equals(user.Email, StringComparison.OrdinalIgnoreCase));
+        if (existing >= 0) _users[existing] = user;
+        else _users.Add(user);
         UpsertUser(user);
     }
     public void SetElderlySession(string token, ElderlyUser user)
@@ -2055,18 +3073,84 @@ public class HealthDataService
         ElderlySessions[token] = user;
     }
     public List<FamilyMember> GetFamilyMembers(string elderlyId) => familyMembers.Where(f => f.ElderlyId == elderlyId).ToList();
-    public void AddFamilyMember(FamilyMember member) => familyMembers.Add(member);
+    public void AddFamilyMember(FamilyMember member)
+    {
+        familyMembers.RemoveAll(x => x.Id == member.Id);
+        familyMembers.Add(member);
+        UpsertFamilyMember(member);
+    }
     public void RecordFamilyContact(string elderlyId)
     {
         if (string.IsNullOrWhiteSpace(elderlyId)) return;
-        lastFamilyContact[elderlyId] = DateTime.Now;
+
+        var now = DateTime.UtcNow;
+        lastFamilyContact[elderlyId] = now;
+
+        var existing = _db.FamilyContacts.FirstOrDefault(x => x.ElderlyId == elderlyId);
+        if (existing == null)
+        {
+            existing = new StoredFamilyContact { ElderlyId = elderlyId };
+            _db.FamilyContacts.Add(existing);
+        }
+
+        existing.LastContactAt = now;
+        _db.SaveChanges();
     }
 
     public DateTime? GetLastFamilyContact(string elderlyId)
     {
         if (string.IsNullOrWhiteSpace(elderlyId)) return null;
+        var persisted = _db.FamilyContacts.AsNoTracking().FirstOrDefault(x => x.ElderlyId == elderlyId);
+        if (persisted != null)
+        {
+            lastFamilyContact[elderlyId] = persisted.LastContactAt;
+            return persisted.LastContactAt;
+        }
         return lastFamilyContact.TryGetValue(elderlyId, out var timestamp) ? timestamp : null;
     }
+
+    public bool ShouldSendFamilyReminder(string elderlyId, DateTime utcNow)
+    {
+        if (string.IsNullOrWhiteSpace(elderlyId)) return false;
+
+        var contact = _db.FamilyContacts.FirstOrDefault(x => x.ElderlyId == elderlyId);
+        var lastContactAt = contact?.LastContactAt;
+
+        // son 24 saatte aile teması varsa reminder yok
+        if (lastContactAt.HasValue && (utcNow - lastContactAt.Value).TotalHours < 24)
+        {
+            return false;
+        }
+
+        // bugün zaten reminder gönderildiyse tekrar gönderme
+        if (contact?.LastReminderSentAt.HasValue == true && contact.LastReminderSentAt.Value.Date == utcNow.Date)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    public void MarkFamilyReminderSent(string elderlyId, DateTime utcNow)
+    {
+        if (string.IsNullOrWhiteSpace(elderlyId)) return;
+
+        var contact = _db.FamilyContacts.FirstOrDefault(x => x.ElderlyId == elderlyId);
+        if (contact == null)
+        {
+            contact = new StoredFamilyContact
+            {
+                ElderlyId = elderlyId,
+                LastContactAt = utcNow
+            };
+            _db.FamilyContacts.Add(contact);
+        }
+
+        contact.LastReminderSentAt = utcNow;
+        _db.SaveChanges();
+    }
+
+    public List<ElderlyUser> GetAllUsers() => _users.ToList();
     public List<Medication> GetMedications(string elderlyId) => medications.Where(m => m.ElderlyId == elderlyId).ToList();
     public Medication AddMedication(string elderlyId, string name, string notes, List<string> scheduleTimes, int? stockCount)
     {
@@ -2081,28 +3165,32 @@ public class HealthDataService
             LastTakenAt = null
         };
         medications.Add(medication);
+        UpsertMedication(medication);
         return medication;
     }
     public Medication? MarkMedicationTaken(string elderlyId, int medicationId)
     {
         var medication = medications.FirstOrDefault(m => m.Id == medicationId && m.ElderlyId == elderlyId);
         if (medication == null) return null;
-        medication.LastTakenAt = DateTime.Now;
+        medication.LastTakenAt = DateTime.UtcNow;
         if (medication.StockCount.HasValue && medication.StockCount.Value > 0)
         {
             medication.StockCount--;
         }
+        UpsertMedication(medication);
         return medication;
     }
-    public void AddMoodRecord(string elderlyId, int moodScore, string source = "manual")
+    public void AddMoodRecord(string elderlyId, int moodScore, string source = "manual", DateTime? timestamp = null)
     {
-        moodRecords.Add(new MoodRecord
+        var record = new MoodRecord
         {
             ElderlyId = elderlyId,
             MoodScore = moodScore,
-            Timestamp = DateTime.Now,
+            Timestamp = timestamp ?? DateTime.UtcNow,
             Source = source
-        });
+        };
+        moodRecords.Add(record);
+        PersistMoodRecord(record);
     }
     public MoodAnalysis GetMoodAnalysis(string elderlyId, int count = 5)
     {
@@ -2197,7 +3285,11 @@ public class HealthDataService
     public (string Token, FamilyMember Member)? AuthenticateFamily(string email, string password)
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password)) return null;
-        if (password != "1234") return null;
+        var providedPassword = password.Trim();
+        var primaryMatches = !string.IsNullOrWhiteSpace(_sharedFamilyPassword)
+            && string.Equals(providedPassword, _sharedFamilyPassword, StringComparison.Ordinal);
+        var devFallbackMatches = _environment.IsDevelopment() && string.Equals(providedPassword, "123", StringComparison.Ordinal);
+        if (!primaryMatches && !devFallbackMatches) return null;
         var member = familyMembers.FirstOrDefault(m => m.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
         if (member == null) return null;
         var token = Guid.NewGuid().ToString("N");
@@ -2307,6 +3399,36 @@ public class HealthDataService
             _db.HealthRecords.RemoveRange(storedRecords);
         }
 
+        var storedFamilyMembers = _db.FamilyMembers.Where(f => f.ElderlyId == user.Id).ToList();
+        if (storedFamilyMembers.Count > 0)
+        {
+            _db.FamilyMembers.RemoveRange(storedFamilyMembers);
+        }
+
+        var storedMedications = _db.Medications.Where(m => m.ElderlyId == user.Id).ToList();
+        if (storedMedications.Count > 0)
+        {
+            _db.Medications.RemoveRange(storedMedications);
+        }
+
+        var storedMoodRecords = _db.MoodRecords.Where(m => m.ElderlyId == user.Id).ToList();
+        if (storedMoodRecords.Count > 0)
+        {
+            _db.MoodRecords.RemoveRange(storedMoodRecords);
+        }
+
+        var storedEmergencyAlerts = _db.EmergencyAlerts.Where(a => a.ElderlyId == user.Id).ToList();
+        if (storedEmergencyAlerts.Count > 0)
+        {
+            _db.EmergencyAlerts.RemoveRange(storedEmergencyAlerts);
+        }
+
+        var storedTasks = _db.TaskItems.Where(t => t.ElderlyId == user.Id).ToList();
+        if (storedTasks.Count > 0)
+        {
+            _db.TaskItems.RemoveRange(storedTasks);
+        }
+
         _db.SaveChanges();
 
         return (true, "Hesap başarıyla silindi");
@@ -2314,7 +3436,7 @@ public class HealthDataService
 
     private (bool Success, string Message) SendResetPasswordEmail(ElderlyUser user, string tempPassword)
     {
-        var settings = _configuration.GetSection("Email").Get<EmailSettings>() ?? new EmailSettings();
+        var settings = GetEmailSettings();
 
         if (string.IsNullOrWhiteSpace(settings.SmtpServer) ||
             settings.SmtpPort <= 0 ||
@@ -2347,6 +3469,58 @@ public class HealthDataService
         {
             return (false, $"E-posta gönderilemedi: {ex.Message}");
         }
+    }
+
+    private EmailSettings GetEmailSettings()
+    {
+        var settings = _configuration.GetSection("Email").Get<EmailSettings>() ?? new EmailSettings();
+        var env = LoadEnvFileIfPresent();
+
+        settings.SmtpServer = FirstConfigured(settings.SmtpServer, Environment.GetEnvironmentVariable("EMAIL_SMTP_SERVER"), env.GetValueOrDefault("EMAIL_SMTP_SERVER"));
+        settings.FromAddress = FirstConfigured(settings.FromAddress, Environment.GetEnvironmentVariable("EMAIL_FROM_ADDRESS"), env.GetValueOrDefault("EMAIL_FROM_ADDRESS"));
+        settings.FromName = FirstConfigured(settings.FromName, Environment.GetEnvironmentVariable("EMAIL_FROM_NAME"), env.GetValueOrDefault("EMAIL_FROM_NAME"), "VitaGuard");
+        settings.Username = FirstConfigured(settings.Username, Environment.GetEnvironmentVariable("EMAIL_USERNAME"), env.GetValueOrDefault("EMAIL_USERNAME"));
+        settings.Password = FirstConfigured(settings.Password, Environment.GetEnvironmentVariable("EMAIL_PASSWORD"), env.GetValueOrDefault("EMAIL_PASSWORD"));
+
+        var portRaw = FirstConfigured(string.Empty, Environment.GetEnvironmentVariable("EMAIL_SMTP_PORT"), env.GetValueOrDefault("EMAIL_SMTP_PORT"));
+        if (int.TryParse(portRaw, out var port) && port > 0)
+        {
+            settings.SmtpPort = port;
+        }
+
+        return settings;
+    }
+
+    private static string FirstConfigured(params string?[] candidates)
+    {
+        return candidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
+    }
+
+    private Dictionary<string, string> LoadEnvFileIfPresent()
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var path = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), ".env");
+            if (!System.IO.File.Exists(path)) return result;
+
+            foreach (var line in System.IO.File.ReadAllLines(path))
+            {
+                var trimmed = line.Trim();
+                if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith("#", StringComparison.Ordinal)) continue;
+                var index = trimmed.IndexOf('=');
+                if (index <= 0) continue;
+                var key = trimmed[..index].Trim();
+                var value = trimmed[(index + 1)..].Trim();
+                if (!result.ContainsKey(key)) result[key] = value;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Environment file could not be read.");
+        }
+
+        return result;
     }
 
 
@@ -2391,6 +3565,65 @@ public class EmailSettings
     {
         if (string.IsNullOrWhiteSpace(token)) return false;
         return FamilySessions.TryRemove(token, out _);
+    }
+}
+
+public class FamilyContactReminderService : BackgroundService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<FamilyContactReminderService> _logger;
+
+    public FamilyContactReminderService(IServiceScopeFactory scopeFactory, ILogger<FamilyContactReminderService> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var svc = scope.ServiceProvider.GetRequiredService<HealthDataService>();
+                var smsSender = scope.ServiceProvider.GetRequiredService<ISmsSender>();
+
+                var now = DateTime.UtcNow;
+                // yerel saat 20:00-20:59 arası günde bir kontrol
+                var localHour = DateTime.Now.Hour;
+                if (localHour == 20)
+                {
+                    foreach (var elderly in svc.GetAllUsers())
+                    {
+                        if (!elderly.IsActive) continue;
+                        if (!svc.ShouldSendFamilyReminder(elderly.Id, now)) continue;
+
+                        var familyNumbers = svc.GetFamilyMembers(elderly.Id)
+                            .Select(m => m.PhoneNumber)
+                            .Where(p => !string.IsNullOrWhiteSpace(p))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+
+                        if (!familyNumbers.Any()) continue;
+
+                        var message = $"📞 Hatırlatma: {elderly.Name} bugün henüz aile tarafından aranmadı/görüşülmedi. Lütfen en kısa sürede iletişime geçin.";
+                        foreach (var phone in familyNumbers)
+                        {
+                            await smsSender.SendAsync(phone, message);
+                        }
+
+                        svc.MarkFamilyReminderSent(elderly.Id, now);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Family contact reminder job failed");
+            }
+
+            await Task.Delay(TimeSpan.FromMinutes(30), stoppingToken);
+        }
     }
 }
 
@@ -2514,9 +3747,16 @@ public class SmsSender : ISmsSender
     {
         var env = LoadEnvFileIfPresent();
 
+        string provider = Environment.GetEnvironmentVariable("SMS_PROVIDER") ?? env.GetValueOrDefault("SMS_PROVIDER") ?? "";
         string accountSid = Environment.GetEnvironmentVariable("TWILIO_ACCOUNT_SID") ?? env.GetValueOrDefault("TWILIO_ACCOUNT_SID") ?? "";
         string authToken = Environment.GetEnvironmentVariable("TWILIO_AUTH_TOKEN") ?? env.GetValueOrDefault("TWILIO_AUTH_TOKEN") ?? "";
         string fromNumber = Environment.GetEnvironmentVariable("TWILIO_PHONE_NUMBER") ?? env.GetValueOrDefault("TWILIO_PHONE_NUMBER") ?? "";
+        string emergencyServicesNumber = Environment.GetEnvironmentVariable("EMERGENCY_SERVICES_NUMBER") ?? env.GetValueOrDefault("EMERGENCY_SERVICES_NUMBER") ?? "";
+
+        if (string.IsNullOrWhiteSpace(_settings.Provider) && !string.IsNullOrWhiteSpace(provider))
+        {
+            _settings.Provider = provider;
+        }
 
         if (string.IsNullOrWhiteSpace(_settings.Twilio.AccountSid) && !string.IsNullOrWhiteSpace(accountSid))
         {
@@ -2531,6 +3771,11 @@ public class SmsSender : ISmsSender
         if (string.IsNullOrWhiteSpace(_settings.FromNumber) && !string.IsNullOrWhiteSpace(fromNumber))
         {
             _settings.FromNumber = fromNumber;
+        }
+
+        if (string.IsNullOrWhiteSpace(_settings.EmergencyServicesNumber) && !string.IsNullOrWhiteSpace(emergencyServicesNumber))
+        {
+            _settings.EmergencyServicesNumber = emergencyServicesNumber;
         }
 
         if (string.IsNullOrWhiteSpace(_settings.Provider) && !string.IsNullOrWhiteSpace(_settings.Twilio.AccountSid))

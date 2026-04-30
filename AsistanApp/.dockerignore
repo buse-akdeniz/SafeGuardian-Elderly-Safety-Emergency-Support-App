@@ -1,0 +1,12 @@
+bin/
+obj/
+ios/
+*.user
+*.suo
+.vs/
+node_modules/
+*.log
+.env
+asistanapp.db
+asistanapp.db-shm
+asistanapp.db-wal
