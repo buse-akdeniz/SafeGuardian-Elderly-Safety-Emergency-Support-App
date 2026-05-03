@@ -76,11 +76,40 @@ builder.Services.AddHostedService<FamilyContactReminderService>();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
-var sqliteConnection = FirstNonEmpty(
+var rawConnection = FirstNonEmpty(
     Environment.GetEnvironmentVariable("DEFAULT_CONNECTION"),
     builder.Configuration.GetConnectionString("DefaultConnection"),
     "Data Source=asistanapp.db");
-builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqliteConnection));
+
+// Detect Postgres connection strings (Railway injects postgres:// URLs or ADO.NET-style strings
+// containing "Host=" / "Server="). Fall back to SQLite for local development.
+bool isPostgres = rawConnection.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
+    || rawConnection.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase)
+    || rawConnection.Contains("Host=", StringComparison.OrdinalIgnoreCase)
+    || rawConnection.Contains("Server=", StringComparison.OrdinalIgnoreCase);
+
+// Npgsql requires an ADO.NET connection string; convert the postgres:// URI format if needed.
+string dbConnection = rawConnection;
+if (isPostgres && (rawConnection.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
+                   || rawConnection.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase)))
+{
+    var uri = new Uri(rawConnection);
+    var userInfo = uri.UserInfo.Split(':');
+    var host = uri.Host;
+    var port = uri.Port > 0 ? uri.Port : 5432;
+    var database = uri.AbsolutePath.TrimStart('/');
+    var user = userInfo.Length > 0 ? userInfo[0] : "";
+    var password = userInfo.Length > 1 ? userInfo[1] : "";
+    dbConnection = $"Host={host};Port={port};Database={database};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+}
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    if (isPostgres)
+        options.UseNpgsql(dbConnection);
+    else
+        options.UseSqlite(dbConnection);
+});
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
@@ -107,7 +136,13 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
-    db.Database.ExecuteSqlRaw(@"
+
+    // On SQLite, EF Core's EnsureCreated may not add columns introduced after the initial schema
+    // was created, so we run idempotent CREATE TABLE IF NOT EXISTS statements as a safety net.
+    // On Postgres, EnsureCreated handles the full schema via the EF Core model — no raw DDL needed.
+    if (!isPostgres)
+    {
+        db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS ElderlyUsers (
     Id TEXT NOT NULL PRIMARY KEY,
     Name TEXT NOT NULL,
@@ -130,8 +165,8 @@ CREATE TABLE IF NOT EXISTS ElderlyUsers (
     HasLiveLocation INTEGER NOT NULL,
     HasEmergencyIntegration INTEGER NOT NULL
 );");
-    db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_ElderlyUsers_Email ON ElderlyUsers (Email);");
-    db.Database.ExecuteSqlRaw(@"
+        db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_ElderlyUsers_Email ON ElderlyUsers (Email);");
+        db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS FamilyMembers (
     Id TEXT NOT NULL PRIMARY KEY,
     ElderlyId TEXT NOT NULL,
@@ -140,8 +175,8 @@ CREATE TABLE IF NOT EXISTS FamilyMembers (
     Relationship TEXT NULL,
     PhoneNumber TEXT NULL
 );");
-    db.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS IX_FamilyMembers_ElderlyId_Email ON FamilyMembers (ElderlyId, Email);");
-    db.Database.ExecuteSqlRaw(@"
+        db.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS IX_FamilyMembers_ElderlyId_Email ON FamilyMembers (ElderlyId, Email);");
+        db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS Medications (
     Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     ElderlyId TEXT NOT NULL,
@@ -152,7 +187,7 @@ CREATE TABLE IF NOT EXISTS Medications (
     LastTakenAt TEXT NULL,
     CreatedAt TEXT NOT NULL
 );");
-    db.Database.ExecuteSqlRaw(@"
+        db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS MoodRecords (
     Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     ElderlyId TEXT NOT NULL,
@@ -160,7 +195,7 @@ CREATE TABLE IF NOT EXISTS MoodRecords (
     Timestamp TEXT NOT NULL,
     Source TEXT NOT NULL
 );");
-    db.Database.ExecuteSqlRaw(@"
+        db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS EmergencyAlerts (
     Id TEXT NOT NULL PRIMARY KEY,
     ElderlyId TEXT NOT NULL,
@@ -169,7 +204,7 @@ CREATE TABLE IF NOT EXISTS EmergencyAlerts (
     Description TEXT NOT NULL,
     IsResolved INTEGER NOT NULL
 );");
-    db.Database.ExecuteSqlRaw(@"
+        db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS TaskItems (
     Id TEXT NOT NULL PRIMARY KEY,
     ElderlyId TEXT NOT NULL,
@@ -180,12 +215,13 @@ CREATE TABLE IF NOT EXISTS TaskItems (
     IsCompleted INTEGER NOT NULL,
     CompletionMethod TEXT NULL
 );");
-    db.Database.ExecuteSqlRaw(@"
+        db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS FamilyContacts (
     ElderlyId TEXT NOT NULL PRIMARY KEY,
     LastContactAt TEXT NOT NULL,
     LastReminderSentAt TEXT NULL
 );");
+    }
 }
 
 // Rate Limiting Middleware
