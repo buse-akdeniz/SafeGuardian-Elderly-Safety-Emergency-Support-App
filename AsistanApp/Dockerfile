@@ -1,22 +1,28 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Railway bu Dockerfile'ı `AsistanApp` klasörünü build context olarak kullanarak çalıştırıyor.
-# Bu yüzden dosya yolları bu klasöre göre verilmelidir.
-COPY AsistanApp.csproj ./
-RUN dotnet restore "AsistanApp.csproj"
+# Dosyayı bulması için klasör yapısını Docker içinde oluşturuyoruz
+COPY ["AsistanApp/AsistanApp.csproj", "AsistanApp/"]
+RUN dotnet restore "AsistanApp/AsistanApp.csproj"
 
-# Tüm dosyaları kopyala ve yayınla
+# Geri kalan her şeyi kopyala
 COPY . .
+
+# Çalışma dizinini projenin içine çek ve yayınla
+WORKDIR "/src/AsistanApp"
 RUN dotnet publish "AsistanApp.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=build /app/publish .
-ENV PORT=8080
+
+# Senin eklediğin kritik veritabanı izinleri
 USER root
 RUN mkdir -p /var/lib/vitaguard && chmod -R 777 /var/lib/vitaguard
+
+ENV PORT=8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
+
 ENTRYPOINT ["dotnet", "AsistanApp.dll"]
