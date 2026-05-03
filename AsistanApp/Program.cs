@@ -25,6 +25,15 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
 if (builder.Environment.IsDevelopment())
 {
     builder.WebHost.UseUrls("http://0.0.0.0:5007");
@@ -143,6 +152,7 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+app.UseCors("AllowAll");
 
 using (var scope = app.Services.CreateScope())
 {
