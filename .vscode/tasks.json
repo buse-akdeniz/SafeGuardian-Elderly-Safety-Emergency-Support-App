@@ -200,6 +200,16 @@
 			"label": "final-http-statuses",
 			"type": "shell",
 			"command": "base=\"https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app\"; echo ROOT:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/\") FAMILY:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/family\") PRIVACY:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/privacy-policy.html\") HEALTH:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/health/live\")"
+		},
+		{
+			"label": "temp-git-commit-push-script",
+			"type": "shell",
+			"command": "zsh /tmp/copilot_git_commit_push.sh"
+		},
+		{
+			"label": "temp-git-status-check",
+			"type": "shell",
+			"command": "repo=\"/Users/busenurakdeniz/Desktop/ilk projem\"; git -C \"$repo\" --no-pager status --short --branch; echo '---UNMERGED---'; git -C \"$repo\" diff --name-only --diff-filter=U"
 		}
 	]
 }

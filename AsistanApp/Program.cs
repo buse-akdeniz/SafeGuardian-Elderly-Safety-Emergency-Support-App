@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,7 +33,7 @@ else
 {
     // Railway (and other cloud hosts) inject PORT env var
     var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+    builder.WebHost.UseUrls($"http://*:{port}");
 }
 
 string FirstNonEmpty(params string?[] values)
@@ -76,53 +77,65 @@ builder.Services.AddHostedService<FamilyContactReminderService>();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
-var rawConnection = FirstNonEmpty(
+var defaultSqliteConnection = builder.Environment.IsDevelopment()
+    ? "Data Source=asistanapp.db"
+    : "Data Source=/var/lib/vitaguard/asistanapp-prod.db";
+
+var sqliteConnection = FirstNonEmpty(
     Environment.GetEnvironmentVariable("DEFAULT_CONNECTION"),
     builder.Configuration.GetConnectionString("DefaultConnection"),
-    "Data Source=asistanapp.db");
+    defaultSqliteConnection);
 
-// Detect Postgres connection strings (Railway injects postgres:// URLs or ADO.NET-style strings
-// containing "Host=" / "Server="). Fall back to SQLite for local development.
-bool isPostgres = rawConnection.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
-    || rawConnection.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase)
-    || rawConnection.Contains("Host=", StringComparison.OrdinalIgnoreCase)
-    || rawConnection.Contains("Server=", StringComparison.OrdinalIgnoreCase);
-
-// Npgsql requires an ADO.NET connection string; convert the postgres:// URI format if needed.
-string dbConnection = rawConnection;
-if (isPostgres && (rawConnection.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
-                   || rawConnection.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase)))
+try
 {
-    var uri = new Uri(rawConnection);
-    var userInfo = uri.UserInfo.Split(':');
-    var host = uri.Host;
-    var port = uri.Port > 0 ? uri.Port : 5432;
-    var database = uri.AbsolutePath.TrimStart('/');
-    var user = userInfo.Length > 0 ? userInfo[0] : "";
-    var password = userInfo.Length > 1 ? userInfo[1] : "";
-    dbConnection = $"Host={host};Port={port};Database={database};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+    var sqliteBuilder = new SqliteConnectionStringBuilder(sqliteConnection);
+    var dataSource = sqliteBuilder.DataSource;
+
+    if (!string.IsNullOrWhiteSpace(dataSource) &&
+        !string.Equals(dataSource, ":memory:", StringComparison.OrdinalIgnoreCase))
+    {
+        var resolvedPath = System.IO.Path.IsPathRooted(dataSource)
+            ? dataSource
+            : System.IO.Path.GetFullPath(dataSource);
+
+        var dbDirectory = System.IO.Path.GetDirectoryName(resolvedPath);
+        if (!string.IsNullOrWhiteSpace(dbDirectory))
+        {
+            System.IO.Directory.CreateDirectory(dbDirectory);
+        }
+
+        sqliteBuilder.DataSource = resolvedPath;
+        sqliteConnection = sqliteBuilder.ToString();
+    }
+}
+catch
+{
+    // If parsing fails, keep original connection string and let normal DB init report details.
 }
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-{
-    if (isPostgres)
-        options.UseNpgsql(dbConnection);
-    else
-        options.UseSqlite(dbConnection);
-});
+builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqliteConnection));
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    var configuredOrigins = builder.Configuration
+        .GetSection("Cors:AllowedOrigins")
+        .Get<string[]>()
+        ?? Array.Empty<string>();
+
+    var allowedOrigins = configuredOrigins
+        .Concat(new[]
+        {
+            "capacitor://localhost",
+            "http://localhost",
+            "https://localhost"
+        })
+        .Where(origin => !string.IsNullOrWhiteSpace(origin))
+        .Select(origin => origin.Trim())
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    options.AddPolicy("AppCors", policy =>
     {
-        var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
-        var origins = (configuredOrigins != null && configuredOrigins.Length > 0)
-            ? configuredOrigins
-            : new[]
-            {
-                "https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app",
-                "capacitor://localhost"
-            };
-        policy.WithOrigins(origins)
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
@@ -135,13 +148,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
-
-    // On SQLite, EF Core's EnsureCreated may not add columns introduced after the initial schema
-    // was created, so we run idempotent CREATE TABLE IF NOT EXISTS statements as a safety net.
-    // On Postgres, EnsureCreated handles the full schema via the EF Core model — no raw DDL needed.
-    if (!isPostgres)
-    {
-        db.Database.ExecuteSqlRaw(@"
+    db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS ElderlyUsers (
     Id TEXT NOT NULL PRIMARY KEY,
     Name TEXT NOT NULL,
@@ -164,8 +171,8 @@ CREATE TABLE IF NOT EXISTS ElderlyUsers (
     HasLiveLocation INTEGER NOT NULL,
     HasEmergencyIntegration INTEGER NOT NULL
 );");
-        db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_ElderlyUsers_Email ON ElderlyUsers (Email);");
-        db.Database.ExecuteSqlRaw(@"
+    db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_ElderlyUsers_Email ON ElderlyUsers (Email);");
+    db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS FamilyMembers (
     Id TEXT NOT NULL PRIMARY KEY,
     ElderlyId TEXT NOT NULL,
@@ -174,8 +181,8 @@ CREATE TABLE IF NOT EXISTS FamilyMembers (
     Relationship TEXT NULL,
     PhoneNumber TEXT NULL
 );");
-        db.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS IX_FamilyMembers_ElderlyId_Email ON FamilyMembers (ElderlyId, Email);");
-        db.Database.ExecuteSqlRaw(@"
+    db.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS IX_FamilyMembers_ElderlyId_Email ON FamilyMembers (ElderlyId, Email);");
+    db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS Medications (
     Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     ElderlyId TEXT NOT NULL,
@@ -186,7 +193,7 @@ CREATE TABLE IF NOT EXISTS Medications (
     LastTakenAt TEXT NULL,
     CreatedAt TEXT NOT NULL
 );");
-        db.Database.ExecuteSqlRaw(@"
+    db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS MoodRecords (
     Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     ElderlyId TEXT NOT NULL,
@@ -194,7 +201,7 @@ CREATE TABLE IF NOT EXISTS MoodRecords (
     Timestamp TEXT NOT NULL,
     Source TEXT NOT NULL
 );");
-        db.Database.ExecuteSqlRaw(@"
+    db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS EmergencyAlerts (
     Id TEXT NOT NULL PRIMARY KEY,
     ElderlyId TEXT NOT NULL,
@@ -203,7 +210,7 @@ CREATE TABLE IF NOT EXISTS EmergencyAlerts (
     Description TEXT NOT NULL,
     IsResolved INTEGER NOT NULL
 );");
-        db.Database.ExecuteSqlRaw(@"
+    db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS TaskItems (
     Id TEXT NOT NULL PRIMARY KEY,
     ElderlyId TEXT NOT NULL,
@@ -214,13 +221,12 @@ CREATE TABLE IF NOT EXISTS TaskItems (
     IsCompleted INTEGER NOT NULL,
     CompletionMethod TEXT NULL
 );");
-        db.Database.ExecuteSqlRaw(@"
+    db.Database.ExecuteSqlRaw(@"
 CREATE TABLE IF NOT EXISTS FamilyContacts (
     ElderlyId TEXT NOT NULL PRIMARY KEY,
     LastContactAt TEXT NOT NULL,
     LastReminderSentAt TEXT NULL
 );");
-    }
 }
 
 // Rate Limiting Middleware
@@ -287,12 +293,15 @@ if (rateLimitingEnabled)
 }
 
 app.UseRouting();
+app.UseCors(builder => builder
+    .AllowAnyOrigin()
+    .AllowAnyMethod()
+    .AllowAnyHeader());
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
     // app.UseHttpsRedirection();
 }
-app.UseCors("AllowAll");
 app.UseStaticFiles();
 app.MapControllers();
 app.MapHealthChecks("/health/live");
