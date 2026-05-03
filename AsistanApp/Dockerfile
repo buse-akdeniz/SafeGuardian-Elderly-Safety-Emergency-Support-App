@@ -1,13 +1,14 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# BU SATIRI DEĞİŞTİRİYORUZ:
-# Alt klasörlerdeki tüm .csproj dosyalarını bul ve kopyala
-COPY **/*.csproj ./
-RUN dotnet restore
+# Sadece ana proje dosyasını kopyalayalım (Wildcard yerine tam yol)
+COPY AsistanApp/AsistanApp.csproj ./AsistanApp/
+RUN dotnet restore "AsistanApp/AsistanApp.csproj"
 
+# Tüm dosyaları kopyala ve yayınla
 COPY . .
-RUN dotnet publish -c Release -o /app/publish
+WORKDIR "/src/AsistanApp"
+RUN dotnet publish "AsistanApp.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
