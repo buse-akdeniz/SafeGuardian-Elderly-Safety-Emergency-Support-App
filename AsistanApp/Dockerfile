@@ -1,23 +1,23 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-# Docker içinde çalışma alanını /src yapıyoruz
 WORKDIR /src
 
-# Docker'ın dosyaları bulabilmesi için kopyalama komutu
-# Nokta işareti (.) Dockerfile'ın bulunduğu klasörü (yani AsistanApp klasörünü) temsil eder
-COPY ["AsistanApp.csproj", "./"]
-RUN dotnet restore "AsistanApp.csproj"
+# Docker'a diyoruz ki: "Dosya hemen yanındaysa oradan al, 
+# yoksa AsistanApp klasörünün içine bak."
+COPY ["AsistanApp/AsistanApp.csproj", "AsistanApp/"]
+COPY ["AsistanApp.csproj", "./"] || true
 
-# Klasördeki her şeyi kopyala
+# Hangisini bulduysa onunla devam et
+RUN dotnet restore "AsistanApp.csproj" || dotnet restore "AsistanApp/AsistanApp.csproj"
+
 COPY . .
-
-# Yayınla
+WORKDIR "/src/AsistanApp"
 RUN dotnet publish "AsistanApp.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=build /app/publish .
 
-# Veritabanı izni (SQLite hatasını çözen kısım)
+# Veritabanı klasörü ve izinleri
 USER root
 RUN mkdir -p /var/lib/vitaguard && chmod -R 777 /var/lib/vitaguard
 
