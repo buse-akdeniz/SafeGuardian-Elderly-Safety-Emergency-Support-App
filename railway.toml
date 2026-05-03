@@ -1,9 +1,4 @@
 [build]
-builder = "dockerfile"
+builder = "DOCKERFILE"
 dockerfilePath = "AsistanApp/Dockerfile"
-
-[deploy]
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 3
-healthcheckPath = "/health/live"
-healthcheckTimeout = 60
+context = "AsistanApp"
