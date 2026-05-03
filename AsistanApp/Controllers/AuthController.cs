@@ -5,7 +5,7 @@ using ilk_projem.Services;
 namespace ilk_projem.Controllers;
 
 [ApiController]
-[Route("api/auth")]
+[Route("api/elderly")]
 public class AuthController : ControllerBase
 {
     [HttpPost("elderly/login")]
