@@ -3,18 +3,18 @@
  * Supports: Turkish (tr), English (en), German (de)
  */
 
-let currentLanguage = 'tr';
+let currentLanguage = 'en';
 let translations = {};
 
 // Detect system language
 function detectSystemLanguage() {
-    const browserLang = navigator.language || navigator.userLanguage;
+    const browserLang = navigator.language || navigator.userLanguage || 'en';
     const lang = browserLang.split('-')[0];
-    return ['en', 'tr', 'de'].includes(lang) ? lang : 'tr';
+    return ['en', 'tr', 'de'].includes(lang) ? lang : 'en';
 }
 
 // Load translation file
-async function loadLanguage(lang = 'tr') {
+async function loadLanguage(lang = 'en') {
     try {
         const response = await fetch(`/api/i18n/${lang}`);
         if (response.ok) {

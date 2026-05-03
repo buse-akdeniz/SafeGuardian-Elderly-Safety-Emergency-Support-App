@@ -7,6 +7,6 @@ ios/
 node_modules/
 *.log
 .env
-asistanapp.db
-asistanapp.db-shm
-asistanapp.db-wal
+# asistanapp.db
+# asistanapp.db-shm
+# asistanapp.db-wal

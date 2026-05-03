@@ -108,6 +108,28 @@
             margin-bottom: 0;
         }
 
+        .lang-switcher {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-bottom: 14px;
+        }
+
+        .lang-btn {
+            width: auto;
+            padding: 8px 14px;
+            font-size: 14px;
+            border-radius: 999px;
+            background: #e5e7eb;
+            color: #111827;
+            font-weight: 700;
+        }
+
+        .lang-btn.active {
+            background: #2563eb;
+            color: #fff;
+        }
+
         /* DASHBOARD STYLES */
         .dashboard-header {
             background: white;
@@ -285,8 +307,12 @@
 <body>
     <!-- GİRİŞ EKRANI -->
     <div class="login-container active" id="loginContainer">
-        <h1>👨‍👩‍👧 Aile Kontrol Paneli</h1>
-        <p style="text-align: center; color: #666; margin-bottom: 30px; font-size: 16px;">
+        <div class="lang-switcher">
+            <button type="button" class="lang-btn" id="langTrBtn" onclick="setLang('tr')">TR</button>
+            <button type="button" class="lang-btn" id="langEnBtn" onclick="setLang('en')">EN</button>
+        </div>
+        <h1 id="loginTitle">👨‍👩‍👧 Aile Kontrol Paneli</h1>
+        <p id="loginSubtitle" style="text-align: center; color: #666; margin-bottom: 30px; font-size: 16px;">
             Yaşlı yakınızın ilaç alımını ve günlük durumunu buradan takip edebilirsiniz.
         </p>
 
@@ -294,32 +320,32 @@
 
         <form id="loginForm">
             <div class="form-group">
-                <label for="familyEmail">E-Posta (Aile Üyesi)</label>
+                <label id="familyEmailLabel" for="familyEmail">E-Posta (Aile Üyesi)</label>
                 <input type="email" id="familyEmail" placeholder="Örn: ali@example.com" required>
             </div>
 
             <div class="form-group">
-                <label for="familyPassword">Şifre</label>
+                <label id="familyPasswordLabel" for="familyPassword">Şifre</label>
                 <input type="password" id="familyPassword" placeholder="••••••" required>
             </div>
 
             <label style="display: flex; align-items: center; gap: 10px; margin: 15px 0; font-size: 16px; color: #333;">
                 <input type="checkbox" id="rememberMe" />
-                Beni Hatırla
+                <span id="rememberMeText">Beni Hatırla</span>
             </label>
 
-            <button type="submit">Giriş Yap</button>
+            <button type="submit" id="loginSubmitBtn">Giriş Yap</button>
 
-            <button type="button" class="back-btn" onclick="goHome()">← Ana Ekrana Dön</button>
+            <button type="button" class="back-btn" id="backHomeBtn" onclick="goHome()">← Ana Ekrana Dön</button>
 
-            <p style="text-align: center; color: #666; margin-top: 20px; font-size: 14px;">
-                Test: ali@example.com / 1234
+            <p id="testHint" style="text-align: center; color: #666; margin-top: 20px; font-size: 14px;">
+                Destek: support@vitaguard.app
             </p>
         </form>
 
         <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
             <div class="form-group">
-                <label for="apiBaseInput">API Adresi</label>
+                <label id="apiBaseLabel" for="apiBaseInput">API Adresi</label>
                 <input type="url" id="apiBaseInput" placeholder="https://api.yasliyakini.com" />
             </div>
             <div style="display: flex; gap: 10px;">
@@ -334,62 +360,231 @@
         <div class="dashboard-header">
             <div class="elderly-info">
                 <h2 id="elderlyName">Ayşe Hanım</h2>
-                <p>👤 Yaş: <span id="elderlyAge">75</span></p>
-                <p>📞 Tel: <span id="elderlyPhone">+90 555 123 4567</span></p>
+                <p><span id="agePrefix">👤 Yaş:</span> <span id="elderlyAge">75</span></p>
+                <p><span id="phonePrefix">📞 Tel:</span> <span id="elderlyPhone">+90 555 123 4567</span></p>
             </div>
             <div style="text-align: right;">
-                <div id="elderlyStatus" class="status-badge">Iyi ✓</div>
-                <button class="logout-btn" onclick="logout()">Çıkış Yap</button>
-                <button class="back-btn" onclick="goHome()">← Ana Ekrana Dön</button>
+                <div id="elderlyStatus" class="status-badge">İyi ✓</div>
+                <button class="logout-btn" id="logoutBtn" onclick="logout()">Çıkış Yap</button>
+                <button class="back-btn" id="backHomeBtnDash" onclick="goHome()">← Ana Ekrana Dön</button>
             </div>
         </div>
 
         <!-- İLAÇ TAKIP -->
         <div class="card">
-            <h3>💊 Bugünün İlaçları</h3>
+            <h3 id="medicationsTitle">💊 Bugünün İlaçları</h3>
             <div id="medicationsContainer" class="empty-state">
-                Ilaç yükleniyor...
+                İlaç yükleniyor...
             </div>
         </div>
 
         <!-- BİLDİRİMLER -->
         <div class="card">
-            <h3>🔔 Son Bildirimler</h3>
+            <h3 id="notificationsTitle">🔔 Son Bildirimler</h3>
             <div id="notificationsContainer" class="empty-state">
                 Bildirim yükleniyor...
             </div>
         </div>
     </div>
 
+    <script src="/js/signalr.min.js"></script>
     <script>
-        const DEFAULT_API_BASE = 'http://localhost:5007/api';
+        const I18N = {
+            tr: {
+                loginTitle: '👨‍👩‍👧 Aile Kontrol Paneli',
+                loginSubtitle: 'Yaşlı yakınızın ilaç alımını ve günlük durumunu buradan takip edebilirsiniz.',
+                familyEmailLabel: 'E-Posta (Aile Üyesi)',
+                familyEmailPlaceholder: 'Örn: ali@example.com',
+                familyPasswordLabel: 'Şifre',
+                rememberMeText: 'Beni Hatırla',
+                loginSubmitBtn: 'Giriş Yap',
+                backHomeBtn: '← Ana Ekrana Dön',
+                testHint: 'Destek: support@vitaguard.app',
+                apiBaseLabel: 'API Adresi',
+                apiBaseSave: 'Kaydet',
+                apiBaseClear: 'Sıfırla',
+                agePrefix: '👤 Yaş:',
+                phonePrefix: '📞 Tel:',
+                elderlyStatus: 'İyi ✓',
+                logoutBtn: 'Çıkış Yap',
+                backHomeBtnDash: '← Ana Ekrana Dön',
+                medicationsTitle: '💊 Bugünün İlaçları',
+                notificationsTitle: '🔔 Son Bildirimler',
+                medsLoading: 'İlaç yükleniyor...',
+                notifsLoading: 'Bildirim yükleniyor...',
+                loginFailed: 'Giriş başarısız. E-posta ve şifrenizi kontrol edin.',
+                connectionError: 'Bağlantı hatası',
+                dashboardConnWarn: 'Veriler güncellenemiyor. Lütfen internet bağlantınızı kontrol edin.',
+                noMedsToday: 'Bugün için ilaç bulunmuyor',
+                noNotifications: 'Bildirim yok',
+                medsTimes: '⏰ Saatler',
+                notes: '📝',
+                medTaken: '✓ Alındı',
+                medPending: '⏳ Bekleniyor',
+                notifTitle: 'Bildirim',
+                fallDetected: 'Düşme Algılandı',
+                familyAlert: 'Aile Uyarısı',
+                emergency: 'Acil Durum',
+                liveLocation: 'Canlı konum',
+                emergencyBroadcast: 'Acil durum yayını alındı.'
+            },
+            en: {
+                loginTitle: '👨‍👩‍👧 Family Control Panel',
+                loginSubtitle: 'Track your elderly relative\'s medications and daily status from here.',
+                familyEmailLabel: 'Email (Family Member)',
+                familyEmailPlaceholder: 'e.g. ali@example.com',
+                familyPasswordLabel: 'Password',
+                rememberMeText: 'Remember Me',
+                loginSubmitBtn: 'Sign In',
+                backHomeBtn: '← Back to Home',
+                testHint: 'Support: support@vitaguard.app',
+                apiBaseLabel: 'API Address',
+                apiBaseSave: 'Save',
+                apiBaseClear: 'Reset',
+                agePrefix: '👤 Age:',
+                phonePrefix: '📞 Phone:',
+                elderlyStatus: 'Good ✓',
+                logoutBtn: 'Log Out',
+                backHomeBtnDash: '← Back to Home',
+                medicationsTitle: '💊 Today\'s Medications',
+                notificationsTitle: '🔔 Recent Notifications',
+                medsLoading: 'Loading medications...',
+                notifsLoading: 'Loading notifications...',
+                loginFailed: 'Login failed. Please check your email and password.',
+                connectionError: 'Connection error',
+                dashboardConnWarn: 'Data cannot be refreshed. Please check your internet connection.',
+                noMedsToday: 'No medications for today',
+                noNotifications: 'No notifications',
+                medsTimes: '⏰ Times',
+                notes: '📝',
+                medTaken: '✓ Taken',
+                medPending: '⏳ Pending',
+                notifTitle: 'Notification',
+                fallDetected: 'Fall Detected',
+                familyAlert: 'Family Alert',
+                emergency: 'Emergency',
+                liveLocation: 'Live location',
+                emergencyBroadcast: 'Emergency broadcast received.'
+            }
+        };
+
+        let currentLang = localStorage.getItem('familyPanelLang') || localStorage.getItem('appLang') || 'tr';
+        if (!I18N[currentLang]) currentLang = 'tr';
+
+        function t(key) {
+            return (I18N[currentLang] && I18N[currentLang][key]) || key;
+        }
+
+        function setLang(lang) {
+            if (!I18N[lang]) return;
+            currentLang = lang;
+            localStorage.setItem('familyPanelLang', lang);
+            applyTranslations();
+        }
+
+        function applyTranslations() {
+            const map = {
+                loginTitle: 'loginTitle',
+                loginSubtitle: 'loginSubtitle',
+                familyEmailLabel: 'familyEmailLabel',
+                familyPasswordLabel: 'familyPasswordLabel',
+                rememberMeText: 'rememberMeText',
+                loginSubmitBtn: 'loginSubmitBtn',
+                backHomeBtn: 'backHomeBtn',
+                testHint: 'testHint',
+                apiBaseLabel: 'apiBaseLabel',
+                apiBaseSave: 'apiBaseSave',
+                apiBaseClear: 'apiBaseClear',
+                agePrefix: 'agePrefix',
+                phonePrefix: 'phonePrefix',
+                elderlyStatus: 'elderlyStatus',
+                logoutBtn: 'logoutBtn',
+                backHomeBtnDash: 'backHomeBtnDash',
+                medicationsTitle: 'medicationsTitle',
+                notificationsTitle: 'notificationsTitle'
+            };
+
+            Object.entries(map).forEach(([id, key]) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = t(key);
+            });
+
+            const emailInput = document.getElementById('familyEmail');
+            if (emailInput) emailInput.placeholder = t('familyEmailPlaceholder');
+
+            const medsContainer = document.getElementById('medicationsContainer');
+            if (medsContainer && medsContainer.classList.contains('empty-state')) {
+                medsContainer.textContent = t('medsLoading');
+            }
+
+            const notifContainer = document.getElementById('notificationsContainer');
+            if (notifContainer && notifContainer.classList.contains('empty-state')) {
+                notifContainer.textContent = t('notifsLoading');
+            }
+
+            const trBtn = document.getElementById('langTrBtn');
+            const enBtn = document.getElementById('langEnBtn');
+            if (trBtn) trBtn.classList.toggle('active', currentLang === 'tr');
+            if (enBtn) enBtn.classList.toggle('active', currentLang === 'en');
+
+            document.documentElement.lang = currentLang;
+        }
+
+        const DEFAULT_API_BASE = 'https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app/api';
+        const IOS_SIMULATOR_API_BASE = 'https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app/api';
+
+        function normalizeApiBase(value) {
+            if (!value || typeof value !== 'string') return '';
+            return value.trim().replace(/\/api\/?$/i, '').replace(/\/$/, '');
+        }
 
         function getApiBase() {
-            const stored = localStorage.getItem('apiBaseUrl')?.trim();
+            const rawStored = localStorage.getItem('apiBaseUrl')?.trim();
+            const rawConfigured = window.API_BASE?.trim?.();
             const protocol = window.location?.protocol || '';
             const origin = window.location?.origin || '';
+            const userAgent = navigator.userAgent || '';
             const isHttpOrigin = /^https?:/i.test(protocol) && /^https?:\/\//i.test(origin);
             const isCapacitorRuntime = Boolean(window.Capacitor);
+            const isIosSimulator = /(iPhone|iPad|iPod).*Simulator/i.test(userAgent) || /Simulator/i.test(userAgent);
 
+            // Strip any trailing /api so we never end up with /api/api
+            const stored = normalizeApiBase(rawStored);
+            const configured = normalizeApiBase(rawConfigured);
+
+            // Respect user-defined custom API base, including LAN IPs (e.g. 192.168.x.x)
             if (stored) {
-                return `${stored.replace(/\/$/, '')}/api`;
+                return `${stored}/api`;
+            }
+
+            if (configured) {
+                return `${configured}/api`;
+            }
+
+            // Capacitor on iOS Simulator usually runs against local backend during development
+            if (isCapacitorRuntime && isIosSimulator) {
+                return IOS_SIMULATOR_API_BASE;
+            }
+
+            // Capacitor WebView (iOS/Android native shell) → always use production
+            if (isCapacitorRuntime) {
+                return DEFAULT_API_BASE;
             }
 
             if (isHttpOrigin) {
                 return `${origin}/api`;
             }
 
-            if (isCapacitorRuntime) {
-                // iOS Simulator / Android Emulator geliştirme için güvenli varsayılan
-                return 'http://localhost:5007/api';
-            }
-
             return DEFAULT_API_BASE;
         }
 
-        const API_BASE = getApiBase();
+        let ACTIVE_API_BASE = getApiBase();
+        function getHubUrl(apiBase) {
+            return `${apiBase.replace(/\/api$/, '')}/health-hub`;
+        }
         let familyToken = null;
         let elderlyId = null;
+        let realtimeConnection = null;
         const storage = {
             getItem: (key) => (sessionStorage.getItem(key) ?? localStorage.getItem(key)),
             setItem: (key, value, remember) => (remember ? localStorage : sessionStorage).setItem(key, value),
@@ -429,11 +624,29 @@
             const password = document.getElementById('familyPassword').value;
 
             try {
-                const response = await fetch(`${API_BASE}/family/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
+                let response;
+                try {
+                    response = await fetch(`${ACTIVE_API_BASE}/family/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+                } catch (primaryError) {
+                    if (ACTIVE_API_BASE !== DEFAULT_API_BASE) {
+                        response = await fetch(`${DEFAULT_API_BASE}/family/login`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email, password })
+                        });
+                        ACTIVE_API_BASE = DEFAULT_API_BASE;
+                    } else {
+                        throw primaryError;
+                    }
+                }
+
+                if (!response) {
+                    throw new Error('No response from login request');
+                }
 
                 if (response.ok) {
                     const data = await response.json();
@@ -443,14 +656,20 @@
 
                     storage.setItem('familyToken', familyToken, remember);
                     storage.setItem('elderlyId', elderlyId, remember);
+                    storage.setItem('apiBaseUrl', ACTIVE_API_BASE.replace(/\/api\/?$/i, ''));
                     
                     showDashboard();
                 } else {
-                    showError('Giriş başarısız. E-posta ve şifrenizi kontrol edin.');
+                    showError(t('loginFailed'));
                 }
             } catch (error) {
-                console.error('Giriş hatası:', error);
-                showError('Bağlantı hatası');
+                const message = error?.message || String(error);
+                console.error('Giriş hatası:', {
+                    message,
+                    apiBase: ACTIVE_API_BASE,
+                    email
+                });
+                showError(t('connectionError'));
             }
         });
 
@@ -461,13 +680,70 @@
                 history.pushState({ view: 'dashboard' }, '', window.location.href);
             }
             markFamilyContact();
+            initRealtime();
             loadDashboard();
+        }
+
+        async function initRealtime() {
+            if (!window.signalR || realtimeConnection || !elderlyId) return;
+
+            realtimeConnection = new signalR.HubConnectionBuilder()
+                .withUrl(getHubUrl(ACTIVE_API_BASE))
+                .withAutomaticReconnect()
+                .build();
+
+            realtimeConnection.on('ReceiveFamilyAlert', (payload) => {
+                if (!payload || (payload.elderlyId && payload.elderlyId !== elderlyId)) return;
+                prependNotification({
+                    type: payload.severity || 'warning',
+                    title: payload.title || t('familyAlert'),
+                    message: payload.message || (currentLang === 'en' ? 'New alert received.' : 'Yeni uyarı var'),
+                    createdAt: payload.timestamp || new Date().toISOString()
+                });
+                loadDashboard();
+            });
+
+            realtimeConnection.on('ReceiveFallDetected', (payload) => {
+                if (!payload || (payload.elderlyId && payload.elderlyId !== elderlyId)) return;
+                prependNotification({
+                    type: 'critical',
+                    title: payload.title || t('fallDetected'),
+                    message: currentLang === 'en'
+                        ? `Fall risk detected for ${payload.elderlyId || elderlyId}.`
+                        : `${payload.elderlyId || elderlyId} için düşme riski algılandı.`,
+                    createdAt: payload.timestamp || new Date().toISOString()
+                });
+                loadDashboard();
+            });
+
+            realtimeConnection.on('ReceiveEmergencyBroadcast', (payload) => {
+                if (!payload || (payload.elderlyId && payload.elderlyId !== elderlyId)) return;
+                prependNotification({
+                    type: 'critical',
+                    title: t('emergency'),
+                    message: payload.location ? `${t('liveLocation')}: ${payload.location}` : t('emergencyBroadcast'),
+                    createdAt: payload.timestamp || new Date().toISOString()
+                });
+                loadDashboard();
+            });
+
+            realtimeConnection.onclose(() => {
+                realtimeConnection = null;
+            });
+
+            try {
+                await realtimeConnection.start();
+                await realtimeConnection.invoke('JoinFamilyGroup', elderlyId);
+            } catch (error) {
+                console.warn('Gerçek zamanlı bağlantı kurulamadı:', error);
+                realtimeConnection = null;
+            }
         }
 
         async function markFamilyContact() {
             if (!familyToken) return;
             try {
-                await fetch(`${API_BASE}/family/contact?token=${familyToken}`, { method: 'POST' });
+                await fetch(`${ACTIVE_API_BASE}/family/contact?token=${familyToken}`, { method: 'POST' });
             } catch (error) {
                 console.warn('Aile iletişim kaydı başarısız:', error);
             }
@@ -480,7 +756,7 @@
 
         async function loadDashboard() {
             try {
-                const response = await fetch(`${API_BASE}/family/dashboard/${elderlyId}?token=${familyToken}`);
+                const response = await fetch(`${ACTIVE_API_BASE}/family/dashboard/${elderlyId}?token=${familyToken}`);
                 
                 if (response.ok) {
                     const data = await response.json();
@@ -490,11 +766,11 @@
                     // Her 30 saniyede yenile
                     setTimeout(loadDashboard, 30000);
                 } else {
-                    setDashboardAlert('Veriler güncellenemiyor. Lütfen internet bağlantınızı kontrol edin.');
+                    setDashboardAlert(t('dashboardConnWarn'));
                 }
             } catch (error) {
                 console.error('Dashboard hatası:', error);
-                setDashboardAlert('Veriler güncellenemiyor. Lütfen internet bağlantınızı kontrol edin.');
+                setDashboardAlert(t('dashboardConnWarn'));
             }
         }
 
@@ -529,17 +805,17 @@
             // İlaçlar
             const medsContainer = document.getElementById('medicationsContainer');
             if (data.todayMedications.length === 0) {
-                medsContainer.innerHTML = '<div class="empty-state">Bugün için ilaç bulunmuyor</div>';
+                medsContainer.innerHTML = `<div class="empty-state">${t('noMedsToday')}</div>`;
             } else {
                 medsContainer.innerHTML = data.todayMedications.map(med => {
                     const isTaken = med.takenToday.length > 0;
                     return `
                         <div class="medication-item">
                             <div class="medication-name">💊 ${med.medicationName}</div>
-                            <div class="medication-time">⏰ Saatler: ${med.scheduleTimes.join(', ')}</div>
-                            ${med.notes ? `<div class="medication-time">📝 ${med.notes}</div>` : ''}
+                            <div class="medication-time">${t('medsTimes')}: ${med.scheduleTimes.join(', ')}</div>
+                            ${med.notes ? `<div class="medication-time">${t('notes')} ${med.notes}</div>` : ''}
                             <span class="medication-status ${isTaken ? 'taken' : 'pending'}">
-                                ${isTaken ? '✓ Alındı' : '⏳ Bekleniyor'}
+                                ${isTaken ? t('medTaken') : t('medPending')}
                             </span>
                         </div>
                     `;
@@ -549,7 +825,7 @@
             // Bildirimler
             const notifContainer = document.getElementById('notificationsContainer');
             if (data.recentNotifications.length === 0) {
-                notifContainer.innerHTML = '<div class="empty-state">Bildirim yok</div>';
+                notifContainer.innerHTML = `<div class="empty-state">${t('noNotifications')}</div>`;
             } else {
                 notifContainer.innerHTML = data.recentNotifications.map(notif => {
                     const type = notif.type.toLowerCase();
@@ -557,11 +833,32 @@
                         <div class="notification ${type}">
                             <strong>${notif.title}</strong>
                             <p>${notif.message}</p>
-                            <div class="time-stamp">${new Date(notif.createdAt).toLocaleString('tr-TR')}</div>
+                            <div class="time-stamp">${new Date(notif.createdAt).toLocaleString(currentLang === 'en' ? 'en-US' : 'tr-TR')}</div>
                         </div>
                     `;
                 }).join('');
             }
+        }
+
+        function prependNotification(notif) {
+            const notifContainer = document.getElementById('notificationsContainer');
+            if (!notifContainer) return;
+
+            const current = notifContainer.classList.contains('empty-state')
+                ? []
+                : Array.from(notifContainer.querySelectorAll('.notification')).map(node => node.outerHTML);
+
+            const type = String(notif.type || 'info').toLowerCase();
+            const entry = `
+                <div class="notification ${type}">
+                    <strong>${notif.title || t('notifTitle')}</strong>
+                    <p>${notif.message || ''}</p>
+                    <div class="time-stamp">${new Date(notif.createdAt || Date.now()).toLocaleString(currentLang === 'en' ? 'en-US' : 'tr-TR')}</div>
+                </div>
+            `;
+
+            notifContainer.classList.remove('empty-state');
+            notifContainer.innerHTML = [entry, ...current].slice(0, 8).join('');
         }
 
         function showError(message) {
@@ -571,6 +868,10 @@
         }
 
         function logout() {
+            if (realtimeConnection) {
+                realtimeConnection.stop().catch(() => {});
+                realtimeConnection = null;
+            }
             storage.removeItem('familyToken');
             storage.removeItem('elderlyId');
             showLogin();
@@ -584,6 +885,7 @@
 
         // Sayfa açılırken kontrol et
         window.addEventListener('load', () => {
+            applyTranslations();
             if (!history.state) {
                 history.replaceState({ view: 'login' }, '', window.location.href);
             }

@@ -11,23 +11,30 @@
             box-sizing: border-box;
         }
 
+        html, body {
+            height: 100%;
+            overflow: auto;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
             background: #1a1a1a;
             color: #ffff00;
-            padding: 20px;
+            padding: 15px;
             min-height: 100vh;
+            -webkit-overflow-scrolling: touch;
         }
 
         .container {
             max-width: 800px;
             margin: 0 auto;
+            overflow-y: auto;
         }
 
         h1 {
             text-align: center;
-            font-size: 36px;
-            margin-bottom: 30px;
+            font-size: 28px;
+            margin-bottom: 15px;
             text-shadow: 2px 2px 4px rgba(255, 255, 0, 0.2);
         }
 
@@ -35,8 +42,8 @@
             background: rgba(0, 100, 200, 0.2);
             border: 4px solid #0066ff;
             border-radius: 20px;
-            padding: 30px;
-            margin-bottom: 30px;
+            padding: 20px;
+            margin-bottom: 20px;
             text-align: center;
         }
 
@@ -45,20 +52,20 @@
             max-width: 500px;
             border-radius: 15px;
             border: 3px solid #ffff00;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .btn-giant {
             width: 100%;
-            padding: 20px;
-            font-size: 28px;
+            padding: 16px;
+            font-size: 20px;
             font-weight: 700;
             background: linear-gradient(135deg, #00aa00 0%, #00ff00 100%);
             color: black;
             border: none;
             border-radius: 15px;
             cursor: pointer;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             transition: all 0.2s;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
         }
@@ -243,11 +250,11 @@
         .info-box {
             background: rgba(0, 150, 255, 0.15);
             border-left: 5px solid #0096ff;
-            padding: 15px;
+            padding: 12px;
             border-radius: 10px;
-            margin-bottom: 20px;
-            font-size: 18px;
-            line-height: 1.6;
+            margin-bottom: 12px;
+            font-size: 16px;
+            line-height: 1.5;
         }
 
         @media (max-width: 600px) {
@@ -268,26 +275,28 @@
 </head>
 <body>
     <div class="container">
-        <h1>💊 İlaç Tanıma ve Stok Takibi</h1>
-
-        <div class="info-box">
-            <strong>📸 Nasıl Kullanılır:</strong><br>
-            1. "Kamerayı Aç" butonuna basın<br>
-            2. İlaç kutusunu kamera karşısına tutun<br>
-            3. Sistem ilaç şişesini tanıyacak ve stok seviyesini gösterecek
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <button id="backBtn" type="button" class="btn-small" style="background: #ff6666; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold; position: relative; z-index: 9999; touch-action: manipulation;" onclick="goBack(event)">← GERİ</button>
+            <h1 id="pageTitle" style="margin: 0; flex: 1; text-align: center;">💊 İlaç Tanıma</h1>
+            <div style="width: 60px;"></div>
         </div>
 
-        <div class="info-box">
-            <strong>🔒 HTTPS Zorunluluğu:</strong><br>
-            Kamera izni yalnızca HTTPS (veya localhost) üzerinden çalışır. Canlıya geçerken SSL sertifikanız olduğundan emin olun.
+        <div class="info-box" id="usageHint">
+            <strong>📸 Nasıl Kullanılır:</strong><br>
+            Tek tuşla başlayın. Sistem kamerayı açar veya gerekirse fotoğraf seçmenizi ister.
+        </div>
+
+        <div class="info-box" id="environmentHint">
+            <strong>💡 İpucu:</strong><br>
+            Canlı kamera açılmazsa uygulama sizi otomatik olarak fotoğraf seçimine yönlendirir.
         </div>
 
         <div class="permission-guide" id="permissionGuide">
-            <h3>📌 Kamera izni nasıl verilir?</h3>
+            <h3 id="permissionTitle">📌 Kamera izni nasıl verilir?</h3>
             <ol>
-                <li>Adres çubuğundaki 🔒 kilit simgesine tıklayın.</li>
-                <li>“Kamera” iznini “İzin ver” yapın.</li>
-                <li>Sayfayı yenileyin ve tekrar deneyin.</li>
+                <li id="permissionStep1">Adres çubuğundaki 🔒 kilit simgesine tıklayın.</li>
+                <li id="permissionStep2">“Kamera” iznini “İzin ver” yapın.</li>
+                <li id="permissionStep3">Sayfayı yenileyin ve tekrar deneyin.</li>
             </ol>
         </div>
 
@@ -296,30 +305,31 @@
             <div id="cameraError"></div>
             <video id="video" autoplay playsinline></video>
             <canvas id="canvas" style="display: none;"></canvas>
+            <input id="cameraFileInput" type="file" accept="image/*" capture="environment" style="display:none;" />
 
             <button class="btn-giant" id="startCameraBtn" onclick="startCamera()">
-                📷 KAMERAYı AÇ
+                <span id="startCameraBtnLabel">📷 FOTOĞRAF ÇEK VEYA SEÇ</span>
             </button>
 
             <button class="btn-giant btn-secondary" id="captureBtn" onclick="captureImage()" style="display: none;">
-                📸 ÇEK
+                <span id="captureBtnLabel">📸 ŞİMDİ ÇEK</span>
             </button>
 
             <button class="btn-giant btn-danger" id="stopCameraBtn" onclick="stopCamera()" style="display: none;">
-                ⏹️ KAMERAY I KAPAT
+                <span id="stopCameraBtnLabel">⏹️ KAMERAYI KAPAT</span>
             </button>
         </div>
 
         <div class="result-section" id="resultSection">
-            <h2 style="font-size: 28px; margin-bottom: 20px;">🔍 Analiz Sonucu</h2>
+            <h2 id="resultTitle" style="font-size: 28px; margin-bottom: 20px;">🔍 Analiz Sonucu</h2>
 
             <div id="medicationResults"></div>
 
             <div class="action-buttons">
-                <button class="btn-notify" onclick="notifyPharmacy()">
+                <button id="notifyBtn" class="btn-notify" onclick="notifyPharmacy()">
                     🏥 ECZANEYİ BİLGİLENDİR
                 </button>
-                <button class="btn-close" onclick="closeResult()">
+                <button id="closeBtn" class="btn-close" onclick="closeResult()">
                     ❌ KAPAT
                 </button>
             </div>
@@ -327,7 +337,88 @@
     </div>
 
     <script>
-        const DEFAULT_API_BASE = 'http://192.168.1.6:5007';
+        const DEFAULT_API_BASE = 'https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app';
+        const PAGE_LANG = (localStorage.getItem('appLang') || localStorage.getItem('familyPanelLang') || 'tr').toLowerCase().startsWith('en') ? 'en' : 'tr';
+        const MV_TEXT = {
+            tr: {
+                back: '← GERİ',
+                title: '💊 İlaç Tanıma',
+                usageDefault: '<strong>📸 Nasıl Kullanılır:</strong><br>Tek tuşla başlayın. Sistem kamerayı açar veya gerekirse fotoğraf seçmenizi ister.',
+                envDefault: '<strong>💡 İpucu:</strong><br>Canlı kamera açılmazsa uygulama sizi otomatik olarak fotoğraf seçimine yönlendirir.',
+                permissionTitle: '📌 Kamera izni nasıl verilir?',
+                permissionStep1: 'Adres çubuğundaki 🔒 kilit simgesine tıklayın.',
+                permissionStep2: '“Kamera” iznini “İzin ver” yapın.',
+                permissionStep3: 'Sayfayı yenileyin ve tekrar deneyin.',
+                startSelect: '📷 FOTOĞRAF SEÇ',
+                startTake: '📷 FOTOĞRAF ÇEK',
+                startWeb: '📷 KAMERAYI BAŞLAT',
+                usageSim: '<strong>📸 Nasıl Kullanılır:</strong><br>Butona basın ve ilaç kutusunun fotoğrafını seçin.',
+                envSim: '<strong>💡 İpucu:</strong><br>Simülatörde canlı kamera yerine fotoğraf seçimi kullanılacaktır.',
+                usageIos: '<strong>📸 Nasıl Kullanılır:</strong><br>Butona basın, fotoğrafı çekin, analiz otomatik başlasın.',
+                envIos: '<strong>💡 İpucu:</strong><br>iPhone üzerinde uygulama doğrudan yerleşik kamerayı açar.',
+                usageWeb: '<strong>📸 Nasıl Kullanılır:</strong><br>Butona basın, ilaç kutusunu kameraya tutun, çekim otomatik başlasın.',
+                envWeb: '<strong>💡 İpucu:</strong><br>Canlı kamera açılmazsa fotoğraf seçimine geçebilirsiniz.',
+                captureNow: '📸 ŞİMDİ ÇEK',
+                stopCamera: '⏹️ KAMERAYI KAPAT',
+                resultTitle: '🔍 Analiz Sonucu',
+                notify: '🏥 ECZANEYİ BİLGİLENDİR',
+                close: '❌ KAPAT'
+            },
+            en: {
+                back: '← BACK',
+                title: '💊 Medication Recognition',
+                usageDefault: '<strong>📸 How to Use:</strong><br>Start with one tap. The system opens the camera or asks you to pick a photo if needed.',
+                envDefault: '<strong>💡 Tip:</strong><br>If live camera cannot open, the app will automatically switch to photo selection.',
+                permissionTitle: '📌 How to grant camera permission?',
+                permissionStep1: 'Tap the 🔒 lock icon in the address bar.',
+                permissionStep2: 'Set “Camera” permission to “Allow”.',
+                permissionStep3: 'Refresh the page and try again.',
+                startSelect: '📷 PICK PHOTO',
+                startTake: '📷 TAKE PHOTO',
+                startWeb: '📷 START CAMERA',
+                usageSim: '<strong>📸 How to Use:</strong><br>Tap the button and pick a photo of the medication box.',
+                envSim: '<strong>💡 Tip:</strong><br>In simulator, photo selection is used instead of live camera.',
+                usageIos: '<strong>📸 How to Use:</strong><br>Tap the button, take a photo, and analysis starts automatically.',
+                envIos: '<strong>💡 Tip:</strong><br>On iPhone, the app opens the native camera directly.',
+                usageWeb: '<strong>📸 How to Use:</strong><br>Tap the button, point camera to medication box, and capture starts automatically.',
+                envWeb: '<strong>💡 Tip:</strong><br>If live camera fails, you can switch to photo selection.',
+                captureNow: '📸 CAPTURE NOW',
+                stopCamera: '⏹️ CLOSE CAMERA',
+                resultTitle: '🔍 Analysis Result',
+                notify: '🏥 NOTIFY PHARMACY',
+                close: '❌ CLOSE'
+            }
+        };
+
+        function mvText(key) {
+            return (MV_TEXT[PAGE_LANG] && MV_TEXT[PAGE_LANG][key]) || (MV_TEXT.tr && MV_TEXT.tr[key]) || key;
+        }
+
+        function applyStaticTranslations() {
+            const usageHint = document.getElementById('usageHint');
+            const environmentHint = document.getElementById('environmentHint');
+            const map = {
+                backBtn: 'back',
+                pageTitle: 'title',
+                permissionTitle: 'permissionTitle',
+                permissionStep1: 'permissionStep1',
+                permissionStep2: 'permissionStep2',
+                permissionStep3: 'permissionStep3',
+                captureBtnLabel: 'captureNow',
+                stopCameraBtnLabel: 'stopCamera',
+                resultTitle: 'resultTitle',
+                notifyBtn: 'notify',
+                closeBtn: 'close'
+            };
+
+            Object.entries(map).forEach(([id, key]) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = mvText(key);
+            });
+
+            if (usageHint) usageHint.innerHTML = mvText('usageDefault');
+            if (environmentHint) environmentHint.innerHTML = mvText('envDefault');
+        }
 
         function getApiBase() {
             const stored = localStorage.getItem('apiBaseUrl');
@@ -346,48 +437,359 @@
         let detectedMedications = [];
         let lastCapturedImage = null;
         let lastThumbnail = null;
+        let _autoCaptureTimer = null; // track setTimeout so we can cancel it
+        let _cameraWatchRaf = null;
+        const API_TIMEOUT_MS = 5000;
 
-        async function startCamera() {
+        function isCapacitorRuntime() {
+            return Boolean(window.Capacitor);
+        }
+
+        function isIosDevice() {
+            return /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+        }
+
+        function isProbablyIosSimulator() {
+            const userAgent = navigator.userAgent || '';
+            const platform = navigator.platform || '';
+            return /iPhone Simulator|iPad Simulator|Simulator/i.test(userAgent)
+                || (isCapacitorRuntime() && /Mac/i.test(platform) && !/iPhone|iPad|iPod/i.test(userAgent));
+        }
+
+        function hasCapacitorCameraPlugin() {
+            return Boolean(window.Capacitor?.Plugins?.Camera?.getPhoto);
+        }
+
+        function hasWebCameraSupport() {
+            return Boolean(navigator.mediaDevices?.getUserMedia);
+        }
+
+        function wait(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function setButtonText(elementId, text) {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.textContent = text;
+            }
+        }
+
+        function refreshCameraEntryTexts() {
+            const environmentHint = document.getElementById('environmentHint');
+            const usageHint = document.getElementById('usageHint');
+
+            if (isProbablyIosSimulator()) {
+                setButtonText('startCameraBtnLabel', mvText('startSelect'));
+                if (usageHint) {
+                    usageHint.innerHTML = mvText('usageSim');
+                }
+                if (environmentHint) {
+                    environmentHint.innerHTML = mvText('envSim');
+                }
+                return;
+            }
+
+            if (isCapacitorRuntime() && isIosDevice() && hasCapacitorCameraPlugin()) {
+                setButtonText('startCameraBtnLabel', mvText('startTake'));
+                if (usageHint) {
+                    usageHint.innerHTML = mvText('usageIos');
+                }
+                if (environmentHint) {
+                    environmentHint.innerHTML = mvText('envIos');
+                }
+                return;
+            }
+
+            setButtonText('startCameraBtnLabel', mvText('startWeb'));
+            if (usageHint) {
+                usageHint.innerHTML = mvText('usageWeb');
+            }
+            if (environmentHint) {
+                environmentHint.innerHTML = mvText('envWeb');
+            }
+        }
+
+        function resetCameraMessages() {
+            const cameraError = document.getElementById('cameraError');
+            const qualityWarning = document.getElementById('qualityWarning');
+            const permissionGuide = document.getElementById('permissionGuide');
+            if (cameraError) {
+                cameraError.style.display = 'none';
+                cameraError.innerHTML = '';
+            }
+            if (qualityWarning) {
+                qualityWarning.style.display = 'none';
+                qualityWarning.textContent = '';
+            }
+            if (permissionGuide) {
+                permissionGuide.classList.remove('active');
+            }
+        }
+
+        function resolvePhotoSource(photo) {
+            if (!photo) return '';
+            return photo.dataUrl || photo.webPath || photo.path || '';
+        }
+
+        function loadCapturedPhoto(imageSource, loadErrorMessage) {
+            return new Promise((resolve, reject) => {
+                if (!imageSource) {
+                    reject(new Error(loadErrorMessage || 'Resim kaynağı alınamadı.'));
+                    return;
+                }
+
+                canvas = document.getElementById('canvas');
+                if (!canvas) {
+                    reject(new Error('Canvas bulunamadı.'));
+                    return;
+                }
+
+                const img = new Image();
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        reject(new Error('Canvas işlenemedi.'));
+                        return;
+                    }
+                    ctx.drawImage(img, 0, 0);
+                    lastCapturedImage = canvas.toDataURL('image/jpeg', 0.7);
+                    lastThumbnail = createThumbnail(canvas, 200);
+                    resolve(canvas);
+                };
+                img.onerror = () => reject(new Error(loadErrorMessage || 'Görsel yüklenemedi.'));
+                img.src = imageSource;
+            });
+        }
+
+        async function processCapturedImage(imageSource, loadErrorMessage) {
+            const cameraError = document.getElementById('cameraError');
+            try {
+                const processedCanvas = await loadCapturedPhoto(imageSource, loadErrorMessage);
+                const quality = evaluateImageQuality(processedCanvas);
+                if (!quality.isOk) {
+                    showQualityWarning(quality.message);
+                    return false;
+                }
+
+                analyzeMedicationImage(processedCanvas);
+                return true;
+            } catch (error) {
+                if (cameraError) {
+                    cameraError.style.display = 'block';
+                    cameraError.innerHTML = `<strong>❌ Resim Yükleme Hatası:</strong><br>${error?.message || loadErrorMessage || 'Görsel işlenemedi.'}`;
+                }
+                return false;
+            }
+        }
+
+        async function startNativeCameraCapture() {
+            const photo = await window.Capacitor.Plugins.Camera.getPhoto({
+                quality: 90,
+                allowEditing: false,
+                resultType: 'dataUrl',
+                source: 'Camera',
+                promptLabelHeader: 'Fotoğraf Seç',
+                promptLabelPhoto: 'Galeriden Seç',
+                promptLabelPicture: 'Kamera Aç'
+            });
+
+            const imageSource = resolvePhotoSource(photo);
+            if (!imageSource) {
+                throw new Error('Kameradan görsel alınamadı.');
+            }
+
+            const completed = await processCapturedImage(imageSource, 'Kameradan alınan resim yüklenemedi.');
+            if (!completed) {
+                throw new Error('Kameradan alınan resim işlenemedi.');
+            }
+        }
+
+        function stopCameraLoops() {
+            if (_autoCaptureTimer !== null) {
+                clearTimeout(_autoCaptureTimer);
+                _autoCaptureTimer = null;
+            }
+            if (_cameraWatchRaf !== null) {
+                cancelAnimationFrame(_cameraWatchRaf);
+                _cameraWatchRaf = null;
+            }
+        }
+
+        function startCameraWatchdog() {
+            const startedAt = Date.now();
+            const tick = () => {
+                if (!video) {
+                    stopCameraLoops();
+                    return;
+                }
+                const elapsed = Date.now() - startedAt;
+                const hasFrame = Number(video.videoWidth || 0) > 0;
+                if (hasFrame) {
+                    if (_cameraWatchRaf !== null) {
+                        cancelAnimationFrame(_cameraWatchRaf);
+                        _cameraWatchRaf = null;
+                    }
+                    return;
+                }
+                if (elapsed >= 1000) {
+                    stopCamera();
+                    showCameraFallback('Simülatörde kamera desteklenmiyor.');
+                    return;
+                }
+                _cameraWatchRaf = requestAnimationFrame(tick);
+            };
+            _cameraWatchRaf = requestAnimationFrame(tick);
+        }
+
+        async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                return await fetch(url, { ...options, signal: controller.signal });
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        }
+
+        function showCameraFallback(errorMessage = '') {
             const cameraError = document.getElementById('cameraError');
             const permissionGuide = document.getElementById('permissionGuide');
-            const qualityWarning = document.getElementById('qualityWarning');
-            cameraError.style.display = 'none';
-            if (qualityWarning) qualityWarning.style.display = 'none';
-            if (permissionGuide) permissionGuide.classList.remove('active');
+            if (cameraError) {
+                cameraError.style.display = 'block';
+                cameraError.innerHTML = `<strong>📷 Fotoğraf ile devam edin:</strong><br>${errorMessage || 'Canlı kamera açılamadı.'}<br><br><button class="btn-giant btn-secondary" type="button" onclick="openNativeCameraFallback()">📷 FOTOĞRAF SEÇ</button>`;
+            }
+            if (permissionGuide) permissionGuide.classList.add('active');
+        }
+
+        function openNativeCameraFallback() {
+            const cameraFileInput = document.getElementById('cameraFileInput');
+            if (!cameraFileInput) {
+                showQualityWarning('⚠️ Alternatif kamera girişi bu cihazda bulunamadı.');
+                return;
+            }
+            cameraFileInput.value = '';
+            cameraFileInput.click();
+        }
+
+        function handleFallbackFileSelected(event) {
+            const file = event?.target?.files?.[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = () => {
+                const dataUrl = reader.result;
+                const img = new Image();
+                img.onload = () => {
+                    canvas = document.getElementById('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    lastCapturedImage = canvas.toDataURL('image/jpeg', 0.7);
+                    lastThumbnail = createThumbnail(canvas, 200);
+
+                    const quality = evaluateImageQuality(canvas);
+                    if (!quality.isOk) {
+                        showQualityWarning(quality.message);
+                        return;
+                    }
+                    analyzeMedicationImage(canvas);
+                };
+                img.onerror = () => {
+                    const cameraError = document.getElementById('cameraError');
+                    if (cameraError) {
+                        cameraError.style.display = 'block';
+                        cameraError.innerHTML = '<strong>❌ Resim okuma hatası:</strong><br>Seçilen görsel işlenemedi.';
+                    }
+                };
+                img.src = dataUrl;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function startCamera() {
+            resetCameraMessages();
 
             try {
                 video = document.getElementById('video');
                 canvas = document.getElementById('canvas');
+                stopCamera();
+
+                if (isProbablyIosSimulator()) {
+                    showQualityWarning('📷 Simülatörde fotoğraf seçimi açılıyor.');
+                    openNativeCameraFallback();
+                    return;
+                }
+
+                if (isCapacitorRuntime() && isIosDevice() && hasCapacitorCameraPlugin()) {
+                    try {
+                        await startNativeCameraCapture();
+                        return;
+                    } catch (capacitorErr) {
+                        console.log('Capacitor kamera hatası, web API\'ye fallback...', capacitorErr.message);
+                        if (isCapacitorRuntime()) {
+                            showCameraFallback(`Yerleşik kamera açılamadı. ${capacitorErr?.message || 'Alternatif görsel seçimi kullanılacak.'}`);
+                            return;
+                        }
+                    }
+                }
+
+                if (!hasWebCameraSupport()) {
+                    stopCameraLoops();
+                    showQualityWarning('📷 Canlı kamera yok. Fotoğraf seçimi açılıyor.');
+                    openNativeCameraFallback();
+                    return;
+                }
 
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' }
+                    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
                 });
 
                 video.srcObject = stream;
                 video.style.display = 'block';
+                try {
+                    await video.play();
+                } catch (_) {
+                    await wait(150);
+                }
 
                 document.getElementById('startCameraBtn').style.display = 'none';
                 document.getElementById('captureBtn').style.display = 'block';
                 document.getElementById('stopCameraBtn').style.display = 'block';
 
-                // 3 saniye sonra otomatik çek
-                setTimeout(() => {
+                // If videoWidth stays 0 for 1 second, stop all camera loops immediately.
+                startCameraWatchdog();
+
+                // 3 saniye sonra otomatik çek (timeout referansını sakla, iptal edilebilsin)
+                _autoCaptureTimer = setTimeout(() => {
+                    _autoCaptureTimer = null;
                     captureImage();
                 }, 3000);
 
             } catch (error) {
-                cameraError.style.display = 'block';
-                cameraError.innerHTML = `<strong>❌ Kamera Hatası:</strong><br>Kameranıza erişim için izin verin. Tarayıcınız kamerayı desteklemiyor olabilir.<br><br>Hata: ${error.message}`;
-                if (permissionGuide) permissionGuide.classList.add('active');
+                showCameraFallback(`Kameranıza erişim için izin verin. ${error?.message || ''}`);
                 console.error('Kamera hatası:', error);
             }
         }
 
         function stopCamera() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
+            stopCameraLoops();
+            // Pause video element to release GPU decoder resources before stopping tracks
+            const videoEl = document.getElementById('video');
+            if (videoEl) {
+                try { videoEl.pause(); } catch (_) {}
+                videoEl.srcObject = null;
+                videoEl.style.display = 'none';
             }
-            document.getElementById('video').style.display = 'none';
+            if (stream) {
+                stream.getTracks().forEach(track => {
+                    try { track.stop(); } catch (_) {}
+                });
+                stream = null;
+            }
             document.getElementById('startCameraBtn').style.display = 'block';
             document.getElementById('captureBtn').style.display = 'none';
             document.getElementById('stopCameraBtn').style.display = 'none';
@@ -396,6 +798,11 @@
         function captureImage() {
             canvas = document.getElementById('canvas');
             const ctx = canvas.getContext('2d');
+
+            if (!video || !video.videoWidth || !video.videoHeight) {
+                showQualityWarning('⚠️ Kamera görüntüsü henüz hazır değil. Lütfen bir saniye sonra tekrar deneyin.');
+                return;
+            }
 
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
@@ -419,6 +826,9 @@
             const { width, height } = canvasEl;
             const sampleWidth = Math.min(320, width);
             const sampleHeight = Math.min(240, height);
+            if (!ctx || sampleWidth < 2 || sampleHeight < 2) {
+                return { isOk: false, message: '⚠️ Görüntü işlenemedi. Kamerayı tekrar başlatın.' };
+            }
             const imageData = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
             const data = imageData.data;
 
@@ -444,6 +854,10 @@
                     laplacianSum += Math.abs(lap);
                     count++;
                 }
+            }
+
+            if (!count) {
+                return { isOk: false, message: '⚠️ Görüntü analiz edilemedi. Lütfen tekrar deneyin.' };
             }
 
             const mean = sumLuma / count;
@@ -574,7 +988,7 @@
             }
 
             // Aile üyelerine bildirim gönder
-            fetch(`${API_BASE}/api/notifications`, {
+            fetchWithTimeout(`${API_BASE}/api/notifications`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -583,7 +997,13 @@
                     thumbnailBase64: lastThumbnail || null,
                     capturedImageBase64: lastCapturedImage || null
                 })
-            }).catch(e => console.log('Bildirim gönderilemedi:', e));
+            }, API_TIMEOUT_MS).catch(e => {
+                if (e?.name === 'AbortError') {
+                    console.warn('Bildirim isteği zaman aşımı (5s)');
+                } else {
+                    console.log('Bildirim gönderilemedi:', e);
+                }
+            });
 
             alert('✓ Eczaneye haber verildi! Aile üyeleri de bilgilendirildi.');
         }
@@ -594,10 +1014,50 @@
             detectedMedications = [];
         }
 
-        // Sayfa kapandığında kamerayı kapat
-        window.addEventListener('beforeunload', () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
+        // Sayfa kapandığında veya arkaya alındığında kamerayı kapat
+        window.addEventListener('beforeunload', stopCamera);
+        window.addEventListener('pagehide', stopCamera);
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopCamera();
+            }
+        });
+
+        function goBack(event) {
+            if (event && event.preventDefault) event.preventDefault();
+            if (event && event.stopPropagation) event.stopPropagation();
+            // Stop camera and cancel all timers first to prevent resource leaks
+            stopCamera();
+            const backTarget = '/elderly-ui/index.html?returnTo=homeScreen';
+            const doNavigate = () => {
+                try {
+                    window.location.replace(backTarget);
+                } catch (_) {
+                    window.location.href = backTarget;
+                }
+                setTimeout(() => {
+                    if (!window.location.href.includes('returnTo=homeScreen')) {
+                        window.location.href = backTarget;
+                    }
+                }, 180);
+            };
+            setTimeout(doNavigate, 40);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            applyStaticTranslations();
+            refreshCameraEntryTexts();
+            const cameraFileInput = document.getElementById('cameraFileInput');
+            if (cameraFileInput) {
+                cameraFileInput.addEventListener('change', handleFallbackFileSelected);
+            }
+            // Back button: add pointer/touch fallback for iOS WebView reliability
+            const backBtn = document.getElementById('backBtn');
+            if (backBtn) {
+                backBtn.addEventListener('pointerup', goBack, { passive: false });
+                backBtn.addEventListener('touchend', (e) => {
+                    goBack(e);
+                }, { passive: false });
             }
         });
     </script>

@@ -1,11 +1,12 @@
 // Service Worker for Offline Support
-const CACHE_NAME = 'vitaguard-v4';
+const CACHE_NAME = 'safeguardian-v4';
 const urlsToCache = [
     '/',
     '/index.html',
     '/index-elderly-ui.html',
     '/index-elderly-ui-v2.html',
     '/privacy-policy.html',
+    '/accessibility.html',
     '/css/site.css',
     '/js/site.js',
     '/js/i18n.js',
@@ -15,7 +16,7 @@ const urlsToCache = [
 ];
 
 // IndexedDB for offline data sync
-const DB_NAME = 'VitaGuardOffline';
+const DB_NAME = 'SafeGuardianOffline';
 const DB_VERSION = 1;
 const STORES = {
     HEALTH_DATA: 'healthData',
@@ -117,7 +118,7 @@ const OFFLINE_FALLBACK = `
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Çevrimdışı Mod - VitaGuard</title>
+    <title>Çevrimdışı Mod - SafeGuardian</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -183,7 +184,7 @@ const OFFLINE_FALLBACK = `
         <div class="offline-icon">📡</div>
         <h1>Çevrimdışı Mod</h1>
         <p>
-            İnternet bağlantınız bulunmamaktadır. VitaGuard yerel modda çalışıyor.
+            İnternet bağlantınız bulunmamaktadır. SafeGuardian yerel modda çalışıyor.
         </p>
         <p style="font-size: 16px; opacity: 0.7;">
             Görevleriniz ve sağlık bilgileriniz cihazda saklanıyor. 
@@ -410,7 +411,7 @@ self.addEventListener('push', event => {
         }
 
         event.waitUntil(
-            self.registration.showNotification(data.title || '🏥 VitaGuard', options)
+            self.registration.showNotification(data.title || '🏥 SafeGuardian', options)
         );
     } catch (err) {
         console.error('Service Worker push notification error:', err);

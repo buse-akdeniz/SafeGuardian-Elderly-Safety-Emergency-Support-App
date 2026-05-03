@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=4, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <title>VitaGuard</title>
+    <title>SafeGuardian AI</title>
     <link rel="stylesheet" href="elderly.css">
     <link rel="stylesheet" href="mood-theme.css">
 </head>
@@ -42,7 +42,7 @@
     <!-- =================== ANA SAYFA - 3 BUTON =================== -->
     <div id="homeScreen" class="screen">
         <div class="top-bar home-top-bar">
-            <h1 id="greeting">Hoş Geldiniz</h1>
+            <h1 id="greeting" style="display: none;"></h1>
             <div class="home-actions" style="display: flex; gap: 8px;">
                 <button class="btn-small btn-blue" onclick="showScreen('profileScreen')" style="font-size: 16px;" data-i18n="accountBtn">HESAP</button>
                 <button class="btn-small btn-red" onclick="logout()" data-i18n="logoutBtn">ÇIKIŞ</button>
@@ -239,9 +239,7 @@
     <!-- =================== GİRİŞ EKRANI =================== -->
     <div id="loginScreen" class="screen active">
         <div class="logo-area">
-            <h1>VITAGUARD</h1>
-            <p class="logo-subtitle" data-i18n="loginWelcome">Tekrar hoş geldiniz</p>
-            <p class="logo-caption" data-i18n="loginSub">Hızlı ve güvenli giriş yapın</p>
+            <h1>SAFEGUARDIAN AI</h1>
         </div>
 
         <div class="lang-selector">
@@ -277,12 +275,21 @@
                 ŞİFREMİ UNUTTUM
             </button>
 
-            <button type="button" class="btn-giant btn-apple" onclick="handleAppleSignInPreview()" style="margin-top: 12px;">
+            <button type="button" class="btn-giant btn-apple" onclick="handleAppleSignIn()" style="margin-top: 12px;">
                 <span class="apple-logo" aria-hidden="true"></span>
                 <span data-i18n="appleSignIn">Sign in with Apple</span>
             </button>
 
-            <p class="hint-text" id="testHint" data-i18n="demoHint" style="display:block;">💡 Demo: elderly@test.com / 123</p>
+            <button type="button" class="btn-small btn-gray" onclick="handleBiometricLogin()" style="margin-top: 12px; width: 100%;" data-i18n="biometricLoginBtn">
+                🔓 Face ID ile Giriş
+            </button>
+
+            <p class="hint-text" id="testHint" data-i18n="demoHint" style="display:block;">Destek için: support@vitaguard.app</p>
+
+            <div style="display:flex; gap:10px; margin-top:14px; justify-content:center; flex-wrap:wrap;">
+                <button type="button" class="btn-small btn-gray" onclick="openPrivacyPolicy()" data-i18n="privacyPolicyBtn">📄 GİZLİLİK SÖZLEŞMESİ</button>
+                <button type="button" class="btn-small btn-gray" onclick="openTermsOfUse()" data-i18n="termsOfUseBtn">📘 KULLANIM KOŞULLARI</button>
+            </div>
         </form>
     </div>
 
@@ -360,39 +367,45 @@
     <div id="profileScreen" class="screen">
         <div class="top-bar">
             <button class="btn-small btn-back" onclick="showScreen('homeScreen')" data-i18n="backBtn">← GERİ</button>
-            <h1>👤 HESAP</h1>
+            <h1 data-i18n="profileTitle">👤 HESAP</h1>
         </div>
 
         <div class="main-area">
             <div id="profileInfo" style="background: #000; border: 3px solid #ffff00; padding: 20px; border-radius: 12px; color: #ffff00;">
-                <div style="font-size: 28px; font-weight: 700; margin-bottom: 20px; text-align: center;">👤 KULLANICIBAŞI</div>
+                <div style="font-size: 28px; font-weight: 700; margin-bottom: 20px; text-align: center;" data-i18n="profileCardTitle">👤 HESAP BİLGİLERİ</div>
                 
                 <div style="font-size: 20px; margin-bottom: 15px;">
-                    <strong>AD SOYAD:</strong>
+                    <strong data-i18n="userFullName">AD SOYAD</strong><strong>:</strong>
                     <div id="profileName" style="color: #00ffff; font-size: 24px; margin-top: 5px;">-</div>
                 </div>
 
                 <div style="font-size: 20px; margin-bottom: 15px;">
-                    <strong>E-POSTA:</strong>
+                    <strong data-i18n="userEmail">E-POSTA</strong><strong>:</strong>
                     <div id="profileEmail" style="color: #00ffff; font-size: 20px; margin-top: 5px;">-</div>
                 </div>
 
                 <div style="font-size: 20px; margin-bottom: 15px;">
-                    <strong>ABONE DURUMU:</strong>
+                    <strong data-i18n="subscriptionStatus">ABONE DURUMU</strong><strong>:</strong>
                     <div id="profilePlan" style="color: #00ffff; font-size: 24px; margin-top: 5px; font-weight: 700;">-</div>
                 </div>
 
                 <div style="font-size: 20px; margin-bottom: 15px;">
-                    <strong>KALAN GÜN:</strong>
+                    <strong data-i18n="daysRemaining">KALAN GÜN</strong><strong>:</strong>
                     <div id="profileDaysLeft" style="color: #00ffff; font-size: 24px; margin-top: 5px; font-weight: 700;">-</div>
                 </div>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 12px;">
-                <button class="btn-giant btn-blue" onclick="goToPremium()" style="font-size: 24px;">⭐ PREMIUM KAPAT</button>
-                <button class="btn-giant btn-green" onclick="goToSubscription()" style="font-size: 24px;">💳 ABONELİK KALAN</button>
-                <button class="btn-giant btn-yellow" onclick="editProfile()" style="font-size: 24px; color: #000;">✏️ BİLGİ GÜNCELLE</button>
-                <button class="btn-giant btn-red" onclick="logout()" style="font-size: 24px;">🚪 ÇIKIŞ YAP</button>
+                <button class="btn-giant btn-blue" onclick="goToPremium()" style="font-size: 24px;" data-i18n="upgradePremium">⭐ PREMIUM KAPAT</button>
+                <button class="btn-giant btn-green" onclick="goToSubscription()" style="font-size: 24px;" data-i18n="subscriptionButton">💳 ABONELİK KALAN</button>
+                <button class="btn-giant btn-yellow" onclick="editProfile()" style="font-size: 24px; color: #000;" data-i18n="editProfileBtn">✏️ BİLGİ GÜNCELLE</button>
+                <button class="btn-giant btn-gray" style="font-size: 22px;" onclick="openPrivacyPolicy()" data-i18n="privacyPolicyBtn">
+                    📄 GİZLİLİK SÖZLEŞMESİ
+                </button>
+                <button class="btn-giant btn-red" onclick="deleteAccountFlow()" style="font-size: 22px;" data-i18n="deleteAccountBtn">
+                    🗑️ HESABI KALICI SİL
+                </button>
+                <button class="btn-giant btn-red" onclick="logout()" style="font-size: 24px;" data-i18n="editLogoutBtn">🚪 ÇIKIŞ YAP</button>
             </div>
         </div>
     </div>
@@ -401,34 +414,49 @@
     <div id="subscriptionScreen" class="screen">
         <div class="top-bar">
             <button class="btn-small btn-back" onclick="showScreen('profileScreen')" data-i18n="backBtn">← GERİ</button>
-            <h1>💳 ABONELİK</h1>
+            <h1 data-i18n="subscriptionTitle">💳 ABONELİK</h1>
         </div>
 
         <div class="main-area">
             <div id="subscriptionContent" style="background: #000; border: 3px solid #00ffff; padding: 20px; border-radius: 12px; color: #00ffff;">
-                <div style="font-size: 26px; font-weight: 700; margin-bottom: 20px;">PAKET BİLGİLERİ</div>
+                <div style="font-size: 26px; font-weight: 700; margin-bottom: 20px;" data-i18n="packageInfo">PAKET BİLGİLERİ</div>
                 
                 <div style="background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                    <div style="font-size: 24px; color: #ffff00; font-weight: 700; margin-bottom: 10px;">📦 MEVCUT PAKET</div>
+                    <div style="font-size: 24px; color: #ffff00; font-weight: 700; margin-bottom: 10px;" data-i18n="currentPackage">📦 MEVCUT PAKET</div>
                     <div id="subCurrentPlan" style="font-size: 22px; color: #fff;">Standart</div>
                 </div>
 
                 <div style="background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                    <div style="font-size: 24px; color: #ffff00; font-weight: 700; margin-bottom: 10px;">📅 BİTİŞ TARİHİ</div>
+                    <div style="font-size: 24px; color: #ffff00; font-weight: 700; margin-bottom: 10px;" data-i18n="endDate">📅 BİTİŞ TARİHİ</div>
                     <div id="subEndDate" style="font-size: 22px; color: #fff;">-</div>
                 </div>
 
                 <div style="background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <div style="font-size: 24px; color: #ffff00; font-weight: 700; margin-bottom: 10px;">✨ ÖZELLİKLER</div>
-                    <div style="font-size: 18px; color: #e0e0e0;">
-                        <div>✓ Temel İlaç Yönetimi</div>
-                        <div>✓ Aile Üyeleri</div>
-                        <div>✓ Sesli Asistan</div>
+                    <div style="font-size: 24px; color: #ffff00; font-weight: 700; margin-bottom: 10px;" data-i18n="features">✨ ÖZELLİKLER</div>
+                    <div id="basicFeaturesList" style="font-size: 18px; color: #e0e0e0;">
+                        <div data-i18n="basicFeature1">✓ Temel İlaç Yönetimi</div>
+                        <div data-i18n="basicFeature2">✓ Aile Üyeleri</div>
+                        <div data-i18n="basicFeature3">✓ Sesli Asistan</div>
                         <div id="premiumFeatures"></div>
                     </div>
                 </div>
 
-                <button class="btn-giant btn-blue" onclick="showScreen('profileScreen')" style="font-size: 22px;">← KAPAT</button>
+                <p style="font-size: 16px; color: #e0e0e0; margin-bottom: 14px;" data-i18n="subscriptionLegalNote">
+                    Otomatik yenilemeli aboneliklerde iOS Ayarlar &gt; Apple Kimliği &gt; Abonelikler ekranından yönetim yapılabilir.
+                </p>
+
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <button class="btn-giant btn-yellow" onclick="restorePurchases()" style="font-size: 22px; color: #000;" data-i18n="restorePurchasesBtn">
+                        🔄 SATIN ALMALARI GERİ YÜKLE
+                    </button>
+                    <button class="btn-giant btn-red" onclick="cancelSubscriptionFlow()" style="font-size: 20px;" data-i18n="cancelSubscriptionBtn">
+                        ⛔ ABONELİĞİ İPTAL ET
+                    </button>
+                    <button class="btn-giant btn-gray" onclick="openSubscriptionManagement()" style="font-size: 20px;" data-i18n="manageSubscriptionsBtn">
+                        ⚙️ ABONELİKLERİ YÖNET
+                    </button>
+                    <button class="btn-giant btn-blue" onclick="showScreen('profileScreen')" style="font-size: 22px;" data-i18n="closeBtn">← KAPAT</button>
+                </div>
             </div>
         </div>
     </div>
@@ -487,6 +515,9 @@
             </button>
             <button id="resetViewBtn" type="button" class="btn-small btn-gray a11y-btn" onclick="resetViewSettings()" data-i18n="resetViewBtnLabel">
                 GÖRÜNÜMÜ SIFIRLA
+            </button>
+            <button type="button" class="btn-small btn-blue a11y-btn" onclick="openPrivacyPolicy()" data-i18n="privacyPolicyBtn">
+                📄 GİZLİLİK SÖZLEŞMESİ
             </button>
         </div>
     </div>

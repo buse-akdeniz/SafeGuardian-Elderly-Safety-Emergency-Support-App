@@ -1,4 +1,5 @@
 // API base override (opsiyonel)
-// Boş bırakılırsa uygulama varsayılanı kullanır (simülatörde localhost:5007).
-// Fiziksel cihaz için örnek: window.API_BASE = 'http://192.168.1.10:5007';
-// window.API_BASE = 'http://192.168.1.6:5007'; // <-- canlı sunucu için yorum kaldır
+// TestFlight/canlı kullanım için varsayılan canlı API kullanılır.
+// Gerekirse geçici olarak yerel IP yazabilirsiniz: window.API_BASE = 'http://192.168.1.10:5007';
+window.API_BASE = 'https://vitaguard.app';
+window.API_FALLBACK_BASE = 'https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app';

@@ -30,6 +30,176 @@
 			"label": "tail-live-log",
 			"type": "shell",
 			"command": "tail -n 30 /tmp/asistan_live_test_v2.log 2>/dev/null || true"
+		},
+		{
+			"label": "build-ios-app",
+			"type": "shell",
+			"command": "cd /Users/busenurakdeniz/Desktop/ilk\\ projem/AsistanApp/ios/App && xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -derivedDataPath /tmp/asistan-build clean build",
+			"group": "build"
+		},
+		{
+			"label": "backend-watch",
+			"type": "shell",
+			"command": "cd \"/Users/busenurakdeniz/Desktop/ilk projem\" && dotnet watch --project AsistanApp/AsistanApp.csproj run",
+			"isBackground": true,
+			"problemMatcher": {
+				"pattern": {
+					"regexp": "^.*$",
+					"file": 1,
+					"location": 2,
+					"message": 3
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "^.*watch \\:.*",
+					"endsPattern": "^.*Started"
+				}
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "new",
+				"focus": false
+			}
+		},
+		{
+			"label": "web-sync-watch",
+			"type": "shell",
+			"command": "cd \"/Users/busenurakdeniz/Desktop/ilk projem/AsistanApp\" && npm run cap:copy:watch",
+			"isBackground": true,
+			"problemMatcher": {
+				"pattern": {
+					"regexp": "^.*$",
+					"message": 0
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "^.*Watching.*",
+					"endsPattern": "^.*ready.*"
+				}
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "new",
+				"focus": false
+			}
+		},
+		{
+			"label": "dev-server",
+			"type": "shell",
+			"command": "echo 'Starting backend and web sync...'",
+			"dependsOn": [
+				"backend-watch",
+				"web-sync-watch"
+			],
+			"dependsOrder": "parallel",
+			"isBackground": true,
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared",
+				"focus": true
+			}
+		},
+		{
+			"label": "railway-remote-smoke",
+			"type": "shell",
+			"command": "python3 - <<'PY'\nimport json, time, urllib.request, urllib.error\nbase='https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app'\nemail=f'railway.test.{int(time.time())}@example.com'\npassword='Test123!'\n\ndef post(path,payload,token=None):\n    data=json.dumps(payload).encode()\n    h={'Content-Type':'application/json'}\n    if token: h['Authorization']=f'Bearer {token}'\n    req=urllib.request.Request(base+path,data=data,headers=h,method='POST')\n    try:\n        with urllib.request.urlopen(req,timeout=20) as r:\n            return r.getcode(), r.read().decode()\n    except urllib.error.HTTPError as e:\n        return e.code, e.read().decode()\n\ndef get(path,token=None):\n    h={}\n    if token: h['Authorization']=f'Bearer {token}'\n    req=urllib.request.Request(base+path,headers=h,method='GET')\n    try:\n        with urllib.request.urlopen(req,timeout=20) as r:\n            return r.getcode(), r.read().decode()\n    except urllib.error.HTTPError as e:\n        return e.code, e.read().decode()\n\nprint('HEALTH',*get('/health/live'))\nc,b=post('/api/elderly-self-enroll',{\n'deviceId':f'ios-sim-{int(time.time())}','fullName':'Railway Test User','phone':'+905551234567','email':email,'birthDate':'1948-05-10','bloodType':'A+','password':password,'emergencyContact1Name':'Test Aile','emergencyContact1Phone':'+905551234568'\n})\nprint('ENROLL',c,b)\nc,b=post('/api/elderly/login',{'email':email,'password':password})\nprint('LOGIN',c,b)\ntoken=''\ntry: token=json.loads(b).get('token','')\nexcept: pass\nprint('TOKEN',bool(token))\nif token:\n    print('SUB',*get('/api/subscription',token))\n    print('EMG',*post('/api/emergency-alert',{'location':'41.0082,28.9784','coords':{'latitude':41.0082,'longitude':28.9784}},token))\nPY"
+		},
+		{
+			"label": "railway-remote-smoke-file",
+			"type": "shell",
+			"command": "python3 AsistanApp/tools/railway_smoke_test.py"
+		},
+		{
+			"label": "railway-remote-smoke-curl",
+			"type": "shell",
+			"command": "base=\"https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app\"; echo \"HEALTH_STATUS:$(curl -k -s -o /tmp/rail_h.txt -w '%{http_code}' \"$base/health/live\")\"; echo \"HEALTH_BODY:$(cat /tmp/rail_h.txt)\"; login=$(curl -k -s -X POST \"$base/api/elderly/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"elderly@test.com\",\"password\":\"123\"}'); echo \"LOGIN_BODY:$login\""
+		},
+		{
+			"label": "railway-enroll-login-smoke",
+			"type": "shell",
+			"command": "base=\"https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app\"; email=\"railway.test.$(date +%s)@example.com\"; pass=\"Test123!\"; payload=$(printf '{\"deviceId\":\"ios-%s\",\"fullName\":\"Railway Test User\",\"phone\":\"+905551234567\",\"email\":\"%s\",\"birthDate\":\"1948-05-10\",\"bloodType\":\"A+\",\"password\":\"%s\",\"emergencyContact1Name\":\"Test Aile\",\"emergencyContact1Phone\":\"+905551234568\"}' \"$(date +%s)\" \"$email\" \"$pass\"); enroll=$(curl -k -s -X POST \"$base/api/elderly-self-enroll\" -H \"Content-Type: application/json\" -d \"$payload\"); echo \"ENROLL:$enroll\"; login=$(curl -k -s -X POST \"$base/api/elderly/login\" -H \"Content-Type: application/json\" -d \"{\\\"email\\\":\\\"$email\\\",\\\"password\\\":\\\"$pass\\\"}\"); echo \"LOGIN:$login\"; token=$(printf '%s' \"$login\" | python3 -c 'import sys,json; print(json.load(sys.stdin).get(\"token\",\"\"))' 2>/dev/null || true); if [ -n \"$token\" ]; then echo \"TOKEN:OK\"; code_sub=$(curl -k -s -o /tmp/rail_sub.txt -w '%{http_code}' -H \"Authorization: Bearer $token\" \"$base/api/subscription\"); echo \"SUB_STATUS:$code_sub\"; cat /tmp/rail_sub.txt; else echo \"TOKEN:EMPTY\"; fi"
+		},
+		{
+			"label": "railway-emergency-smoke",
+			"type": "shell",
+			"command": "base=\"https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app\"; email=\"railway.test.$(date +%s)@example.com\"; pass=\"Test123!\"; payload=$(printf '{\"deviceId\":\"ios-%s\",\"fullName\":\"Railway Test User\",\"phone\":\"+905551234567\",\"email\":\"%s\",\"birthDate\":\"1948-05-10\",\"bloodType\":\"A+\",\"password\":\"%s\",\"emergencyContact1Name\":\"Test Aile\",\"emergencyContact1Phone\":\"+905551234568\"}' \"$(date +%s)\" \"$email\" \"$pass\"); curl -k -s -X POST \"$base/api/elderly-self-enroll\" -H \"Content-Type: application/json\" -d \"$payload\" >/tmp/rail_enroll3.txt; login=$(curl -k -s -X POST \"$base/api/elderly/login\" -H \"Content-Type: application/json\" -d \"{\\\"email\\\":\\\"$email\\\",\\\"password\\\":\\\"$pass\\\"}\"); token=$(printf '%s' \"$login\" | python3 -c 'import sys,json; print(json.load(sys.stdin).get(\"token\",\"\"))' 2>/dev/null || true); echo \"TOKEN_OK:$([ -n \"$token\" ] && echo yes || echo no)\"; code_emg=$(curl -k -s -o /tmp/rail_emg3.txt -w '%{http_code}' -X POST \"$base/api/emergency-alert\" -H \"Authorization: Bearer $token\" -H \"Content-Type: application/json\" -d '{\"location\":\"41.0082,28.9784\",\"coords\":{\"latitude\":41.0082,\"longitude\":28.9784}}'); echo \"EMG_STATUS:$code_emg\"; cat /tmp/rail_emg3.txt"
+		},
+		{
+			"label": "railway-remote-smoke-file-2",
+			"type": "shell",
+			"command": "python3 AsistanApp/tools/railway_smoke_test.py"
+		},
+		{
+			"label": "railway-health-only",
+			"type": "shell",
+			"command": "curl -k -s -o /tmp/rail_health_check.txt -w 'HEALTH_STATUS:%{http_code}\\n' https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app/health/live && echo HEALTH_BODY:$(cat /tmp/rail_health_check.txt)"
+		},
+		{
+			"label": "curl-head-railway-root",
+			"type": "shell",
+			"command": "curl -I https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app/"
+		},
+		{
+			"label": "curl-head-railway-root-full",
+			"type": "shell",
+			"command": "curl -sS -D - -o /dev/null https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app/"
+		},
+		{
+			"label": "curl-head-railway-status-only",
+			"type": "shell",
+			"command": "curl -sS -o /dev/null -w 'HTTP_STATUS:%{http_code}\\n' https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app/"
+		},
+		{
+			"label": "railway-privacy-check",
+			"type": "shell",
+			"command": "curl -k -s -o /tmp/rail_privacy.txt -w 'PRIVACY_STATUS:%{http_code}\\n' https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app/privacy-policy.html && echo PRIVACY_BODY_HEAD:$(head -c 80 /tmp/rail_privacy.txt | tr '\\n' ' ')"
+		},
+		{
+			"label": "railway-root-family-check",
+			"type": "shell",
+			"command": "curl -k -s -o /tmp/rail_family_root.txt -w 'FAMILY_STATUS:%{http_code}\\n' https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app/family && echo FAMILY_HEAD:$(head -c 80 /tmp/rail_family_root.txt | tr '\\n' ' ')"
+		},
+		{
+			"label": "create-review-accounts-verify",
+			"type": "shell",
+			"command": "base=\"https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app\"; deviceId=\"app-review-elderly-001\"; elderlyEmail=\"review.elderly@safeguardian.app\"; elderlyPass=\"Review123!\"; payload='{\"deviceId\":\"app-review-elderly-001\",\"fullName\":\"App Review Elderly\",\"phone\":\"+905551234567\",\"email\":\"review.elderly@safeguardian.app\",\"birthDate\":\"1948-05-10\",\"bloodType\":\"A+\",\"password\":\"Review123!\",\"emergencyContact1Name\":\"App Review Family 1\",\"emergencyContact1Phone\":\"+905551234568\",\"emergencyContact2Name\":\"App Review Family 2\",\"emergencyContact2Phone\":\"+905551234569\"}' ; echo '--- ENROLL/UPSERT ---'; curl -k -s -X POST \"$base/api/elderly-self-enroll\" -H \"Content-Type: application/json\" -d \"$payload\"; echo; echo '--- ELDERLY LOGIN ---'; elderly=$(curl -k -s -X POST \"$base/api/elderly/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"review.elderly@safeguardian.app\",\"password\":\"Review123!\"}'); echo \"$elderly\"; echo '--- FAMILY LOGIN ---'; family=$(curl -k -s -X POST \"$base/api/family/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"family1.app-review-elderly-001@vitaguard.local\",\"password\":\"123\"}'); echo \"$family\"; echo '--- FAMILY LOGIN 2 ---'; family2=$(curl -k -s -X POST \"$base/api/family/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"family2.app-review-elderly-001@vitaguard.local\",\"password\":\"123\"}'); echo \"$family2\""
+		},
+		{
+			"label": "verify-review-account-statuses",
+			"type": "shell",
+			"command": "base=\"https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app\"; ecode=$(curl -k -s -o /tmp/rev_elderly.json -w '%{http_code}' -X POST \"$base/api/elderly/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"review.elderly@safeguardian.app\",\"password\":\"Review123!\"}'); f1code=$(curl -k -s -o /tmp/rev_f1.json -w '%{http_code}' -X POST \"$base/api/family/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"family1.app-review-elderly-001@vitaguard.local\",\"password\":\"123\"}'); f2code=$(curl -k -s -o /tmp/rev_f2.json -w '%{http_code}' -X POST \"$base/api/family/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"family2.app-review-elderly-001@vitaguard.local\",\"password\":\"123\"}'); echo ECODE:$ecode; echo FCODE1:$f1code; echo FCODE2:$f2code; echo ELDERLY_BODY:$(cat /tmp/rev_elderly.json); echo FAMILY1_BODY:$(cat /tmp/rev_f1.json)"
+		},
+		{
+			"label": "verify-review-account-okfail",
+			"type": "shell",
+			"command": "base=\"https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app\"; e=$(curl -k -s -X POST \"$base/api/elderly/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"review.elderly@safeguardian.app\",\"password\":\"Review123!\"}'); f=$(curl -k -s -X POST \"$base/api/family/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"family1.app-review-elderly-001@vitaguard.local\",\"password\":\"123\"}'); python3 - <<'PY'\nimport json,os\nfor name,var in [('ELDERLY','e'),('FAMILY','f')]:\n    body=os.environ[var]\n    try:\n        obj=json.loads(body)\n        print(f'{name}_SUCCESS:{obj.get(\"success\", False)}')\n    except Exception:\n        print(f'{name}_SUCCESS:False')\nPY",
+			"args": []
+		},
+		{
+			"label": "post-deploy-checks",
+			"type": "shell",
+			"command": "base=\"https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app\"; echo ROOT:$(curl -k -s -o /tmp/pd_root.txt -w '%{http_code}' \"$base/\"); echo FAMILY:$(curl -k -s -o /tmp/pd_family.txt -w '%{http_code}' \"$base/family\"); echo PRIVACY:$(curl -k -s -o /tmp/pd_priv.txt -w '%{http_code}' \"$base/privacy-policy.html\"); echo HEALTH:$(curl -k -s -o /tmp/pd_health.txt -w '%{http_code}' \"$base/health/live\")"
+		},
+		{
+			"label": "review-login-smoke-after-deploy",
+			"type": "shell",
+			"command": "base=\"https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app\"; ec=$(curl -k -s -o /tmp/review_elderly_after.txt -w '%{http_code}' -X POST \"$base/api/elderly/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"review.elderly@safeguardian.app\",\"password\":\"Review123!\"}'); fc=$(curl -k -s -o /tmp/review_family_after.txt -w '%{http_code}' -X POST \"$base/api/family/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"family1.app-review-elderly-001@vitaguard.local\",\"password\":\"123\"}'); echo ELDERLY_STATUS:$ec; echo FAMILY_STATUS:$fc; echo ELDERLY_BODY:$(cat /tmp/review_elderly_after.txt); echo FAMILY_BODY:$(cat /tmp/review_family_after.txt)"
+		},
+		{
+			"label": "review-login-after-seed-deploy",
+			"type": "shell",
+			"command": "sleep 25; base=\"https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app\"; ec=$(curl -k -s -o /tmp/review_seed_elderly.txt -w '%{http_code}' -X POST \"$base/api/elderly/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"review.elderly@safeguardian.app\",\"password\":\"Review123!\"}'); fc=$(curl -k -s -o /tmp/review_seed_family.txt -w '%{http_code}' -X POST \"$base/api/family/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"family1.app-review-elderly-001@vitaguard.local\",\"password\":\"123\"}'); echo ELDERLY_STATUS:$ec; echo FAMILY_STATUS:$fc; echo ELDERLY_BODY:$(cat /tmp/review_seed_elderly.txt); echo FAMILY_BODY:$(cat /tmp/review_seed_family.txt)"
+		},
+		{
+			"label": "review-login-status-short",
+			"type": "shell",
+			"command": "base=\"https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app\"; ec=$(curl -k -s -o /dev/null -w '%{http_code}' -X POST \"$base/api/elderly/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"review.elderly@safeguardian.app\",\"password\":\"Review123!\"}'); fc=$(curl -k -s -o /dev/null -w '%{http_code}' -X POST \"$base/api/family/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"family1.app-review-elderly-001@vitaguard.local\",\"password\":\"123\"}'); echo E:$ec F:$fc"
+		},
+		{
+			"label": "final-http-statuses",
+			"type": "shell",
+			"command": "base=\"https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app\"; echo ROOT:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/\") FAMILY:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/family\") PRIVACY:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/privacy-policy.html\") HEALTH:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/health/live\")"
 		}
 	]
 }

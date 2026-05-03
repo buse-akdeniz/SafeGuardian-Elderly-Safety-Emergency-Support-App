@@ -14,7 +14,7 @@ class StateBasedUIManager {
         this.currentState = null;
         this.pollInterval = 5000; // Poll every 5 seconds
         this.apiBase = '/api';
-        this.requestTimeoutMs = 4500;
+        this.requestTimeoutMs = 5000;
         this.errorCount = 0;
         this.lastSuccessfulFetchAt = null;
         this.connection = null;
@@ -343,31 +343,32 @@ class StateBasedUIManager {
     // Text-to-speech announcement when screen changes
     announceContextChange(context) {
         try {
-            if (!('speechSynthesis' in window)) {
-                console.warn('⚠️ Speech Synthesis not supported');
-                return;
-            }
-            
-            const announcements = {
-                medication_time: "İlaç saati geldi. İlacını aldın mı? Büyük butona bas.",
-                meal_time: "Yemek zamanı. Yemek yedin mi? Büyük butona bas.",
-                water_time: "Su içme saati. Su içtin mi? Büyük butona bas.",
-                emergency: "Acil durum! Aileniz ile iletişime geçiliyor.",
-                home: "Hoş geldin. Sana nasıl yardımcı olabilirim?"
-            };
-            
-            const text = announcements[context] || announcements.home;
-            
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'tr-TR'; // Turkish
-            utterance.rate = 0.9; // Slower for elderly users
-            utterance.pitch = 1;
-            utterance.volume = 1;
-            
-            window.speechSynthesis.cancel(); // Cancel any previous speech
-            window.speechSynthesis.speak(utterance);
-            
-            console.log(`🔊 Announce: ${text}`);
+            // TTS TEMP DISABLED
+            // const isCapacitorIos = Boolean(window.Capacitor) && /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+            // if (isCapacitorIos) {
+            //     return;
+            // }
+            // if (!('speechSynthesis' in window)) {
+            //     console.warn('⚠️ Speech Synthesis not supported');
+            //     return;
+            // }
+            // const announcements = {
+            //     medication_time: "İlaç saati geldi. İlacını aldın mı? Büyük butona bas.",
+            //     meal_time: "Yemek zamanı. Yemek yedin mi? Büyük butona bas.",
+            //     water_time: "Su içme saati. Su içtin mi? Büyük butona bas.",
+            //     emergency: "Acil durum! Aileniz ile iletişime geçiliyor.",
+            //     home: "Hoş geldin. Sana nasıl yardımcı olabilirim?"
+            // };
+            // const text = announcements[context] || announcements.home;
+            // const utterance = new SpeechSynthesisUtterance(text);
+            // utterance.lang = 'tr-TR';
+            // utterance.rate = 0.9;
+            // utterance.pitch = 1;
+            // utterance.volume = 1;
+            // window.speechSynthesis.cancel();
+            // window.speechSynthesis.speak(utterance);
+            // console.log(`🔊 Announce: ${text}`);
+            return;
         } catch (error) {
             console.error('❌ TTS error:', error);
         }
@@ -384,6 +385,8 @@ class StateBasedUIManager {
     // Manual context update (for emergency or special cases)
     async setContext(context, priority = 'normal') {
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs);
             const response = await fetch(`${this.apiBase}/user-state`, {
                 method: 'POST',
                 headers: {
@@ -394,8 +397,10 @@ class StateBasedUIManager {
                     currentContext: context,
                     screenPriority: priority,
                     isAssistantActive: true
-                })
+                }),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
             
             if (response.ok) {
                 console.log(`🎯 Context manually set: ${context}`);
@@ -555,12 +560,13 @@ class AccessibilityManager {
             home: "Ana ekran. Mikrofon ve durum kartları var. Soruların var mı diye sor."
         };
         
-        const text = descriptions[screenContext] || descriptions.home;
-        
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'tr-TR';
-        utterance.rate = 0.8;
-        window.speechSynthesis.speak(utterance);
+        // TTS TEMP DISABLED
+        // const text = descriptions[screenContext] || descriptions.home;
+        // const utterance = new SpeechSynthesisUtterance(text);
+        // utterance.lang = 'tr-TR';
+        // utterance.rate = 0.8;
+        // window.speechSynthesis.speak(utterance);
+        return;
     }
 
     // Haptic feedback for actions

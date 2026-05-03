@@ -255,7 +255,7 @@ app.UseRouting();
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
-    app.UseHttpsRedirection();
+    // app.UseHttpsRedirection();
 }
 app.UseCors("AllowAll");
 app.UseStaticFiles();
@@ -457,6 +457,14 @@ app.MapGet("/", async (HttpContext ctx) =>
 {
     ctx.Response.ContentType = "text/html; charset=utf-8";
     var filePath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "index.html");
+    if (!System.IO.File.Exists(filePath))
+    {
+        filePath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", "index.html");
+    }
+    if (!System.IO.File.Exists(filePath))
+    {
+        return Results.NotFound(new { success = false, message = "index.html bulunamadı" });
+    }
     return Results.File(System.IO.File.ReadAllBytes(filePath), "text/html");
 });
 
@@ -464,6 +472,14 @@ app.MapGet("/family", async (HttpContext ctx) =>
 {
     ctx.Response.ContentType = "text/html; charset=utf-8";
     var filePath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "family-dashboard.html");
+    if (!System.IO.File.Exists(filePath))
+    {
+        filePath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", "family-dashboard.html");
+    }
+    if (!System.IO.File.Exists(filePath))
+    {
+        return Results.NotFound(new { success = false, message = "family-dashboard.html bulunamadı" });
+    }
     return Results.File(System.IO.File.ReadAllBytes(filePath), "text/html");
 });
 
@@ -486,6 +502,14 @@ app.MapFallback(async (HttpContext ctx) =>
 {
     ctx.Response.ContentType = "text/html; charset=utf-8";
     var filePath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "index.html");
+    if (!System.IO.File.Exists(filePath))
+    {
+        filePath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", "index.html");
+    }
+    if (!System.IO.File.Exists(filePath))
+    {
+        return Results.NotFound(new { success = false, message = "index.html bulunamadı" });
+    }
     return Results.File(System.IO.File.ReadAllBytes(filePath), "text/html");
 });
 
@@ -2539,6 +2563,7 @@ public class HealthDataService
 
         LoadUsersFromDb();
         LoadOperationalDataFromDb();
+        SeedAppReviewData();
         SeedDemoDataIfEnabled();
         medicationIdSeq = medications.Any() ? medications.Max(m => m.Id) + 1 : 1;
     }
@@ -2766,6 +2791,61 @@ public class HealthDataService
         SeedDemoOperationalData(demoUserId);
     }
 
+    private void SeedAppReviewData()
+    {
+        const string reviewUserId = "app-review-elderly-001";
+        const string reviewEmail = "review.elderly@safeguardian.app";
+        const string reviewPassword = "Review123!";
+
+        var reviewUser = new ElderlyUser
+        {
+            Id = reviewUserId,
+            Name = "App Review Elderly",
+            Email = reviewEmail,
+            Password = string.Empty,
+            PasswordHash = PasswordSecurity.HashPassword(reviewPassword),
+            PhoneNumber = "+905551234567",
+            BirthDate = "1948-05-10",
+            BloodType = "A+",
+            Subscription = new Subscription
+            {
+                UserId = reviewUserId,
+                Plan = "standard",
+                StartDate = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddYears(1),
+                IsActive = true,
+                HasAIAnalysis = false,
+                HasFallDetection = false,
+                HasLiveLocation = false,
+                HasEmergencyIntegration = true
+            },
+            CreatedAt = DateTime.UtcNow,
+            IsActive = true
+        };
+
+        AddUser(reviewUser);
+
+        AddFamilyMember(new FamilyMember
+        {
+            Id = "review-family-1",
+            ElderlyId = reviewUserId,
+            Name = "App Review Family 1",
+            Email = "family1.app-review-elderly-001@vitaguard.local",
+            Relationship = "Aile",
+            PhoneNumber = "+905551234568"
+        });
+
+        AddFamilyMember(new FamilyMember
+        {
+            Id = "review-family-2",
+            ElderlyId = reviewUserId,
+            Name = "App Review Family 2",
+            Email = "family2.app-review-elderly-001@vitaguard.local",
+            Relationship = "Aile",
+            PhoneNumber = "+905551234569"
+        });
+    }
+
     private void SeedDemoOperationalData(string elderlyId)
     {
         var now = DateTime.UtcNow;
@@ -2774,6 +2854,21 @@ public class HealthDataService
         {
             AddFamilyMember(new FamilyMember { Id = "f1", ElderlyId = elderlyId, Name = "Fatih (Oğlu)", Email = "fatih@test.com", Relationship = "Oğlu", PhoneNumber = "+905551112233" });
             AddFamilyMember(new FamilyMember { Id = "f2", ElderlyId = elderlyId, Name = "Ayşe (Kızı)", Email = "ayse@test.com", Relationship = "Kızı", PhoneNumber = "+905554445566" });
+        }
+
+        if (!familyMembers.Any(f =>
+                f.ElderlyId == elderlyId &&
+                f.Email.Equals("elderly@test.com", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddFamilyMember(new FamilyMember
+            {
+                Id = "f-review",
+                ElderlyId = elderlyId,
+                Name = "App Review (Aile)",
+                Email = "elderly@test.com",
+                Relationship = "Aile",
+                PhoneNumber = "+905550000000"
+            });
         }
 
         if (!tasks.Any(t => t.ElderlyId == elderlyId))

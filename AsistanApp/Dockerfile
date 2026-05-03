@@ -1,29 +1,20 @@
-# ── Build Stage ──────────────────────────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# .NET SDK imajını kullan
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Copy csproj and restore (layer cache friendly)
+# Sadece proje dosyasını kopyala ve paketleri geri yükle (Restore)
+# Dosyan en üstte olduğu için doğrudan kopyalıyoruz
 COPY AsistanApp.csproj ./
-RUN dotnet restore
+RUN dotnet restore "./AsistanApp.csproj"
 
-# Copy everything else and publish
+# Geri kalan tüm dosyaları kopyala
 COPY . .
-RUN dotnet publish AsistanApp.csproj -c Release -o /app/publish --no-restore
 
-# ── Runtime Stage ─────────────────────────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+# Uygulamayı yayınla (Publish)
+RUN dotnet publish "AsistanApp.csproj" -c Release -o /app/publish
+
+# Çalışma zamanı (Runtime) imajına geç
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
-
-# SQLite database will live in /data (Railway persistent volume or ephemeral)
-RUN mkdir -p /data
-
 COPY --from=build /app/publish .
-
-# Railway injects PORT; ASP.NET Core reads ASPNETCORE_URLS
-ENV ASPNETCORE_URLS=http://+:${PORT:-8080}
-ENV ASPNETCORE_ENVIRONMENT=Production
-ENV DEFAULT_CONNECTION="Data Source=/data/asistanapp.db"
-
-EXPOSE 8080
-
 ENTRYPOINT ["dotnet", "AsistanApp.dll"]

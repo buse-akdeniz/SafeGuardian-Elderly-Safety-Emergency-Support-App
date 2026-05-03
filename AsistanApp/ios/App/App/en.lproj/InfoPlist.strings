@@ -1,0 +1,6 @@
+"CFBundleDisplayName" = "SafeGuardianAI";
+"NSLocationWhenInUseUsageDescription" = "This app needs location access to determine your location during emergencies (SOS) and share it with your trusted contacts.";
+"NSCameraUsageDescription" = "SafeGuardian AI uses your camera for medication recognition and safety scanning.";
+"NSPhotoLibraryAddUsageDescription" = "SafeGuardian AI may save captured medication photos for analysis and sharing workflow.";
+"NSPhotoLibraryUsageDescription" = "SafeGuardian AI accesses your photo library so you can choose medication photos from gallery.";
+"NSMicrophoneUsageDescription" = "SafeGuardian AI uses your microphone for voice commands and safety features.";

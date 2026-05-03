@@ -15,12 +15,12 @@
             font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
             background-color: #1a237e;
             color: white;
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             padding: 0;
-            overflow: hidden;
+            overflow-y: auto;
         }
 
         /* ========== EN ÜSTTE: SAATİ GÖSTER ========== */
@@ -53,21 +53,22 @@
 
         /* ========== ORTA BÖLGE: DİNAMİK GÖREV ========== */
         .middle-zone {
-            flex: 1;
+            flex: 1 1 auto;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 40px 20px;
+            padding: 20px;
             background-color: #1a237e;
+            overflow: hidden;
         }
 
         .task-card {
             background: white;
             border-radius: 30px;
-            padding: 60px 40px;
+            padding: 28px 30px;
             text-align: center;
             width: 90%;
-            max-width: 600px;
+            max-width: 560px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
             display: none;
             animation: slideIn 0.5s ease-out;
@@ -97,27 +98,27 @@
         }
 
         .task-title {
-            font-size: 60px;
+            font-size: 40px;
             color: #d32f2f;
             font-weight: bold;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
         .task-description {
-            font-size: 45px;
+            font-size: 30px;
             color: #1a237e;
             font-weight: bold;
-            margin-bottom: 30px;
+            margin-bottom: 14px;
         }
 
         .task-icon {
-            font-size: 100px;
-            margin-bottom: 30px;
+            font-size: 64px;
+            margin-bottom: 14px;
         }
 
         .hidden-status {
-            font-size: 35px;
+            font-size: 24px;
             color: #1a237e;
             opacity: 0.7;
             font-weight: 600;
@@ -126,20 +127,21 @@
         /* ========== EN ALTTA: DEV BUTONLAR ========== */
         .button-zone {
             display: flex;
-            gap: 15px;
-            padding: 20px;
+            gap: 12px;
+            padding: 16px;
             background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
-            min-height: 180px;
+            min-height: 120px;
             justify-content: center;
             align-items: center;
             flex-wrap: wrap;
+            flex-shrink: 0;
         }
 
         .btn-main {
             flex: 1;
-            min-width: 250px;
-            padding: 40px 30px;
-            font-size: 50px;
+            min-width: 160px;
+            padding: 22px 20px;
+            font-size: 32px;
             font-weight: bold;
             border: none;
             border-radius: 20px;
@@ -148,7 +150,7 @@
             text-transform: uppercase;
             letter-spacing: 2px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            min-height: 140px;
+            min-height: 80px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -292,6 +294,54 @@
             border-radius: 0 0 0 15px;
         }
 
+        .language-switcher {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 120;
+            display: flex;
+            gap: 8px;
+        }
+
+        .lang-btn {
+            border: none;
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.92);
+            color: #1a237e;
+        }
+
+        .accessibility-tools {
+            position: fixed;
+            top: 52px;
+            left: 10px;
+            z-index: 120;
+            display: flex;
+            gap: 8px;
+        }
+
+        .a11y-btn {
+            border: none;
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.92);
+            color: #1a237e;
+        }
+
+        body.large-text {
+            font-size: 112%;
+        }
+
+        body.high-contrast {
+            filter: contrast(1.2) saturate(0.8);
+        }
+
         .status-online {
             color: #4caf50;
         }
@@ -325,6 +375,17 @@
 <div class="status-bar">
     <span id="connectionStatus" class="status-online">🌐 Online</span>
     <span id="batteryStatus" class="status-battery">🔋 100%</span>
+</div>
+
+<div class="language-switcher">
+    <button class="lang-btn" onclick="changeLanguage('tr')">TR</button>
+    <button class="lang-btn" onclick="changeLanguage('en')">EN</button>
+    <button class="lang-btn" onclick="changeLanguage('de')">DE</button>
+</div>
+
+<div class="accessibility-tools">
+    <button class="a11y-btn" onclick="toggleLargeText()">A+ Yazı</button>
+    <button class="a11y-btn" onclick="toggleHighContrast()">Kontrast</button>
 </div>
 
 <!-- SAATİ GÖSTER BÖLGESI -->
@@ -362,6 +423,10 @@
     <button class="btn-main btn-help" id="helpBtn" onclick="triggerEmergency()">🆘 <span data-i18n="btn_help">YARDIM</span></button>
     <button class="btn-main" style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); margin-top: 15px;" 
             onclick="window.location.href='/elderly-signup.html'">📝 YENİ KAYDOL</button>
+    <button style="padding: 14px 24px; font-size: 22px; font-weight: 600; border: none; border-radius: 12px; background: #ffffff; color: #1a237e; cursor: pointer; margin-top: 10px;"
+            onclick="window.open('/privacy-policy.html', '_blank')">
+        Privacy Policy
+    </button>
 </div>
 
 <!-- ACİL DURUM EKRANI -->
@@ -382,6 +447,22 @@
     let currentTaskIndex = 0;
     let isListening = false;
     let connection = null;
+
+    function changeLanguage(lang) {
+        if (typeof setLanguage === 'function') {
+            setLanguage(lang);
+        }
+    }
+
+    function toggleLargeText() {
+        document.body.classList.toggle('large-text');
+        localStorage.setItem('a11y_large_text', document.body.classList.contains('large-text') ? '1' : '0');
+    }
+
+    function toggleHighContrast() {
+        document.body.classList.toggle('high-contrast');
+        localStorage.setItem('a11y_high_contrast', document.body.classList.contains('high-contrast') ? '1' : '0');
+    }
 
     // ========== OTOMATIK GİRİŞ KONTROL (Yaşlı Self-Enrollment) ==========
     function checkAutoLogin() {
@@ -417,7 +498,15 @@
     }
 
     // Sayfa yüklendiğinde otomatik giriş kontrolü yap
-    window.addEventListener('load', checkAutoLogin);
+    window.addEventListener('load', () => {
+        checkAutoLogin();
+        if (localStorage.getItem('a11y_large_text') === '1') {
+            document.body.classList.add('large-text');
+        }
+        if (localStorage.getItem('a11y_high_contrast') === '1') {
+            document.body.classList.add('high-contrast');
+        }
+    });
 
     // ========== MİKROFON İZNİ (İLK AÇILIŞ) ==========
     async function requestMicrophonePermission() {
@@ -448,22 +537,85 @@
     setInterval(updateClock, 1000);
     updateClock();
 
+    function getPendingQueue() {
+        try {
+            return JSON.parse(localStorage.getItem('offline_api_queue') || '[]');
+        } catch {
+            return [];
+        }
+    }
+
+    function setPendingQueue(items) {
+        localStorage.setItem('offline_api_queue', JSON.stringify(items));
+    }
+
+    function queueApiRequest(url, options) {
+        const queue = getPendingQueue();
+        queue.push({ url, options, queuedAt: new Date().toISOString() });
+        setPendingQueue(queue);
+    }
+
+    async function postWithOfflineQueue(url, payload, extraHeaders = {}) {
+        const options = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...extraHeaders },
+            body: JSON.stringify(payload)
+        };
+
+        if (!navigator.onLine) {
+            queueApiRequest(url, options);
+            return { queued: true };
+        }
+
+        try {
+            const res = await fetch(url, options);
+            if (!res.ok) {
+                queueApiRequest(url, options);
+                return { queued: true };
+            }
+            return { queued: false };
+        } catch {
+            queueApiRequest(url, options);
+            return { queued: true };
+        }
+    }
+
+    async function flushOfflineQueue() {
+        const queue = getPendingQueue();
+        if (!queue.length || !navigator.onLine) return;
+
+        const remaining = [];
+        for (const item of queue) {
+            try {
+                const res = await fetch(item.url, item.options);
+                if (!res.ok) remaining.push(item);
+            } catch {
+                remaining.push(item);
+            }
+        }
+
+        setPendingQueue(remaining);
+        if (queue.length > remaining.length) {
+            console.log(`✅ Offline kuyruktan ${queue.length - remaining.length} işlem senkronlandı.`);
+        }
+    }
+
     // ========== GÖREV TAMAMLA ==========
-    function completeTask() {
+    async function completeTask() {
         console.log('✅ Görev tamamlandı');
         speak('Aferin Ahmet Amca, ilacını not aldım. Sağlıklı kalın.');
         rotateTask();
         
         // Sunucuya gönder
-        fetch('/api/complete-task', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                taskId: 't1',
-                method: 'button',
-                elderlyId: 'elderly-001'
-            })
+        const result = await postWithOfflineQueue('/api/complete-task', {
+            taskId: 't1',
+            method: 'button',
+            elderlyId: 'elderly-001'
         });
+
+        if (result.queued) {
+            speak('İnternet yok. Görev kaydedildi, bağlantı gelince gönderilecek.');
+        }
     }
 
     // ========== GÖREVI ATLA ==========
@@ -474,7 +626,7 @@
     }
 
     // ========== ACİL DURUM ==========
-    function triggerEmergency() {
+    async function triggerEmergency() {
         console.log('🆘 Acil durum tetiklendi');
         const emergency = document.getElementById('emergencyScreen');
         emergency.classList.add('active');
@@ -493,13 +645,13 @@
             headers['Authorization'] = `Bearer ${token}`;
         }
 
-        fetch('/api/emergency-alert', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                alertType: 'emergency_call'
-            })
-        });
+        const result = await postWithOfflineQueue('/api/emergency-alert', {
+            alertType: 'emergency_call'
+        }, token ? { 'Authorization': `Bearer ${token}` } : {});
+
+        if (result.queued) {
+            speak('İnternet yok. Acil bildirim kuyrukta, bağlantı gelir gelmez gönderilecek.', true);
+        }
 
         // 30 saniye sonra otomatik kapat
         setTimeout(() => {
@@ -594,6 +746,7 @@
         document.getElementById('connectionStatus').textContent = '🌐 Online';
         document.getElementById('connectionStatus').className = 'status-online';
         speak('İnternet bağlantınız sağlandı.');
+        flushOfflineQueue();
     });
 
     window.addEventListener('offline', () => {
@@ -601,6 +754,8 @@
         document.getElementById('connectionStatus').className = 'status-offline';
         speak('İnternet bağlantınız kesildi. Verileri yerel olarak kaydediyorum.', true);
     });
+
+    window.addEventListener('load', flushOfflineQueue);
 
     // ========== SIGNALR BAĞ LANTISI ==========
     connection = new signalR.HubConnectionBuilder()

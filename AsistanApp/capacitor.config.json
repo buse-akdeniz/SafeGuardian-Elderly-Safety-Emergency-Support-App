@@ -1,6 +1,6 @@
 {
-  "appId": "com.buse.vitaguard",
-  "appName": "VitaGuard",
+  "appId": "com.buse.safeguardian",
+  "appName": "SafeGuardianAI",
   "webDir": "wwwroot",
   "plugins": {
     "SplashScreen": {

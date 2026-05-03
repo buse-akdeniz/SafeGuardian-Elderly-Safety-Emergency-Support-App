@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Dev Server (Backend + Web Sync)",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/AsistanApp/bin/Debug/net8.0/AsistanApp.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "serverReadyAction": {
+        "pattern": "\\bApplication started",
+        "uriFormat": "http://127.0.0.1:5007",
+        "action": "openExternally"
+      },
+      "preLaunchTask": "dev-server"
+    },
+    {
+      "name": "Backend Watch Only",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/AsistanApp/bin/Debug/net8.0/AsistanApp.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "serverReadyAction": {
+        "pattern": "\\bApplication started",
+        "uriFormat": "http://127.0.0.1:5007",
+        "action": "openExternally"
+      },
+      "preLaunchTask": "backend-watch"
+    }
+  ]
+}

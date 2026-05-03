@@ -5,14 +5,50 @@
 
 // =================== EKRAN YÖNETIMI ===================
 
-const DEFAULT_API_BASE = 'http://192.168.1.6:5007';
+const DEFAULT_API_BASE = (window.API_BASE?.trim?.() || 'https://vitaguard.app');
+const FALLBACK_API_BASE = (window.API_FALLBACK_BASE?.trim?.() || 'https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app');
+const IOS_SIMULATOR_API_BASE = FALLBACK_API_BASE;
+const DEMO_OFFLINE_TOKEN = 'demo-offline-token';
+const IS_CAPACITOR_IOS = Boolean(window.Capacitor) && /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+const API_TIMEOUT_MS = 12000;
+
+// --- TTS ENGINE TEMPORARILY DISABLED ---
+// SpeechSynthesis/TextToSpeech blocks are intentionally disabled until app stability is restored.
+
+// --- WebProcess crash prevention ---
+// Uncaught promise rejections crash Capacitor iOS WebView; absorb them here.
+window.addEventListener('unhandledrejection', (event) => {
+    console.warn('[SafeGuardian] Unhandled promise rejection caught (prevented crash):', event.reason);
+    event.preventDefault();
+});
+window.addEventListener('error', (event) => {
+    console.warn('[SafeGuardian] Global JS error caught:', event.message, event.filename, event.lineno);
+    // Do not re-throw; let the app keep running.
+    return true;
+});
+
+// --- Backend reachability tracking ---
+let _backendUnreachableCount = 0;
+const BACKEND_FAIL_THRESHOLD = 2; // trigger offline mode after this many consecutive fails
+function _onBackendFail() {
+    _backendUnreachableCount++;
+    if (_backendUnreachableCount >= BACKEND_FAIL_THRESHOLD && !isOfflineDemoModeEnabled()) {
+        sessionStorage.setItem('offlineDemoMode', 'true');
+        const banner = document.getElementById('offlineBanner');
+        if (banner) { banner.style.display = 'block'; banner.textContent = '📡 Sunucuya bağlanılamıyor — Çevrimdışı modda çalışılıyor.'; }
+        console.warn('[SafeGuardian] Backend unreachable threshold reached → offline demo mode activated');
+    }
+}
+function _onBackendSuccess() {
+    _backendUnreachableCount = 0;
+}
 
 // =================== DİL / I18N ===================
 const TRANSLATIONS = {
     tr: {
         emailLabel: 'E-POSTA', passwordLabel: 'ŞİFRE', rememberMeLabel: 'BENİ HATIRLA',
         loginBtn: 'GİRİŞ YAP', registerBtn: 'KAYIT OL', forgotBtn: 'ŞİFREMİ UNUTTUM',
-        appleSignIn: 'Sign in with Apple',
+        appleSignIn: 'Sign in with Apple', biometricLoginBtn: '🔓 Face ID ile Giriş',
         registerTitle: 'KAYIT OL', backBtn: '← GERİ', fullNameLabel: 'AD SOYAD',
         phoneLabel: 'TELEFON', birthDateLabel: 'DOĞUM TARİHİ', completeRegBtn: 'KAYDI TAMAMLA',
         logoutBtn: 'ÇIKIŞ', medicationsLabel: 'İLAÇLARIM', familyLabel: 'AİLE', helpLabel: 'YARDIM',
@@ -44,29 +80,49 @@ const TRANSLATIONS = {
         loginFailed: 'Giriş başarısız. E-posta veya şifre hatalı.',
         errorTitle: 'Hata', successTitle: 'Başarılı',
         welcomeMsg: 'Hoş geldiniz',
-        homeGuidance: 'Ana sayfaya hoş geldiniz. Üç buton göreceksiniz: İlaçlarım, Aile, Yardım. Ses komutu kullanabilirsiniz.',
+        homeGuidance: '',
         medicationGuidance: 'İlaçlarım sayfasındasınız. Aldığınız ilaçlar burada listelenir. Yeni ilaç eklemek için aşağıdaki butona basın.',
         addMedGuidance: 'Yeni ilaç ekle formunda bulunuyorsunuz. İlaç adını ve saatlerini girin.',
         familyGuidance: 'Aile üyeleri sayfasına hoş geldiniz. Sizinle iletişim kuran aile üyeleri burada listelenir.',
         helpGuidance: 'Yardım sayfasında bulunuyorsunuz. Tüm özellikleri burada açıklıyoruz.',
-        loginGuidance: 'Giriş sayfasına hoş geldiniz. E-posta ve şifrenizi girin.',
+        loginGuidance: '',
         simpleBannerText: 'Basit mod açık: Ek özellikler gizlendi.',
         apiSaved: 'Kaydedildi', apiSavedMsg: 'API adresi güncellendi',
         apiReset: 'Sıfırlandı', apiResetMsg: 'API adresi temizlendi',
-        demoHint: '💡 Demo: elderly@test.com / 123',
+        demoHint: 'Destek için: support@vitaguard.app',
         relationSelect: 'Seçin...',
         relationChild: 'Çocuk', relationGrandchild: 'Torun', relationSpouse: 'Eş',
         relationSibling: 'Kardeş', relationOther: 'Diğer',
         accountBtn: '👤 HESAP',
         profileTitle: '👤 HESAP',
         subscriptionTitle: '💳 ABONELİK',
+        profileCardTitle: '👤 HESAP BİLGİLERİ',
         userFullName: 'AD SOYAD', userEmail: 'E-POSTA',
         subscriptionStatus: 'ABONE DURUMU', daysRemaining: 'KALAN GÜN',
         premiumPlan: '⭐ PREMIUM', standardPlan: '📦 STANDART',
         upgradePremium: '⭐ PREMIUM KAPAT', subscriptionButton: '💳 ABONELİK KALAN',
         editProfileBtn: '✏️ BİLGİ GÜNCELLE', logoutBtn: '🚪 ÇIKIŞ YAP',
+        editLogoutBtn: '🚪 ÇIKIŞ YAP',
+        privacyPolicyBtn: '📄 GİZLİLİK SÖZLEŞMESİ',
+        termsOfUseBtn: '📘 KULLANIM KOŞULLARI',
+        deleteAccountBtn: '🗑️ HESABI KALICI SİL',
+        restorePurchasesBtn: '🔄 SATIN ALMALARI GERİ YÜKLE',
+        cancelSubscriptionBtn: '⛔ ABONELİĞİ İPTAL ET',
+        manageSubscriptionsBtn: '⚙️ ABONELİKLERİ YÖNET',
+        subscriptionLegalNote: 'Otomatik yenilemeli aboneliklerde iOS Ayarlar > Apple Kimliği > Abonelikler ekranından yönetim yapılabilir.',
+        appleUnavailable: 'Apple girişi bu cihazda kullanılamıyor.',
+        appleLoginFailed: 'Apple girişi başarısız oldu.',
+        biometricUnavailable: 'Face ID / biyometrik doğrulama desteklenmiyor.',
+        biometricNoSession: 'Önce normal giriş yapın. Sonra Face ID ile hızlı giriş kullanabilirsiniz.',
+        biometricFailed: 'Biyometrik doğrulama başarısız.',
+        subscriptionCancelSuccess: 'Abonelik iptal edildi. Dönem sonuna kadar aktif kalır.',
+        subscriptionCancelFailed: 'Abonelik iptal edilemedi.',
         packageInfo: 'PAKET BİLGİLERİ', currentPackage: '📦 MEVCUT PAKET',
         endDate: '📅 BİTİŞ TARİHİ', features: '✨ ÖZELLİKLER',
+        basicFeature1: '✓ Temel İlaç Yönetimi',
+        basicFeature2: '✓ Aile Üyeleri',
+        basicFeature3: '✓ Sesli Asistan',
+        closeBtn: '← KAPAT',
         basicFeatures: 'Temel İlaç Yönetimi\nAile Üyeleri\nSesli Asistan',
         premiumFeatures: 'Video Doktor Konsültasyonu\nİnsan Asistanı (24/7)\nRuh Hali Analizi (AI)\nSağlık Trendleri',
         profileUpdated: 'Adınız güncellendi',
@@ -75,6 +131,24 @@ const TRANSLATIONS = {
         premiumAlreadyMsg: 'Zaten premium aboneniz!',
         premiumSelected: 'Premium Başarılı',
         premiumSelectedMsg: 'Tekrardan hoş geldiniz!',
+        restoreSuccess: 'Satın Alımlar Geri Yüklendi',
+        restoreSuccessMsg: 'Abonelik bilgileriniz güncellendi.',
+        restoreFailed: 'Geri Yükleme Başarısız',
+        restoreFailedMsg: 'Abonelik bilgileri alınamadı. Lütfen tekrar deneyin.',
+        deleteAccountTitle: 'Hesap Silme',
+        deleteAccountConfirmMsg: 'Bu işlem hesabınızı ve tüm verileri kalıcı olarak siler. Devam etmek istiyor musunuz?',
+        deleteAccountPasswordPrompt: 'Güvenlik için şifrenizi girin:',
+        deleteAccountCanceled: 'İptal Edildi',
+        deleteAccountCanceledMsg: 'Hesap silme işlemi iptal edildi.',
+        deleteAccountNeedPassword: 'Şifre Gerekli',
+        deleteAccountNeedPasswordMsg: 'Hesabınızı silmek için şifre girmeniz gerekiyor.',
+        deleteAccountFinalPrompt: 'Son onay için SIL yazın:',
+        deleteAccountFinalMismatch: 'Onay Eksik',
+        deleteAccountFinalMismatchMsg: 'Hesap silme onayı verilmedi.',
+        deleteAccountSuccess: 'Hesap Silindi',
+        deleteAccountSuccessMsg: 'Hesabınız ve ilişkili veriler kalıcı olarak silindi.',
+        deleteAccountFailed: 'Hesap Silinemedi',
+        deleteAccountFailedMsg: 'Lütfen bilgilerinizi kontrol edip tekrar deneyin.',
         medNamePlaceholder: 'Örn: Aspirin',
         medNotesPlaceholder: 'Yemekten sonra alınız',
         presetBp: 'TANSİYON', presetSugar: 'ŞEKER', presetChol: 'KOLESTEROL',
@@ -90,14 +164,22 @@ const TRANSLATIONS = {
         voiceHeard: 'Komut alındı',
         voiceUnknown: 'Komutu anlayamadım. Lütfen tekrar edin.',
         loginWelcome: 'Tekrar hoş geldiniz',
-        loginSub: 'Hızlı ve güvenli giriş yapın',
+        loginSub: '',
+        medsTimeLabel: 'Saatler', medsUnspecified: 'Belirtilmedi', medsRemaining: 'Kalan', medsTakenBtn: '✓ İLACIMI İÇTİM',
+        familyMemberDefault: 'Aile Üyesi',
+        moodThanksTitle: 'Teşekkürler', moodSavedMsg: 'Ruh haliniz kaydedildi', moodSaveError: 'Ruh hali kaydedilemedi',
+        moodAverageLabel: 'Ortalama', moodTrendLabel: 'Eğilim', moodTrendImproving: '📈 İyileşiyor', moodTrendDeclining: '📉 Kötüleşiyor', moodTrendStable: '➡️ Sabit',
+        moodLastFiveDays: '📋 Son 5 Günün Ruh Hali:', moodInfoTitle: '💡 Bilgi:',
+        moodInfoText: 'Ruh haliniz sistem tarafından günlük sohbetleriniz analiz edilerek izleniyor. Anormal bir değişim varsa, aile üyeleriniz otomatik olarak bilgilendirilecektir.',
+        healthRecordsTitle: '📊 SAĞLIK KAYITLARI', noRecordsYet: 'Henüz kayıt bulunmamaktadır.',
+        healthCritical: '🚨 KRİTİK', healthWarning: '⚠️ UYARI', healthNormal: '✅ NORMAL', healthLastLabel: 'Son', healthLastFiveLabel: 'Son 5 kayıt', addNewRecordBtn: '➕ YENİ KAYIT',
         emailPlaceholder: 'ornek@mail.com',
         passwordPlaceholder: 'Şifrenizi girin',
     },
     en: {
         emailLabel: 'EMAIL', passwordLabel: 'PASSWORD', rememberMeLabel: 'REMEMBER ME',
         loginBtn: 'SIGN IN', registerBtn: 'REGISTER', forgotBtn: 'FORGOT PASSWORD',
-        appleSignIn: 'Sign in with Apple',
+        appleSignIn: 'Sign in with Apple', biometricLoginBtn: '🔓 Sign in with Face ID',
         registerTitle: 'REGISTER', backBtn: '← BACK', fullNameLabel: 'FULL NAME',
         phoneLabel: 'PHONE', birthDateLabel: 'DATE OF BIRTH', completeRegBtn: 'COMPLETE REGISTRATION',
         logoutBtn: 'LOGOUT', medicationsLabel: 'MY MEDICATIONS', familyLabel: 'FAMILY', helpLabel: 'HELP',
@@ -129,29 +211,49 @@ const TRANSLATIONS = {
         loginFailed: 'Login failed. Please check your email and password.',
         errorTitle: 'Error', successTitle: 'Success',
         welcomeMsg: 'Welcome',
-        homeGuidance: 'Welcome to home screen. You will see three buttons: Medications, Family, Help.',
+        homeGuidance: '',
         medicationGuidance: 'You are on the Medications page. Your medications are listed here.',
         addMedGuidance: 'You are on the Add Medication form. Enter the medication name and times.',
         familyGuidance: 'Welcome to the Family Members page.',
         helpGuidance: 'You are on the Help page.',
-        loginGuidance: 'Welcome to the login page. Enter your email and password.',
+        loginGuidance: '',
         simpleBannerText: 'Simple mode on: Extra features hidden.',
         apiSaved: 'Saved', apiSavedMsg: 'API address updated',
         apiReset: 'Reset', apiResetMsg: 'API address cleared',
-        demoHint: '💡 Demo: elderly@test.com / 123',
+        demoHint: 'For support: support@vitaguard.app',
         relationSelect: 'Select...',
         relationChild: 'Child', relationGrandchild: 'Grandchild', relationSpouse: 'Spouse',
         relationSibling: 'Sibling', relationOther: 'Other',
         accountBtn: '👤 ACCOUNT',
         profileTitle: '👤 ACCOUNT',
         subscriptionTitle: '💳 SUBSCRIPTION',
+        profileCardTitle: '👤 ACCOUNT DETAILS',
         userFullName: 'FULL NAME', userEmail: 'EMAIL',
         subscriptionStatus: 'SUBSCRIPTION STATUS', daysRemaining: 'DAYS LEFT',
         premiumPlan: '⭐ PREMIUM', standardPlan: '📦 STANDARD',
         upgradePremium: '⭐ UPGRADE PREMIUM', subscriptionButton: '💳 VIEW SUBSCRIPTION',
         editProfileBtn: '✏️ UPDATE INFO', logoutBtn: '🚪 LOGOUT',
+        editLogoutBtn: '🚪 LOGOUT',
+        privacyPolicyBtn: '📄 PRIVACY POLICY',
+        termsOfUseBtn: '📘 TERMS OF USE',
+        deleteAccountBtn: '🗑️ DELETE ACCOUNT',
+        restorePurchasesBtn: '🔄 RESTORE PURCHASES',
+        cancelSubscriptionBtn: '⛔ CANCEL SUBSCRIPTION',
+        manageSubscriptionsBtn: '⚙️ MANAGE SUBSCRIPTIONS',
+        subscriptionLegalNote: 'For auto-renewable subscriptions, you can manage billing in iOS Settings > Apple ID > Subscriptions.',
+        appleUnavailable: 'Apple sign-in is not available on this device.',
+        appleLoginFailed: 'Apple sign-in failed.',
+        biometricUnavailable: 'Face ID / biometric authentication is unavailable.',
+        biometricNoSession: 'Please sign in once with email/password first, then use Face ID quick sign-in.',
+        biometricFailed: 'Biometric authentication failed.',
+        subscriptionCancelSuccess: 'Subscription cancelled. It stays active until period end.',
+        subscriptionCancelFailed: 'Subscription cancel failed.',
         packageInfo: 'PACKAGE INFO', currentPackage: '📦 CURRENT PLAN',
         endDate: '📅 END DATE', features: '✨ FEATURES',
+        basicFeature1: '✓ Basic Medication Management',
+        basicFeature2: '✓ Family Members',
+        basicFeature3: '✓ Voice Assistant',
+        closeBtn: '← CLOSE',
         basicFeatures: 'Basic Medication Management\nFamily Members\nVoice Assistant',
         premiumFeatures: 'Video Doctor Consultation\nHuman Assistant (24/7)\nAI Mood Analysis\nHealth Trends',
         profileUpdated: 'Name Updated',
@@ -160,6 +262,24 @@ const TRANSLATIONS = {
         premiumAlreadyMsg: 'You are already a premium subscriber!',
         premiumSelected: 'Premium Successful',
         premiumSelectedMsg: 'Welcome back!',
+        restoreSuccess: 'Purchases Restored',
+        restoreSuccessMsg: 'Your subscription details were refreshed.',
+        restoreFailed: 'Restore Failed',
+        restoreFailedMsg: 'Subscription details could not be loaded. Please try again.',
+        deleteAccountTitle: 'Delete Account',
+        deleteAccountConfirmMsg: 'This action permanently deletes your account and all data. Do you want to continue?',
+        deleteAccountPasswordPrompt: 'For security, enter your password:',
+        deleteAccountCanceled: 'Cancelled',
+        deleteAccountCanceledMsg: 'Account deletion was cancelled.',
+        deleteAccountNeedPassword: 'Password Required',
+        deleteAccountNeedPasswordMsg: 'You must enter your password to delete your account.',
+        deleteAccountFinalPrompt: 'Type DELETE for final confirmation:',
+        deleteAccountFinalMismatch: 'Confirmation Missing',
+        deleteAccountFinalMismatchMsg: 'Account deletion confirmation not provided.',
+        deleteAccountSuccess: 'Account Deleted',
+        deleteAccountSuccessMsg: 'Your account and related data were permanently deleted.',
+        deleteAccountFailed: 'Delete Failed',
+        deleteAccountFailedMsg: 'Please verify your information and try again.',
         medNamePlaceholder: 'e.g. Aspirin',
         medNotesPlaceholder: 'Take after meal',
         presetBp: 'BLOOD PRESSURE', presetSugar: 'BLOOD SUGAR', presetChol: 'CHOLESTEROL',
@@ -176,27 +296,62 @@ const TRANSLATIONS = {
         voiceUnknown: 'I could not understand the command. Please repeat.',
         loginWelcome: 'Welcome back',
         loginSub: 'Sign in quickly and securely',
+        medsTimeLabel: 'Times', medsUnspecified: 'Not specified', medsRemaining: 'Remaining', medsTakenBtn: '✓ MARK AS TAKEN',
+        familyMemberDefault: 'Family Member',
+        moodThanksTitle: 'Thank You', moodSavedMsg: 'Your mood has been saved', moodSaveError: 'Mood could not be saved',
+        moodAverageLabel: 'Average', moodTrendLabel: 'Trend', moodTrendImproving: '📈 Improving', moodTrendDeclining: '📉 Declining', moodTrendStable: '➡️ Stable',
+        moodLastFiveDays: '📋 Last 5 Days Mood:', moodInfoTitle: '💡 Info:',
+        moodInfoText: 'Your mood is monitored by analyzing daily conversations. If an abnormal change is detected, your family members are automatically informed.',
+        healthRecordsTitle: '📊 HEALTH RECORDS', noRecordsYet: 'No records yet.',
+        healthCritical: '🚨 CRITICAL', healthWarning: '⚠️ WARNING', healthNormal: '✅ NORMAL', healthLastLabel: 'Last', healthLastFiveLabel: 'Last 5 records', addNewRecordBtn: '➕ NEW RECORD',
         emailPlaceholder: 'example@mail.com',
         passwordPlaceholder: 'Enter your password',
     }
 };
 
-let currentLang = localStorage.getItem('appLang') || 'tr';
+function detectPreferredLanguage() {
+    const savedLang = localStorage.getItem('appLang');
+    if (savedLang && TRANSLATIONS[savedLang]) {
+        return savedLang;
+    }
+
+    // Capacitor iOS simulator always reports 'en' browser lang regardless of device locale.
+    // Default to Turkish so the app launches in TR unless the user explicitly changes it.
+    if (IS_CAPACITOR_IOS) return 'tr';
+
+    const browserLanguages = Array.isArray(navigator.languages) && navigator.languages.length
+        ? navigator.languages
+        : [navigator.language || navigator.userLanguage || 'tr'];
+
+    for (const language of browserLanguages) {
+        const normalized = String(language || '').toLowerCase();
+        if (normalized.startsWith('tr')) return 'tr';
+        if (normalized.startsWith('en')) return 'en';
+    }
+
+    return 'tr';
+}
+
+let currentLang = detectPreferredLanguage();
 
 function t(key) {
-    return (TRANSLATIONS[currentLang] || TRANSLATIONS.tr)[key] || key;
+    const dictionary = TRANSLATIONS[currentLang] || TRANSLATIONS.tr;
+    if (Object.prototype.hasOwnProperty.call(dictionary, key)) {
+        return dictionary[key];
+    }
+    return key;
 }
 
 function getApiBase() {
     const rawStored = localStorage.getItem('apiBaseUrl')?.trim();
     const configured = window.API_BASE?.trim?.();
     const origin = window.location?.origin || '';
+    const protocol = window.location?.protocol || '';
     const userAgent = navigator.userAgent || '';
     const isHttpOrigin = /^https?:\/\//i.test(origin);
     const isCapacitorRuntime = Boolean(window.Capacitor);
     const isIosSimulator = /iPhone Simulator|iPad Simulator|Simulator/i.test(userAgent);
-    const isPrivateLanAddress = /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/i.test(rawStored || '');
-
+    const isCapacitorLocalhost = /^capacitor:\/\/localhost/i.test(origin) || /^capacitor:/i.test(protocol);
     const stored = rawStored && /:3000\b/.test(rawStored)
         ? ''
         : rawStored;
@@ -205,14 +360,35 @@ function getApiBase() {
         localStorage.removeItem('apiBaseUrl');
     }
 
-    if (isCapacitorRuntime && isIosSimulator && isPrivateLanAddress) {
-        localStorage.removeItem('apiBaseUrl');
-    }
-
     let candidate = stored || configured || (isHttpOrigin ? origin : '');
 
+    // Hosted web'de farklı domain'e yanlış/stale API yazıldıysa (ör. vitaguard.app)
+    // CORS + 503'e düşmemek için aynı origin/configured API'ye geri dön.
+    if (!isCapacitorRuntime && isHttpOrigin && stored) {
+        try {
+            const storedOrigin = new URL(/^https?:\/\//i.test(stored) ? stored : `https://${stored}`).origin;
+            const sameOrigin = storedOrigin === origin;
+            const isLocalDev = /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.)/i.test(storedOrigin);
+            if (!sameOrigin && !isLocalDev) {
+                localStorage.removeItem('apiBaseUrl');
+                candidate = configured || origin;
+            }
+        } catch {
+            localStorage.removeItem('apiBaseUrl');
+            candidate = configured || origin;
+        }
+    }
+
+    if (!stored && isCapacitorRuntime && isCapacitorLocalhost) {
+        candidate = IOS_SIMULATOR_API_BASE;
+    }
+
     if (!candidate && isCapacitorRuntime) {
-        candidate = DEFAULT_API_BASE;
+        candidate = isIosSimulator ? IOS_SIMULATOR_API_BASE : DEFAULT_API_BASE;
+    }
+
+    if (isCapacitorRuntime && (isIosSimulator || isCapacitorLocalhost) && /vitaguard\.app/i.test(candidate || '')) {
+        candidate = IOS_SIMULATOR_API_BASE;
     }
 
     if (candidate && !/^https?:\/\//i.test(candidate)) {
@@ -222,7 +398,7 @@ function getApiBase() {
     try {
         return new URL(candidate).origin;
     } catch {
-        return DEFAULT_API_BASE;
+        return (isIosSimulator || isCapacitorLocalhost) ? IOS_SIMULATOR_API_BASE : DEFAULT_API_BASE;
     }
 }
 
@@ -246,8 +422,23 @@ let subscriptionCache = null;
 let currentMedicationsCache = [];
 let careRoutineStarted = false;
 let authTokenCache = null;
+let userHasInteracted = !IS_CAPACITOR_IOS;
+let lastSpokenText = '';
+let lastSpokenAt = 0;
 
 const PUBLIC_SCREENS = new Set(['loginScreen', 'registerScreen', 'helpScreen', 'homeScreen']);
+
+function isDemoOfflineToken(value) {
+    return String(value || '').trim() === DEMO_OFFLINE_TOKEN;
+}
+
+function isOfflineDemoModeEnabled() {
+    return sessionStorage.getItem('offlineDemoMode') === 'true';
+}
+
+function clearOfflineDemoMode() {
+    sessionStorage.removeItem('offlineDemoMode');
+}
 
 async function getStoredToken() {
     if (authTokenCache) return authTokenCache;
@@ -256,7 +447,9 @@ async function getStoredToken() {
         try {
             const result = await PreferencesPlugin.get({ key: 'token' });
             const token = result?.value || '';
-            if (token) {
+            if (isDemoOfflineToken(token)) {
+                await PreferencesPlugin.remove({ key: 'token' });
+            } else if (token) {
                 authTokenCache = token;
                 return token;
             }
@@ -266,6 +459,11 @@ async function getStoredToken() {
     }
 
     const webToken = localStorage.getItem('token') || '';
+    if (isDemoOfflineToken(webToken)) {
+        localStorage.removeItem('token');
+        authTokenCache = null;
+        return '';
+    }
     if (webToken && PreferencesPlugin) {
         try {
             await PreferencesPlugin.set({ key: 'token', value: webToken });
@@ -293,6 +491,7 @@ async function setStoredToken(value) {
 async function removeStoredToken() {
     authTokenCache = null;
     localStorage.removeItem('token');
+    clearOfflineDemoMode();
     if (!PreferencesPlugin) return;
     try {
         await PreferencesPlugin.remove({ key: 'token' });
@@ -302,10 +501,13 @@ async function removeStoredToken() {
 }
 
 function hasAuthTokenSync() {
-    return Boolean(authTokenCache || localStorage.getItem('token'));
+    return Boolean(authTokenCache || localStorage.getItem('token') || isOfflineDemoModeEnabled());
 }
 
 function requireAuthToken() {
+    if (isOfflineDemoModeEnabled()) {
+        return DEMO_OFFLINE_TOKEN;
+    }
     const token = authTokenCache || localStorage.getItem('token');
     if (!token) {
         showScreen('loginScreen');
@@ -315,6 +517,9 @@ function requireAuthToken() {
 }
 
 async function requireAuthTokenAsync() {
+    if (isOfflineDemoModeEnabled()) {
+        return DEMO_OFFLINE_TOKEN;
+    }
     const token = await getStoredToken();
     if (!token) {
         showScreen('loginScreen');
@@ -332,11 +537,37 @@ function handleAuthExpired() {
     showScreen('loginScreen');
 }
 
+function forceCloseLoadingAndRecover() {
+    try {
+        const loadingLike = ['loadingScreen', 'globalLoading', 'spinnerOverlay', 'overlayLoading'];
+        loadingLike.forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.remove('active');
+            el.style.display = 'none';
+            el.setAttribute('hidden', '');
+        });
+        document.querySelectorAll('[data-loading="true"], .loading, .loading-overlay, .spinner, .spinner-overlay').forEach((el) => {
+            el.classList.remove('active');
+            el.style.display = 'none';
+            el.setAttribute('hidden', '');
+        });
+    } catch (_) { }
+
+    if (hasAuthTokenSync()) {
+        showScreen('homeScreen');
+    } else {
+        showScreen('loginScreen');
+    }
+}
+
 async function safeFetch(url, options, fetchOpts = {}) {
     let finalUrl = url;
     let extractedToken = null;
+    let parsedUrl = null;
     try {
         const parsed = new URL(url, API_BASE);
+        parsedUrl = parsed;
         extractedToken = parsed.searchParams.get('token');
         if (extractedToken) {
             parsed.searchParams.delete('token');
@@ -348,27 +579,97 @@ async function safeFetch(url, options, fetchOpts = {}) {
         return null;
     }
 
-    try {
-        const requestOptions = { ...(options || {}) };
-        const headers = new Headers(requestOptions.headers || {});
-        const fallbackToken = authTokenCache || localStorage.getItem('token');
-        const bearer = extractedToken || fallbackToken;
-        if (bearer && !headers.has('Authorization')) {
-            headers.set('Authorization', `Bearer ${bearer}`);
-        }
-        requestOptions.headers = headers;
-
-        const response = await fetch(finalUrl, requestOptions);
-        if (response.status === 401 || response.status === 403) {
-            handleAuthExpired();
-            return null;
-        }
-        return response;
-    } catch (error) {
-        console.error('Bağlantı hatası:', { finalUrl, error });
-        if (!fetchOpts.silent) showNotification(t('errorTitle'), t('connError'), 'error');
+    const requestOptionsBase = { ...(options || {}) };
+    const headers = new Headers(requestOptionsBase.headers || {});
+    const fallbackToken = authTokenCache || localStorage.getItem('token');
+    const bearer = extractedToken || fallbackToken;
+    if (isDemoOfflineToken(bearer)) {
         return null;
     }
+    if (bearer && !headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${bearer}`);
+    }
+    requestOptionsBase.headers = headers;
+
+    const retryTargets = [finalUrl];
+    if (!fetchOpts.disableFallbackRetry && parsedUrl) {
+        try {
+            const defaultUrl = new URL(`${parsedUrl.pathname}${parsedUrl.search}`, DEFAULT_API_BASE).toString();
+            if (!retryTargets.includes(defaultUrl)) {
+                retryTargets.push(defaultUrl);
+            }
+
+            const secondaryUrl = new URL(`${parsedUrl.pathname}${parsedUrl.search}`, FALLBACK_API_BASE).toString();
+            if (!retryTargets.includes(secondaryUrl)) {
+                retryTargets.push(secondaryUrl);
+            }
+        } catch {
+            // ignore fallback URL generation failures
+        }
+    }
+
+    let lastError = null;
+    for (let i = 0; i < retryTargets.length; i++) {
+        const targetUrl = retryTargets[i];
+        const requestOptions = { ...requestOptionsBase };
+        const timeoutMs = Number(fetchOpts.timeoutMs || (i === 0 ? API_TIMEOUT_MS : API_TIMEOUT_MS + 6000));
+        let timeoutId = null;
+
+        try {
+            if (typeof AbortController !== 'undefined' && !requestOptions.signal) {
+                const controller = new AbortController();
+                requestOptions.signal = controller.signal;
+                timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            }
+
+            const response = await fetch(targetUrl, requestOptions);
+            if (timeoutId) clearTimeout(timeoutId);
+
+            if (response.status === 401) {
+                handleAuthExpired();
+                return null;
+            }
+
+            if (response.status === 403) {
+                const isLast = i === retryTargets.length - 1;
+                if (!isLast) {
+                    console.warn('403 alındı, alternatif API deneniyor:', { from: targetUrl, to: retryTargets[i + 1] });
+                    continue;
+                }
+            }
+
+            // Fallback URL başarıyla kullanıldıysa eski API override'ı temizle
+            if (i > 0) {
+                localStorage.removeItem('apiBaseUrl');
+            }
+
+            _onBackendSuccess();
+            return response;
+        } catch (error) {
+            if (timeoutId) clearTimeout(timeoutId);
+            lastError = error;
+            const isLast = i === retryTargets.length - 1;
+            if (!isLast) {
+                console.warn('İstek başarısız, alternatif API deneniyor:', { from: targetUrl, to: retryTargets[i + 1] });
+                continue;
+            }
+        }
+    }
+
+    if (lastError?.name === 'AbortError') {
+        console.warn('İstek zaman aşımına uğradı:', finalUrl);
+        _onBackendFail();
+        forceCloseLoadingAndRecover();
+        if (!fetchOpts.silent) {
+            showNotification(t('errorTitle'), currentLang === 'en' ? 'Request timed out.' : 'İstek zaman aşımına uğradı.', 'error');
+        }
+        return null;
+    }
+
+    console.warn('Bağlantı hatası:', { finalUrl });
+    _onBackendFail();
+    if (!fetchOpts.silent) showNotification(t('errorTitle'), t('connError'), 'error');
+    return null;
 }
 
 async function safeReadJson(response, fallbackValue) {
@@ -441,8 +742,15 @@ function showScreen(screenId) {
 }
 
 function triggerVoiceGuidance(screenId) {
+    // Never show guidance text on home screen — it creates unwanted green text overlay.
+    // On Capacitor iOS, never auto-speak (causes SSML errors and AVAudioBuffer noise).
+    if (screenId === 'homeScreen') {
+        updateGuidanceText('');
+        return;
+    }
+    if (IS_CAPACITOR_IOS) return;
+
     const guidance = {
-        'homeScreen': t('homeGuidance'),
         'medicationScreen': t('medicationGuidance'),
         'addMedicationScreen': t('addMedGuidance'),
         'familyScreen': t('familyGuidance'),
@@ -460,7 +768,9 @@ function triggerVoiceGuidance(screenId) {
 function updateGuidanceText(text) {
     const guidanceEl = document.getElementById('voiceGuidance');
     if (guidanceEl) {
-        guidanceEl.textContent = text;
+        guidanceEl.textContent = text || '';
+        // Hide the element entirely when empty to avoid empty green box
+        guidanceEl.style.display = text ? '' : 'none';
     }
 }
 
@@ -528,14 +838,99 @@ function setLanguage(lang) {
     currentLang = lang;
     localStorage.setItem('appLang', lang);
     if (speechRecognition) {
-        speechRecognition.lang = currentLang === 'en' ? 'en-GB' : 'tr-TR';
+        speechRecognition.lang = currentLang === 'en' ? 'en-US' : 'tr-TR';
     }
     applyTranslations();
+    updateProfileScreen();
+    updateSubscriptionScreen();
+    if (isListening) {
+        updateVoiceStatus(currentLang === 'en' ? '🎙️ Listening...' : '🎙️ Dinleniyor...');
+    }
 }
 
 // Inline onclick çağrıları için global erişim
 window.setLanguage = setLanguage;
 window.applyTranslations = applyTranslations;
+
+function openExternalUrl(url) {
+    const targetUrl = String(url || '').trim();
+    if (!targetUrl) return;
+
+    const origin = window.location?.origin || '';
+    let resolvedUrl = targetUrl;
+    let isHttpOrHttps = /^https?:\/\//i.test(targetUrl);
+    try {
+        resolvedUrl = new URL(targetUrl, origin || undefined).href;
+        isHttpOrHttps = /^https?:\/\//i.test(resolvedUrl);
+    } catch {
+        // Geçersiz URL ise mevcut davranışla dene
+    }
+
+    // Capacitor Browser eklentisi `capacitor://localhost/...` gibi local URL'leri açamaz.
+    // Yerel/same-origin sayfaları uygulama içinde normal navigation ile aç.
+    const isSameOrigin = Boolean(origin) && resolvedUrl.startsWith(origin);
+    const isRelativePath = !/^([a-z][a-z\d+\-.]*:)?\/\//i.test(targetUrl) && targetUrl.startsWith('/');
+    if (isSameOrigin || isRelativePath || !isHttpOrHttps) {
+        window.location.href = resolvedUrl;
+        return;
+    }
+
+    const browserPlugin = window.Capacitor?.Plugins?.Browser;
+    if (browserPlugin?.open) {
+        browserPlugin.open({ url: resolvedUrl }).catch(() => {
+            const opened = window.open(resolvedUrl, '_blank');
+            if (!opened) {
+                window.location.href = resolvedUrl;
+            }
+        });
+        return;
+    }
+
+    const opened = window.open(resolvedUrl, '_blank');
+    if (!opened) {
+        window.location.href = resolvedUrl;
+    }
+}
+
+function openPrivacyPolicy() {
+    openExternalUrl('/privacy-policy.html');
+}
+
+function openTermsOfUse() {
+    openExternalUrl('/terms-of-use.html');
+}
+
+function openSubscriptionManagement() {
+    openExternalUrl('https://apps.apple.com/account/subscriptions');
+}
+
+async function cancelSubscriptionFlow() {
+    const token = await requireAuthTokenAsync();
+    if (!token) return;
+
+    const confirmed = confirm(currentLang === 'en'
+        ? 'Do you want to cancel your subscription?'
+        : 'Aboneliğinizi iptal etmek istiyor musunuz?');
+    if (!confirmed) return;
+
+    const response = await safeFetch(`${API_BASE}/api/subscription/cancel?token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response) return;
+
+    const payload = await safeReadJson(response, {});
+    if (!response.ok || !payload?.success) {
+        showNotification(t('errorTitle'), payload?.message || t('subscriptionCancelFailed'), 'error');
+        return;
+    }
+
+    localStorage.setItem('userPlan', 'Standart');
+    subscriptionCache = payload.subscription || null;
+    updateProfileScreen();
+    updateSubscriptionScreen();
+    showNotification(t('successTitle'), payload?.message || t('subscriptionCancelSuccess'));
+}
 
 function forceOpenA11yMenu() {
     const a11yMenuBtn = document.getElementById('a11yMenuBtn');
@@ -567,7 +962,7 @@ function initSpeechRecognition() {
 
     recognition.onstart = () => {
         isListening = true;
-        updateVoiceStatus('🎙️ Dinleniyor...');
+        updateVoiceStatus(currentLang === 'en' ? '🎙️ Listening...' : '🎙️ Dinleniyor...');
     };
 
     recognition.onend = () => {
@@ -618,7 +1013,11 @@ function startVoiceCommand() {
             window.voiceAssistantStart();
             return;
         }
-        showNotification('Uyarı', 'Bu cihazda ses tanıma desteklenmiyor', 'error');
+        showNotification(
+            currentLang === 'en' ? 'Warning' : 'Uyarı',
+            currentLang === 'en' ? 'Voice recognition is not supported on this device.' : 'Bu cihazda ses tanıma desteklenmiyor',
+            'error'
+        );
         return;
     }
     if (isListening) return;
@@ -670,10 +1069,41 @@ async function shareDoctorReport() {
     }
 }
 
-function handleVoiceCommand(command) {
+function extractVoiceNumber(commandText) {
+    const normalized = String(commandText || '').replace(',', '.');
+    const match = normalized.match(/(\d+(?:\.\d+)?)/);
+    if (!match) return null;
+    const value = Number.parseFloat(match[1]);
+    return Number.isFinite(value) ? value : null;
+}
+
+async function handleVoiceCommand(command) {
     const cmd = String(command || '').toLowerCase().trim();
     if (!cmd) {
         speak(t('voiceUnknown'));
+        return;
+    }
+
+    const numericValue = extractVoiceNumber(cmd);
+
+    if ((cmd.includes('ruh hali') || cmd.includes('mood')) && numericValue !== null) {
+        const score = Math.round(numericValue);
+        if (score >= 1 && score <= 10) {
+            await submitMood(score);
+            speak(currentLang === 'en' ? `Mood score saved: ${score}` : `Ruh hali puanı kaydedildi: ${score}`);
+            return;
+        }
+    }
+
+    if ((cmd.includes('tansiyon') || cmd.includes('blood pressure')) && numericValue !== null) {
+        await addHealthRecord('tansiyon', numericValue, 'mmHg');
+        speak(currentLang === 'en' ? 'Blood pressure saved.' : 'Tansiyon kaydedildi.');
+        return;
+    }
+
+    if ((cmd.includes('şeker') || cmd.includes('seker') || cmd.includes('sugar') || cmd.includes('glucose')) && numericValue !== null) {
+        await addHealthRecord('şeker', numericValue, 'mg/dL');
+        speak(currentLang === 'en' ? 'Blood sugar saved.' : 'Kan şekeri kaydedildi.');
         return;
     }
 
@@ -794,6 +1224,12 @@ function goToAddMedication() {
 
 function goToFamily() {
     if (!requireAuthToken()) return;
+    // In offline/demo mode skip premium check (backend is unreachable so check always fails)
+    if (isOfflineDemoModeEnabled()) {
+        showScreen('familyScreen');
+        loadFamilyMembers();
+        return;
+    }
     ensurePremiumAccess('Aile').then(hasAccess => {
         if (!hasAccess) return;
         showScreen('familyScreen');
@@ -809,7 +1245,7 @@ function goToMoodDashboard() {
 
 function goToMedicationVision() {
     // iOS WebView'de yeni sekme yerine aynı sekmede aç
-    window.location.href = 'medication-vision.html';
+    window.location.href = 'medication-vision.html?returnTo=homeScreen';
 }
 
 function goToHealthRecords() {
@@ -844,55 +1280,179 @@ function logout() {
 
 function updateProfileScreen() {
     const userId = localStorage.getItem('userId') || 'elderly-001';
-    const userName = localStorage.getItem('userName') || 'Kullanıcı';
-    const userEmail = localStorage.getItem('userEmail') || localStorage.getItem('rememberedEmail') || 'test@email.com';
-    const userPlan = localStorage.getItem('userPlan') || 'Standart';
+    const userName = localStorage.getItem('userName') || (currentLang === 'en' ? 'User' : 'Kullanıcı');
+    const userEmail = localStorage.getItem('userEmail') || localStorage.getItem('rememberedEmail') || '-';
+    const userPlanRaw = localStorage.getItem('userPlan') || 'Standart';
     const subscriptionEnd = localStorage.getItem('subscriptionEnd') || '2025-12-31';
-    const registrationDate = localStorage.getItem('registrationDate') || new Date().toLocaleDateString('tr-TR');
+    const registrationDate = localStorage.getItem('registrationDate') || new Date().toLocaleDateString(currentLang === 'en' ? 'en-US' : 'tr-TR');
+    const normalizedPlan = String(userPlanRaw).toLowerCase().includes('premium') ? 'premium' : 'standard';
 
     // Kalan günleri hesapla
     const endDate = new Date(subscriptionEnd);
     const today = new Date();
     const daysLeft = Math.max(0, Math.ceil((endDate - today) / (1000 * 60 * 60 * 24)));
-    const daysLeftText = daysLeft > 0 ? `${daysLeft} GÜN` : 'KATILAŞMIŞ';
+    const daysLeftText = daysLeft > 0
+        ? (currentLang === 'en' ? `${daysLeft} DAYS` : `${daysLeft} GÜN`)
+        : (currentLang === 'en' ? 'EXPIRED' : 'SÜRESİ DOLDU');
 
     document.getElementById('profileName').textContent = userName;
     document.getElementById('profileEmail').textContent = userEmail;
-    document.getElementById('profilePlan').textContent = userPlan === 'Premium' ? '⭐ PREMIUM' : '📦 STANDART';
+    document.getElementById('profilePlan').textContent = normalizedPlan === 'premium'
+        ? '⭐ PREMIUM'
+        : (currentLang === 'en' ? '📦 STANDARD' : '📦 STANDART');
     document.getElementById('profileDaysLeft').textContent = daysLeftText;
 }
 
 function updateSubscriptionScreen() {
-    const userPlan = localStorage.getItem('userPlan') || 'Standart';
+    const userPlanRaw = localStorage.getItem('userPlan') || 'Standart';
     const subscriptionEnd = localStorage.getItem('subscriptionEnd') || '2025-12-31';
-    const isPremium = userPlan === 'Premium';
+    const isPremium = String(userPlanRaw).toLowerCase().includes('premium');
 
-    document.getElementById('subCurrentPlan').textContent = isPremium ? '⭐ PREMIUM (Tüm Özellikler)' : '📦 STANDART';
+    document.getElementById('subCurrentPlan').textContent = isPremium
+        ? (currentLang === 'en' ? '⭐ PREMIUM (All Features)' : '⭐ PREMIUM (Tüm Özellikler)')
+        : (currentLang === 'en' ? '📦 STANDARD' : '📦 STANDART');
     document.getElementById('subEndDate').textContent = subscriptionEnd;
 
+    const premiumFeaturesEl = document.getElementById('premiumFeatures');
+    if (!premiumFeaturesEl) return;
+
+    if (isPremium && currentLang === 'en') {
+        premiumFeaturesEl.innerHTML = `
+            <div>✓ Video Doctor Consultation</div>
+            <div>✓ Human Assistant (24/7)</div>
+            <div>✓ Mood Analysis (AI)</div>
+            <div>✓ Health Trends</div>
+        `;
+        return;
+    }
+
     if (isPremium) {
-        document.getElementById('premiumFeatures').innerHTML = `
+        premiumFeaturesEl.innerHTML = `
             <div>✓ Video Doktor Konsültasyonu</div>
             <div>✓ İnsan Asistanı (24/7)</div>
             <div>✓ Ruh Hali Analizi (AI)</div>
             <div>✓ Sağlık Trendleri</div>
         `;
+        return;
     }
+
+    premiumFeaturesEl.innerHTML = '';
 }
 
 function editProfile() {
-    const newName = prompt('Yeni ad soyadınız:', localStorage.getItem('userName') || '');
+    const newName = prompt(currentLang === 'en' ? 'Your new full name:' : 'Yeni ad soyadınız:', localStorage.getItem('userName') || '');
     if (newName && newName.trim()) {
         localStorage.setItem('userName', newName.trim());
         updateProfileScreen();
-        speak('Adınız güncellendi', 'tr-TR');
+        speak(currentLang === 'en' ? 'Your name has been updated' : 'Adınız güncellendi', currentLang === 'en' ? 'en-US' : 'tr-TR');
     }
 }
 
 function goToSubscription() {
     updateSubscriptionScreen();
     showScreen('subscriptionScreen');
-    speak('Abone durumu sayfasında bulunuyorsunuz', 'tr-TR');
+    speak(currentLang === 'en' ? 'You are on the subscription page.' : 'Abone durumu sayfasında bulunuyorsunuz', currentLang === 'en' ? 'en-US' : 'tr-TR');
+}
+
+async function restorePurchases() {
+    const token = await requireAuthTokenAsync();
+    if (!token) return;
+
+    const response = await safeFetch(`${API_BASE}/api/subscription?token=${token}`, {
+        method: 'GET'
+    });
+    if (!response) return;
+
+    const data = await safeReadJson(response, null);
+    if (!response.ok || !data) {
+        showNotification(t('restoreFailed'), t('restoreFailedMsg'), 'error');
+        return;
+    }
+
+    const subscription = data.subscription || data;
+    const planRaw = String(subscription.plan || subscription.Plan || 'standard').toLowerCase();
+    const normalizedPlan = planRaw === 'premium' ? 'Premium' : 'Standart';
+    const expiresAtRaw = subscription.expiresAt || subscription.ExpiresAt || '';
+    const isActive = subscription.isActive ?? subscription.IsActive ?? false;
+
+    localStorage.setItem('userPlan', isActive ? normalizedPlan : 'Standart');
+    if (expiresAtRaw) {
+        const parsedDate = new Date(expiresAtRaw);
+        if (!Number.isNaN(parsedDate.getTime())) {
+            localStorage.setItem('subscriptionEnd', parsedDate.toISOString().split('T')[0]);
+        }
+    }
+
+    subscriptionCache = subscription;
+    updateProfileScreen();
+    updateSubscriptionScreen();
+    if (!isActive) {
+        showNotification(
+            t('restoreSuccess'),
+            currentLang === 'en'
+                ? 'No active purchase found. Plan refreshed as Standard.'
+                : 'Aktif satın alma bulunamadı. Paket Standart olarak güncellendi.',
+            'error'
+        );
+        return;
+    }
+
+    showNotification(t('restoreSuccess'), t('restoreSuccessMsg'));
+}
+
+async function deleteAccountFlow() {
+    const token = await requireAuthTokenAsync();
+    if (!token) return;
+
+    const confirmed = confirm(t('deleteAccountConfirmMsg'));
+    if (!confirmed) {
+        showNotification(t('deleteAccountCanceled'), t('deleteAccountCanceledMsg'), 'error');
+        return;
+    }
+
+    const passwordInput = prompt(t('deleteAccountPasswordPrompt'));
+    if (passwordInput === null) {
+        showNotification(t('deleteAccountCanceled'), t('deleteAccountCanceledMsg'), 'error');
+        return;
+    }
+
+    const password = String(passwordInput || '').trim();
+    if (!password) {
+        showNotification(t('deleteAccountNeedPassword'), t('deleteAccountNeedPasswordMsg'), 'error');
+        return;
+    }
+
+    const finalText = prompt(t('deleteAccountFinalPrompt'));
+    const expectedFinalText = currentLang === 'en' ? 'DELETE' : 'SIL';
+    if ((finalText || '').trim().toUpperCase() !== expectedFinalText) {
+        showNotification(t('deleteAccountFinalMismatch'), t('deleteAccountFinalMismatchMsg'), 'error');
+        return;
+    }
+
+    const response = await safeFetch(`${API_BASE}/api/elderly/account?token=${token}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+    });
+    if (!response) return;
+
+    const payload = await safeReadJson(response, {});
+    if (!response.ok || !payload?.success) {
+        showNotification(t('deleteAccountFailed'), payload?.message || t('deleteAccountFailedMsg'), 'error');
+        return;
+    }
+
+    await removeStoredToken();
+    localStorage.removeItem('userId');
+    localStorage.removeItem('userName');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userPlan');
+    localStorage.removeItem('subscriptionEnd');
+    localStorage.removeItem('rememberMe');
+    subscriptionCache = null;
+
+    showNotification(t('deleteAccountSuccess'), t('deleteAccountSuccessMsg'));
+    showScreen('loginScreen');
 }
 
 function goToPremium() {
@@ -900,27 +1460,36 @@ function goToPremium() {
     if (isPremium) {
         showNotification('Premium Aktif', 'Zaten premium aboneniz!');
     } else {
-        speak('Premium paket seçildi. Ödemedikten sonra tüm özellikler aktif olur.', 'tr-TR');
-        localStorage.setItem('userPlan', 'Premium');
-        const today = new Date();
-        const nextYear = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
-        localStorage.setItem('subscriptionEnd', nextYear.toISOString().split('T')[0]);
-        showNotification('Premium Başarılı', 'Tekrardan hoş geldiniz!');
-        updateProfileScreen();
+        const title = currentLang === 'en' ? 'Subscription Required' : 'Abonelik Gerekli';
+        const message = currentLang === 'en'
+            ? 'Opening subscription screen. Apple account page opens only if you tap Manage Subscriptions.'
+            : 'Abonelik ekranı açılıyor. Apple hesabı sadece siz "Abonelikleri Yönet" derseniz açılır.';
+        showNotification(title, message);
+        goToSubscription();
     }
+}
+
+function shouldShowDemoHint() {
+    const params = new URLSearchParams(window.location.search || '');
+    return params.get('demo') === '1' || localStorage.getItem('showDemoHint') === 'true';
 }
 
 // =================== BİLDİRİM ===================
 
 function showNotification(title, message, type = 'success') {
+    const activeScreenId = document.querySelector('.screen.active')?.id || '';
+    if (type === 'success' && activeScreenId === 'homeScreen') {
+        return;
+    }
+
     provideFeedback(`${title}. ${message}`, type === 'error' ? [80, 40, 80] : [40]);
     const notification = document.createElement('div');
     notification.style.cssText = `
         position: fixed;
         top: 20px;
         right: 20px;
-        background: ${type === 'success' ? '#00cc00' : '#ff3333'};
-        color: black;
+        background: ${type === 'success' ? '#2563eb' : '#ff3333'};
+        color: ${type === 'success' ? 'white' : 'black'};
         padding: 20px 30px;
         border-radius: 10px;
         font-size: 20px;
@@ -1011,7 +1580,7 @@ function provideFeedback(message, pattern = [30]) {
             // ignore
         }
     }
-    if (message) {
+    if (message && (!IS_CAPACITOR_IOS || userHasInteracted)) {
         speak(message);
     }
 }
@@ -1019,9 +1588,21 @@ function provideFeedback(message, pattern = [30]) {
 // =================== FORM IŞLEYENLER ===================
 
 document.addEventListener('DOMContentLoaded', async function () {
+    const markInteraction = () => {
+        userHasInteracted = true;
+    };
+    document.addEventListener('pointerdown', markInteraction, { passive: true, once: true });
+    document.addEventListener('touchstart', markInteraction, { passive: true, once: true });
+    document.addEventListener('keydown', markInteraction, { passive: true, once: true });
+
     handleAssistantIntentFromUrl();
 
     initOfflineResilienceBridge();
+
+    const testHint = document.getElementById('testHint');
+    if (testHint && !shouldShowDemoHint()) {
+        testHint.style.display = 'none';
+    }
 
     const a11yMenuBtn = document.getElementById('a11yMenuBtn');
     const a11yMenu = document.getElementById('a11yMenu');
@@ -1162,7 +1743,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     // Dil ve çevirileri her açılışta uygula
-    currentLang = localStorage.getItem('appLang') || 'tr';
+    currentLang = detectPreferredLanguage();
     applyTranslations();
 
     // Otomatik giriş (Beni Hatırla)
@@ -1183,6 +1764,33 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
 
         // Kayıtlı dil ayarı zaten yukarıda uygulandı
+    }
+
+    if (isOfflineDemoModeEnabled()) {
+        showScreen('homeScreen');
+        updateGreeting();
+        showGracefulOfflineState('📡 Demo çevrimdışı mod açık. Sunucuya bağlanmadan temel ekran gösteriliyor.', 'offline');
+    }
+
+    // Capacitor iOS: if the backend is not reachable on startup, don't hang on loading screens.
+    // Proactively test connectivity and immediately enable offline mode if unreachable.
+    if (IS_CAPACITOR_IOS && !isOfflineDemoModeEnabled()) {
+        (async () => {
+            try {
+                const ctrl = new AbortController();
+                const tid = setTimeout(() => ctrl.abort(), API_TIMEOUT_MS);
+                await fetch(`${API_BASE}/api/health`, { signal: ctrl.signal, method: 'HEAD' }).catch(() => {
+                    forceCloseLoadingAndRecover();
+                });
+                clearTimeout(tid);
+            } catch (_) { /* absorbed */ } finally {
+                // _onBackendFail will activate offline mode if needed after 2 fails;
+                // call it once here for the startup probe.
+                if (_backendUnreachableCount === 0) {
+                    // if we reach here without error, backend responded — all good.
+                }
+            }
+        })();
     }
 
     // Butonlara sesli geri bildirim
@@ -1224,7 +1832,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 window.addEventListener('load', async () => {
     const token = await getStoredToken();
     const path = window.location.pathname || '';
-    if (token && (path.includes('login') || path === '/' || path.endsWith('/index.html'))) {
+    if ((token || isOfflineDemoModeEnabled()) && (path.includes('login') || path === '/' || path.endsWith('/index.html'))) {
         showScreen('homeScreen');
         updateGreeting();
     }
@@ -1288,6 +1896,7 @@ function withinHours(now, startHour, endHour) {
 
 async function maybeRunCareRoutine() {
     const token = await getStoredToken();
+    if (isOfflineDemoModeEnabled() || isDemoOfflineToken(token)) return;
     if (!token) return;
     const now = new Date();
     const dateKey = getDateKey(now);
@@ -1305,13 +1914,8 @@ async function maybePromptMood(dateKey, now) {
     if (!withinHours(now, 9, 21)) return;
 
     localStorage.setItem(key, 'true');
-    speak('Bugün nasılsın? Ruh halini 1 ile 10 arasında söyleyebilirsin.');
-    showNotification('Ruh Hali', 'Bugün nasılsın? 1-10 arası söyleyebilirsin.', 'info');
-    const input = prompt('Ruh halin (1-10):');
-    const score = Number.parseInt(String(input || '').trim(), 10);
-    if (!Number.isNaN(score) && score >= 1 && score <= 10) {
-        await submitMood(score);
-    }
+    speak('Ruh hali kaydı için sesli komut ver. Örnek: Ruh halim 7.');
+    showNotification('Ruh Hali', 'Sesli komut kullanın: "Ruh halim 7"', 'info');
 }
 
 async function maybePromptHealth(dateKey, now, recordType, unit, startHour, endHour, question) {
@@ -1320,13 +1924,11 @@ async function maybePromptHealth(dateKey, now, recordType, unit, startHour, endH
     if (!withinHours(now, startHour, endHour)) return;
 
     localStorage.setItem(key, 'true');
-    speak(`Canım, ${question} Değerini girer misin?`);
-    showNotification('Sağlık Kontrolü', question, 'info');
-    const input = prompt(`${recordType.toUpperCase()} değeri (${unit}):`);
-    const value = Number.parseFloat(String(input || '').replace(',', '.'));
-    if (!Number.isNaN(value) && value > 0) {
-        await addHealthRecord(recordType, value, unit);
-    }
+    const commandHint = recordType === 'tansiyon'
+        ? 'Sesli komut: "Tansiyon 12"'
+        : 'Sesli komut: "Şeker 110"';
+    speak(`Canım, ${question} ${commandHint}`);
+    showNotification('Sağlık Kontrolü', commandHint, 'info');
 }
 
 async function maybeRemindMedications(dateKey, now) {
@@ -1389,7 +1991,7 @@ async function handleLogin(e) {
         if (response) {
             const rawText = await response.text();
             let data = null;
-            try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+            try { data = rawText ? JSON.parse(rawText) : null; } catch { }
 
             if (response.ok && data?.token) {
                 await setStoredToken(data.token);
@@ -1423,9 +2025,11 @@ async function handleLogin(e) {
         console.error('Login error:', { error, apiBase: API_BASE, email });
     }
 
-    // Demo / Offline mod: sunucuya ulaşılamadığında test hesabıyla giriş
-    if (email === 'elderly@test.com' && password === '123') {
-        await setStoredToken('demo-offline-token');
+    // Controlled Offline Mode (only if explicitly enabled for local QA)
+    const allowOfflineDemo = localStorage.getItem('allowOfflineDemo') === 'true';
+    if (allowOfflineDemo) {
+        await removeStoredToken();
+        sessionStorage.setItem('offlineDemoMode', 'true');
         localStorage.setItem('userId', 'demo-user');
         localStorage.setItem('userName', currentLang === 'en' ? 'Demo User' : 'Demo Kullanıcı');
         localStorage.setItem('rememberMe', remember ? 'true' : 'false');
@@ -1433,7 +2037,7 @@ async function handleLogin(e) {
         subscriptionCache = null;
         showScreen('homeScreen');
         updateGreeting();
-        speak(t('welcomeMsg'));
+        showGracefulOfflineState('📡 Demo çevrimdışı mod açık. Sunucuya bağlanmadan temel ekran gösteriliyor.', 'offline');
         runPendingAssistantIntentIfAny();
         return;
     }
@@ -1446,11 +2050,16 @@ async function handleForgotPassword() {
     if (!email) return;
 
     try {
-        const response = await fetch(`${API_BASE}/api/elderly/reset-password`, {
+        const response = await safeFetch(`${API_BASE}/api/elderly/reset-password`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email })
-        });
+        }, { timeoutMs: API_TIMEOUT_MS });
+
+        if (!response) {
+            forceCloseLoadingAndRecover();
+            return;
+        }
 
         if (response.ok) {
             let tempPassword = null;
@@ -1537,7 +2146,7 @@ async function handleRegister(e) {
     const birthDate = document.getElementById('regBirthDate').value;
 
     try {
-        const response = await fetch(`${API_BASE}/api/elderly-self-enroll`, {
+        const response = await safeFetch(`${API_BASE}/api/elderly-self-enroll`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1548,7 +2157,12 @@ async function handleRegister(e) {
                 birthDate,
                 plan: 'standard'
             })
-        });
+        }, { timeoutMs: API_TIMEOUT_MS });
+
+        if (!response) {
+            forceCloseLoadingAndRecover();
+            return;
+        }
 
         if (response.ok) {
             let tempPassword = null;
@@ -1583,10 +2197,18 @@ async function handleRegister(e) {
 
 async function loadMedications() {
     const token = requireAuthToken();
-    if (!token) return;
+    const container = document.getElementById('medicationsList');
+    if (!token) {
+        if (container) container.innerHTML = `<div style="font-size:24px;color:#ffff00;text-align:center;padding:24px;">${t('medsEmpty')}</div>`;
+        return;
+    }
     try {
-        const response = await safeFetch(`${API_BASE}/api/medications?token=${token}`);
-        if (!response) return;
+        const response = await safeFetch(`${API_BASE}/api/medications?token=${token}`, {}, { silent: true });
+        if (!response) {
+            // Backend unreachable — show empty state immediately, don't hang
+            if (container) container.innerHTML = `<div style="font-size:22px;color:#ffaa00;text-align:center;padding:24px;">📡 Sunucu bağlantısı yok. İlaçlar yüklenemedi.</div>`;
+            return;
+        }
         if (response.ok) {
             const payload = await safeReadJson(response, []);
             const medications = Array.isArray(payload)
@@ -1603,17 +2225,18 @@ async function loadMedications() {
             container.innerHTML = medications.map(med => `
                 <div style="background: rgba(255,255,0,0.1); border-left: 5px solid #ffff00; padding: 20px; margin-bottom: 20px; border-radius: 10px;">
                     <div style="font-size: 32px; color: #ffff00; font-weight: bold; margin-bottom: 10px;">${med.name}</div>
-                    <div style="font-size: 24px; color: #ffffff; margin-bottom: 10px;">Saatler: ${med.scheduleTimes?.join(', ') || 'Belirtilmedi'}</div>
+                    <div style="font-size: 24px; color: #ffffff; margin-bottom: 10px;">${t('medsTimeLabel')}: ${med.scheduleTimes?.join(', ') || t('medsUnspecified')}</div>
                     <div style="font-size: 20px; color: #00ff00; margin-bottom: 15px;">${med.notes || ''}</div>
-                    ${typeof med.stockCount === 'number' ? `<div style="font-size: 20px; color: ${med.stockCount <= 3 ? '#ff6666' : '#00ccff'}; margin-bottom: 10px;">Kalan: ${med.stockCount}</div>` : ''}
-                    <button class="btn-giant btn-green" onclick="takeMedication(${med.id})" style="margin-top: 10px;">✓ İLACIMI İÇTİM</button>
+                    ${typeof med.stockCount === 'number' ? `<div style="font-size: 20px; color: ${med.stockCount <= 3 ? '#ff6666' : '#00ccff'}; margin-bottom: 10px;">${t('medsRemaining')}: ${med.stockCount}</div>` : ''}
+                    <button class="btn-giant btn-green" onclick="takeMedication(${med.id})" style="margin-top: 10px;">${t('medsTakenBtn')}</button>
                 </div>
             `).join('');
             refreshMedicationConfirmTimers(medications);
             scheduleMedicationReminders();
         }
     } catch (error) {
-        console.error('İlaç yükleme hatası:', error);
+        console.warn('İlaç yükleme hatası:', error);
+        if (container) container.innerHTML = `<div style="font-size:22px;color:#ffaa00;text-align:center;padding:24px;">📡 İlaçlar yüklenirken hata oluştu.</div>`;
     }
 }
 
@@ -1708,7 +2331,7 @@ async function loadFamilyMembers() {
             container.innerHTML = members.map(member => `
                 <div style="background: rgba(0,255,100,0.1); border-left: 5px solid #00ff00; padding: 20px; margin-bottom: 20px; border-radius: 10px;">
                     <div style="font-size: 32px; color: #ffff00; font-weight: bold; margin-bottom: 10px;">${member.name}</div>
-                    <div style="font-size: 24px; color: #ffffff;">${member.relationship || 'Aile Üyesi'}</div>
+                    <div style="font-size: 24px; color: #ffffff;">${member.relationship || t('familyMemberDefault')}</div>
                     <div style="font-size: 20px; color: #00ff00; margin-top: 10px;">${member.email}</div>
                     ${member.phoneNumber ? `<div style="font-size: 20px; color: #00ccff; margin-top: 8px;">${member.phoneNumber}</div>` : ''}
                 </div>
@@ -1758,45 +2381,30 @@ function updateGreeting() {
 }
 
 function pickPreferredVoice(langCode) {
-    if (!('speechSynthesis' in window)) return null;
-    const voices = speechSynthesis.getVoices() || [];
-    if (!voices.length) return null;
-
-    if (langCode === 'en-GB') {
-        return voices.find(v => /^en-GB$/i.test(v.lang))
-            || voices.find(v => /^en-/i.test(v.lang) && /google|samantha|serena|daniel|karen/i.test(v.name))
-            || voices.find(v => /^en-/i.test(v.lang))
-            || null;
-    }
-
-    return voices.find(v => /^tr-TR$/i.test(v.lang))
-        || voices.find(v => /^tr/i.test(v.lang))
-        || null;
+    // TTS TEMP DISABLED
+    // if (IS_CAPACITOR_IOS) return null;
+    // if (!('speechSynthesis' in window)) return null;
+    // const voices = speechSynthesis.getVoices() || [];
+    // if (!voices.length) return null;
+    // if (langCode === 'en-GB') {
+    //     return voices.find(v => /^en-GB$/i.test(v.lang))
+    //         || voices.find(v => /^en-/i.test(v.lang) && /google|samantha|serena|daniel|karen/i.test(v.name))
+    //         || voices.find(v => /^en-/i.test(v.lang))
+    //         || null;
+    // }
+    // return voices.find(v => /^tr-TR$/i.test(v.lang))
+    //     || voices.find(v => /^tr/i.test(v.lang))
+    //     || null;
+    return null;
 }
 
 function speak(text) {
-    if (!text || typeof text !== 'string') return;
-    if ('speechSynthesis' in window) {
-        try {
-            speechSynthesis.cancel();
-            const cleanedText = String(text)
-                .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
-                .replace(/\s+/g, ' ')
-                .trim();
-            if (!cleanedText) return;
-
-            const voiceLang = currentLang === 'en' ? 'en-GB' : 'tr-TR';
-            const utterance = new SpeechSynthesisUtterance(cleanedText);
-            utterance.lang = voiceLang;
-            utterance.voice = pickPreferredVoice(voiceLang);
-            utterance.rate = 0.85;
-            utterance.volume = 1;
-            utterance.pitch = currentLang === 'en' ? 1.05 : 1;
-            speechSynthesis.speak(utterance);
-        } catch (error) {
-            console.warn('Konuşma sentezi hatası:', error);
-        }
-    }
+    // TTS TEMP DISABLED
+    // if (!text || typeof text !== 'string') return;
+    // if ('speechSynthesis' in window) {
+    //   ... intentionally disabled during stabilization ...
+    // }
+    return;
 }
 
 async function triggerEmergencyCall() {
@@ -1825,28 +2433,25 @@ function showEmergencyConfirm() {
     if (isEmergencyModalOpen) return;
     isEmergencyModalOpen = true;
 
-    ensurePremiumAccess('SOS').then(hasAccess => {
-        if (!hasAccess) {
-            isEmergencyModalOpen = false;
-            return;
-        }
-        const modal = document.getElementById('emergencyModal');
-        if (modal) {
-            modal.classList.add('show');
-            speak('Acil yardım onayı. Aileye ve sağlık kuruluşlarına konumla bildirim gönderilecek. İptal etmek için iptal butonuna basın.');
-            if (emergencyTimer) {
-                clearTimeout(emergencyTimer);
-            }
-            emergencyTimer = setTimeout(() => {
-                if (isEmergencyModalOpen) {
-                    confirmEmergency();
-                }
-            }, 5000);
-        }
-    }).catch(error => {
-        console.error('Emergency check error:', error);
+    const token = requireAuthToken();
+    if (!token) {
         isEmergencyModalOpen = false;
-    });
+        return;
+    }
+
+    const modal = document.getElementById('emergencyModal');
+    if (modal) {
+        modal.classList.add('show');
+        speak('Acil yardım onayı. Aileye ve sağlık kuruluşlarına konumla bildirim gönderilecek. İptal etmek için iptal butonuna basın.');
+        if (emergencyTimer) {
+            clearTimeout(emergencyTimer);
+        }
+        emergencyTimer = setTimeout(() => {
+            if (isEmergencyModalOpen) {
+                confirmEmergency();
+            }
+        }, 5000);
+    }
 }
 
 function cancelEmergency() {
@@ -1882,7 +2487,7 @@ async function confirmEmergency() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                location: location?.label || 'Unknown',
+                location: location?.label || location?.mapsUrl || 'Unknown',
                 coords: location?.coords || null
             })
         });
@@ -1890,9 +2495,7 @@ async function confirmEmergency() {
         if (response.ok) {
             showNotification('Gönderildi', 'Acil yardım çağrısı gönderildi', 'success');
             await sendEmergencyNotification(location);
-            await sendEmergencyBroadcast({
-                location: location?.label || 'Unknown'
-            });
+            await sendEmergencyBroadcast(buildEmergencyPayload(location));
             await triggerEmergencyCall();
         } else {
             showNotification('Hata', 'Acil çağrı gönderilemedi', 'error');
@@ -1917,6 +2520,7 @@ async function getCurrentLocation() {
             const { latitude, longitude, accuracy } = position.coords;
             return {
                 label: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+                mapsUrl: `https://maps.google.com/?q=${latitude},${longitude}`,
                 coords: { latitude, longitude, accuracy }
             };
         } catch (error) {
@@ -1941,6 +2545,7 @@ async function getCurrentLocation() {
                 const { latitude, longitude, accuracy } = position.coords;
                 resolve({
                     label: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+                    mapsUrl: `https://maps.google.com/?q=${latitude},${longitude}`,
                     coords: { latitude, longitude, accuracy }
                 });
             },
@@ -1951,6 +2556,20 @@ async function getCurrentLocation() {
             { enableHighAccuracy: true, timeout: 3000, maximumAge: 10000 }
         );
     });
+}
+
+function buildEmergencyPayload(location) {
+    const coords = location?.coords || null;
+    return {
+        location: coords
+            ? {
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                accuracy: coords.accuracy,
+                mapsUrl: location?.mapsUrl || null
+            }
+            : (location?.mapsUrl || location?.label || 'Unknown')
+    };
 }
 
 async function sendEmergencyNotification(location) {
@@ -1966,7 +2585,8 @@ async function sendEmergencyNotification(location) {
             body: JSON.stringify({
                 type: 'emergency_alert',
                 message,
-                severity: 'high'
+                severity: 'high',
+                location: location?.mapsUrl || location?.label || 'Unknown'
             })
         });
         if (!response) return;
@@ -2091,17 +2711,27 @@ async function loadNotifications() {
 
 async function loadMoodAnalysis() {
     const token = requireAuthToken();
-    if (!token) return;
+    if (!token) {
+        renderMoodDashboard({ averageMood: 0, trend: 'stable', recentMoods: [] });
+        return;
+    }
     try {
-        const response = await safeFetch(`${API_BASE}/api/mood-analysis?token=${token}`);
-        if (!response) return;
+        const response = await safeFetch(`${API_BASE}/api/mood-analysis?token=${token}`, {}, { silent: true });
+        if (!response) {
+            // Backend unreachable — show empty offline placeholder so screen doesn't hang
+            renderMoodDashboard({ averageMood: 0, trend: 'stable', recentMoods: [] });
+            return;
+        }
         if (response.ok) {
             const data = await safeReadJson(response, { averageMood: 0, trend: 'stable', recentMoods: [] });
             document.body.classList.toggle('mood-declining', data.trend === 'declining');
             renderMoodDashboard(data);
+        } else {
+            renderMoodDashboard({ averageMood: 0, trend: 'stable', recentMoods: [] });
         }
     } catch (error) {
-        console.error('Ruh hali yükleme hatası:', error);
+        console.warn('Ruh hali yükleme hatası:', error);
+        renderMoodDashboard({ averageMood: 0, trend: 'stable', recentMoods: [] });
     }
 }
 
@@ -2116,7 +2746,7 @@ async function submitMood(score) {
         });
         if (!response) return;
         if (response.ok) {
-            showNotification('Teşekkürler', 'Ruh haliniz kaydedildi', 'success');
+            showNotification(t('moodThanksTitle'), t('moodSavedMsg'), 'success');
             const severity = score <= 3 ? 'high' : 'normal';
             const moodMessage = score <= 3
                 ? `Ruh hali düşük: ${score}/10. Kullanıcı kendini iyi hissetmiyor olabilir.`
@@ -2124,7 +2754,7 @@ async function submitMood(score) {
             await sendFamilyNotification('mood_update', moodMessage, severity);
             loadMoodAnalysis();
         } else {
-            showNotification('Hata', 'Ruh hali kaydedilemedi', 'error');
+            showNotification(t('errorTitle'), t('moodSaveError'), 'error');
         }
     } catch (error) {
         console.error('Ruh hali kaydı hatası:', error);
@@ -2147,15 +2777,15 @@ function renderMoodDashboard(data) {
         <div style="text-align: center; padding: 20px;">
             <div style="font-size: 80px; margin-bottom: 20px;">${trendEmoji}</div>
             <div style="font-size: 32px; font-weight: bold; color: ${moodColor}; margin-bottom: 10px;">
-                Ortalama: ${data.averageMood}/10
+                ${t('moodAverageLabel')}: ${data.averageMood}/10
             </div>
             <div style="font-size: 24px; color: #ffff00; margin-bottom: 30px;">
-                Eğilim: ${data.trend === 'improving' ? '📈 İyileşiyor' : data.trend === 'declining' ? '📉 Kötüleşiyor' : '➡️ Sabit'}
+                ${t('moodTrendLabel')}: ${data.trend === 'improving' ? t('moodTrendImproving') : data.trend === 'declining' ? t('moodTrendDeclining') : t('moodTrendStable')}
             </div>
         </div>
         
         <div style="background: rgba(255,255,0,0.1); padding: 20px; border-radius: 10px; border-left: 5px solid #ffff00;">
-            <h3 style="font-size: 24px; margin-bottom: 15px;">📋 Son 5 Günün Ruh Hali:</h3>
+            <h3 style="font-size: 24px; margin-bottom: 15px;">${t('moodLastFiveDays')}</h3>
             <div style="display: grid; gap: 10px;">
                 ${data.recentMoods.map((mood, idx) => `
                     <div style="display: flex; align-items: center; gap: 15px; padding: 10px; background: rgba(0,200,100,0.1); border-radius: 8px;">
@@ -2171,8 +2801,7 @@ function renderMoodDashboard(data) {
         </div>
         
         <div style="margin-top: 20px; padding: 20px; background: rgba(0,150,255,0.15); border-radius: 10px; border-left: 5px solid #0096ff; font-size: 18px; line-height: 1.6;">
-            <strong>💡 Bilgi:</strong> Ruh haliniz sistem tarafından günlük sohbetleriniz analiz edilerek izleniyor. 
-            Anormal bir değişim varsa, aile üyeleriniz otomatik olarak bilgilendirilecektir.
+            <strong>${t('moodInfoTitle')}</strong> ${t('moodInfoText')}
         </div>
     `;
 }
@@ -2180,16 +2809,26 @@ function renderMoodDashboard(data) {
 // ================= HEALTH RECORDS (Sağlık Kayıtları) =================
 async function loadHealthRecords() {
     const token = requireAuthToken();
-    if (!token) return;
+    if (!token) {
+        renderHealthRecords([]);
+        return;
+    }
     try {
-        const response = await safeFetch(`${API_BASE}/api/health-records?token=${token}`);
-        if (!response) return;
+        const response = await safeFetch(`${API_BASE}/api/health-records?token=${token}`, {}, { silent: true });
+        if (!response) {
+            // Backend unreachable — show empty state so screen doesn’t hang
+            renderHealthRecords([]);
+            return;
+        }
         if (response.ok) {
             const data = await safeReadJson(response, []);
             renderHealthRecords(data);
+        } else {
+            renderHealthRecords([]);
         }
     } catch (error) {
-        console.error('Sağlık kayıtları yükleme hatası:', error);
+        console.warn('Sağlık kayıtları yükleme hatası:', error);
+        renderHealthRecords([]);
     }
 }
 
@@ -2198,10 +2837,10 @@ function renderHealthRecords(records) {
     if (!healthDiv) return;
 
     let html = '<div style="padding: 20px;">';
-    html += '<h2 style="color: #ffff00; text-align: center; margin-bottom: 30px;">📊 SAĞLIK KAYITLARI</h2>';
+    html += `<h2 style="color: #ffff00; text-align: center; margin-bottom: 30px;">${t('healthRecordsTitle')}</h2>`;
 
     if (records.length === 0) {
-        html += '<div style="color: #ffff00; text-align: center; font-size: 20px;">Henüz kayıt bulunmamaktadır.</div>';
+        html += `<div style="color: #ffff00; text-align: center; font-size: 20px;">${t('noRecordsYet')}</div>`;
     } else {
         // Group by record type
         const byType = {};
@@ -2222,27 +2861,36 @@ function renderHealthRecords(records) {
                     ${icon} ${type.toUpperCase()}: ${latest.value} ${latest.unit}
                 </div>
                 <div style="color: ${alertColor}; font-size: 18px; margin-bottom: 10px;">
-                    ${latest.alertLevel === 'critical' ? '🚨 KRİTİK' : latest.alertLevel === 'warning' ? '⚠️ UYARI' : '✅ NORMAL'}
+                    ${latest.alertLevel === 'critical' ? t('healthCritical') : latest.alertLevel === 'warning' ? t('healthWarning') : t('healthNormal')}
                 </div>
-                <div style="color: #999; font-size: 14px;">Son: ${new Date(latest.timestamp).toLocaleString('tr-TR')}</div>
-                <div style="color: #666; font-size: 12px; margin-top: 5px;">Son 5 kayıt: ${typeRecords.slice(0, 5).map(r => r.value).join(', ')}</div>
+                <div style="color: #999; font-size: 14px;">${t('healthLastLabel')}: ${new Date(latest.timestamp).toLocaleString(currentLang === 'en' ? 'en-US' : 'tr-TR')}</div>
+                <div style="color: #666; font-size: 12px; margin-top: 5px;">${t('healthLastFiveLabel')}: ${typeRecords.slice(0, 5).map(r => r.value).join(', ')}</div>
             </div>`;
         });
     }
 
-    html += '<div style="margin-top: 30px;"><button onclick="showAddHealthRecord()" class="btn-mega" style="background: linear-gradient(135deg, #667eea, #764ba2); width: 100%; margin-bottom: 10px;">➕ YENİ KAYIT</button></div>';
+    html += `<div style="margin-top: 30px;"><button onclick="showAddHealthRecord()" class="btn-mega" style="background: linear-gradient(135deg, #667eea, #764ba2); width: 100%; margin-bottom: 10px;">${t('addNewRecordBtn')}</button></div>`;
     html += '</div>';
 
     healthDiv.innerHTML = html;
 }
 
 function showAddHealthRecord() {
-    const type = prompt('Hangi ölçümü eklemek istersiniz?\n1 = Tansiyon (mmHg)\n2 = Kan Şekeri (mg/dL)\n3 = Kolesterol (mg/dL)');
+    const type = prompt(currentLang === 'en'
+        ? 'Which measurement would you like to add?\n1 = Blood Pressure (mmHg)\n2 = Blood Sugar (mg/dL)\n3 = Cholesterol (mg/dL)'
+        : 'Hangi ölçümü eklemek istersiniz?\n1 = Tansiyon (mmHg)\n2 = Kan Şekeri (mg/dL)\n3 = Kolesterol (mg/dL)');
     if (!type) return;
 
     const recordType = type === '1' ? 'tansiyon' : type === '2' ? 'şeker' : 'kolesterol';
+    const recordTypeLabel = type === '1'
+        ? (currentLang === 'en' ? 'blood pressure' : 'tansiyon')
+        : type === '2'
+            ? (currentLang === 'en' ? 'blood sugar' : 'şeker')
+            : (currentLang === 'en' ? 'cholesterol' : 'kolesterol');
     const unit = type === '1' ? 'mmHg' : 'mg/dL';
-    const value = prompt(`${recordType} değerini girin (${unit}):`);
+    const value = prompt(currentLang === 'en'
+        ? `Enter ${recordTypeLabel} value (${unit}):`
+        : `${recordType} değerini girin (${unit}):`);
     if (!value) return;
 
     addHealthRecord(recordType, value, unit);

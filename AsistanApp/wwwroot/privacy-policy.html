@@ -60,12 +60,29 @@
       color: var(--muted);
       font-size: 14px;
     }
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 20px;
+      padding: 10px 18px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .back-btn:hover { opacity: 0.88; }
   </style>
 </head>
 <body>
   <main class="container">
+    <a class="back-btn" href="/" onclick="if(history.length>1){history.back();return false;}">&#8592; Geri Dön</a>
     <h1>AsistanApp Gizlilik Politikası</h1>
-    <p class="updated">Son güncelleme: 28 Mart 2026</p>
+    <p class="updated">Son güncelleme: 16 Nisan 2026</p>
 
     <h2>Kapsam</h2>
     <p>Bu politika, VitaGuard/AsistanApp tarafından işlenen kişisel veriler (kimlik, iletişim, sağlık ve cihaz verileri) için GDPR ve KVKK uyumlu bilgilendirme metnidir.</p>
@@ -77,6 +94,16 @@
       <li><strong>Teknik Veriler:</strong> oturum belirteci, cihaz kimliği, hata/güvenlik logları.</li>
       <li><strong>Konum Verileri:</strong> yalnızca acil durum senaryolarında ve kullanıcı akışı kapsamında.</li>
     </ul>
+
+    <h2>İzinler ve Cihaz Erişimleri</h2>
+    <ul>
+      <li><strong>Konum:</strong> yalnızca acil yardım akışı sırasında konum paylaşımı için istenir.</li>
+      <li><strong>Mikrofon:</strong> sadece sesli komut özelliği başlatıldığında kullanılır.</li>
+      <li><strong>Kamera:</strong> sadece ilaç tanıma ekranında kullanıcı başlatırsa kullanılır.</li>
+    </ul>
+
+    <h2>Abonelik ve Ödeme Verisi</h2>
+    <p>Abonelik statüsü ve plan bilgisi uygulama içinde görüntülenir. Ödeme işlemleri Apple altyapısı üzerinden yürütülüyorsa kart bilgileriniz tarafımızda saklanmaz.</p>
 
     <h2>İşleme Amaçları ve Hukuki Sebep</h2>
     <ul>
@@ -95,6 +122,10 @@
 
     <h2>Veri Paylaşımı</h2>
     <p>Verileriniz yalnızca hizmetin çalışması için gerekli taraflarla (ör. bildirim/SMS sağlayıcısı) ve hukuki zorunluluk halinde yetkili kurumlarla paylaşılır. Veri satışı yapılmaz.</p>
+
+    <h2>Reklam ve Veri Kullanım Taahhüdü</h2>
+    <p><strong>SafeGuardian AI kullanıcı verilerini reklam amaçlı kullanmaz ve sadece uygulama işlevselliği için saklar.</strong></p>
+    <p>İsim, e-posta, konum ve sağlık verileri yalnızca güvenli oturum, acil durum yönetimi, aile bilgilendirmesi ve sağlık takibi gibi uygulama işlevleri için işlenir.</p>
 
     <h2>Saklama Süresi</h2>
     <p>Veriler, hizmetin sunulması için gerekli süre boyunca veya yasal zorunluluklar kapsamında saklanır. Süre sonunda anonimleştirilir veya silinir.</p>

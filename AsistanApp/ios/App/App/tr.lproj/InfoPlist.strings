@@ -1,0 +1,6 @@
+"CFBundleDisplayName" = "SafeGuardianAI";
+"NSLocationWhenInUseUsageDescription" = "Bu uygulama acil durumlarda (SOS) konumunuzu belirlemek ve güvenilir kişilerinize göndermek için konum iznine ihtiyaç duyar.";
+"NSCameraUsageDescription" = "SafeGuardian AI, ilaç tanıma ve güvenlik taraması için kameranızı kullanır.";
+"NSPhotoLibraryAddUsageDescription" = "SafeGuardian AI, çekilen ilaç fotoğraflarını analiz ve paylaşım akışı için fotoğraf arşivinize kaydedebilir.";
+"NSPhotoLibraryUsageDescription" = "SafeGuardian AI, galeriden ilaç fotoğrafı seçebilmeniz için fotoğraf arşivinize erişir.";
+"NSMicrophoneUsageDescription" = "SafeGuardian AI, sesli komutlar ve güvenlik özellikleri için mikrofonunuzu kullanır.";

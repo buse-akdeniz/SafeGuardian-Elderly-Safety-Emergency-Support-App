@@ -3,6 +3,18 @@
  * Handles fall detection, health monitoring, voice checks, and emergency escalation
  */
 
+const API_TIMEOUT_MS = 5000;
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
 class AIEmergencyProtocol {
     constructor() {
         this.elderlyId = 'elderly-001';
@@ -31,10 +43,32 @@ class AIEmergencyProtocol {
         console.log(`🚨 Fall Detection - Acceleration: ${accelerationMagnitude.toFixed(2)} m/s²`);
         
         if (accelerationMagnitude > this.thresholds.fallAcceleration) {
-            await this.triggerEmergencyProtocol('fall_detected', {
-                accelerationMagnitude,
-                timestamp: new Date().toISOString()
-            });
+            // Backend'e bildir — SMS aileye + doktora otomatik gönderilir
+            let backendResponse = null;
+            try {
+                const res = await fetchWithTimeout('/api/ai-fall-detection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        elderlyId: this.elderlyId,
+                        accelerationMagnitude,
+                        timestamp: new Date().toISOString()
+                    })
+                }, API_TIMEOUT_MS);
+                backendResponse = await res.json();
+                console.log('📡 Backend fall response:', backendResponse);
+            } catch (e) {
+                console.error('Backend fall-detection isteği başarısız:', e);
+            }
+
+            // Backend initiateVoiceCheck: true döndürdüyse sesli kontrol başlat
+            if (!backendResponse || backendResponse.initiateVoiceCheck !== false) {
+                await this.triggerEmergencyProtocol('fall_detected', {
+                    accelerationMagnitude,
+                    timestamp: new Date().toISOString(),
+                    backendSmsSent: backendResponse?.smsSent ?? false
+                });
+            }
             return true;
         }
         return false;
@@ -233,22 +267,28 @@ class AIEmergencyProtocol {
 
         console.log(`🚨 EMERGENCY PROTOCOL TRIGGERED: ${alertType}`);
 
-        // Show emergency UI
+        // Acil ekranı göster
         document.getElementById('emergencyScreen')?.classList.add('active');
 
-        // Notify backend
-        await fetch('/api/ai-health-check', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                elderlyId: this.elderlyId,
-                healthStatus: 'critical',
-                alertType,
-                ...details
-            })
-        });
+        // Sağlık kritik durumları için backend'e bildir (düşme zaten detectFall'da bildirildi)
+        if (alertType !== 'fall_detected') {
+            try {
+                await fetchWithTimeout('/api/ai-health-check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        elderlyId: this.elderlyId,
+                        healthStatus: 'critical',
+                        alertType,
+                        ...details
+                    })
+                }, API_TIMEOUT_MS);
+            } catch (e) {
+                console.error('ai-health-check isteği başarısız:', e);
+            }
+        }
 
-        // Initiate voice check
+        // Sesli kontrol başlat — yanıt gelmezse 112 geri sayımı tetiklenir
         await this.initiateVoiceCheck(alertType);
     }
 
@@ -265,7 +305,7 @@ class AIEmergencyProtocol {
         const healthData = await this.getLatestHealthData();
 
         // Broadcast emergency to family
-        await fetch('/api/emergency-broadcast', {
+        await fetchWithTimeout('/api/emergency-broadcast', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -276,7 +316,7 @@ class AIEmergencyProtocol {
                 location,
                 ...healthData
             })
-        });
+        }, API_TIMEOUT_MS);
 
         // SignalR broadcast
         if (connection) {
@@ -285,6 +325,68 @@ class AIEmergencyProtocol {
 
         // Show critical alert screen
         this.showCriticalAlert(reason, analysis);
+
+        // 112'yi otomatik ara (5 saniye sonra, kullanıcıya iptal şansı ver)
+        this.scheduleEmergencyCall();
+    }
+
+    /**
+     * 112'yi otomatik arama - kullanıcıya iptal şansı verir
+     */
+    scheduleEmergencyCall() {
+        const callDelaySeconds = 10;
+        let remaining = callDelaySeconds;
+
+        // Geri sayım ekranı oluştur
+        const overlay = document.createElement('div');
+        overlay.id = 'emergencyCallCountdown';
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(200,0,0,0.92); color: white;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 99999; font-family: sans-serif; text-align: center;
+        `;
+        overlay.innerHTML = `
+            <div style="font-size:80px;">🚨</div>
+            <div style="font-size:36px; font-weight:bold; margin:16px 0;">ACİL DURUM!</div>
+            <div style="font-size:24px; margin-bottom:20px;">112 aranıyor...</div>
+            <div id="callCountdownNum" style="font-size:72px; font-weight:bold;">${remaining}</div>
+            <div style="font-size:20px; margin:20px 0;">İptal etmek için aşağıya basın</div>
+            <button id="cancelEmergencyCall" style="
+                background:white; color:red; border:none; border-radius:50px;
+                padding:20px 48px; font-size:24px; font-weight:bold; cursor:pointer; margin-top:10px;
+            ">✕ İPTAL ET</button>
+        `;
+        document.body.appendChild(overlay);
+
+        let cancelled = false;
+        document.getElementById('cancelEmergencyCall').addEventListener('click', () => {
+            cancelled = true;
+            clearInterval(timer);
+            overlay.remove();
+            console.log('⛔ Kullanıcı 112 aramasını iptal etti');
+        });
+
+        const timer = setInterval(() => {
+            remaining--;
+            const el = document.getElementById('callCountdownNum');
+            if (el) el.textContent = remaining;
+
+            if (remaining <= 0) {
+                clearInterval(timer);
+                overlay.remove();
+                if (!cancelled) {
+                    console.log('📞 112 aranıyor...');
+                    // Capacitor (iOS/Android) ve tarayıcı için evrensel arama
+                    if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+                        // Capacitor native: tel: link direkt telefon uygulamasını açar
+                        window.open('tel:112', '_system');
+                    } else {
+                        window.location.href = 'tel:112';
+                    }
+                }
+            }
+        }, 1000);
     }
 
     /**
@@ -295,7 +397,7 @@ class AIEmergencyProtocol {
         document.getElementById('emergencyScreen')?.classList.remove('active');
 
         // Notify backend
-        await fetch('/api/ai-voice-check', {
+        await fetchWithTimeout('/api/ai-voice-check', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -303,7 +405,7 @@ class AIEmergencyProtocol {
                 voiceInput: 'positive_confirmation',
                 emotionScore: 0.8
             })
-        });
+        }, API_TIMEOUT_MS);
 
         console.log('✅ Emergency cancelled - User confirmed OK');
     }
@@ -312,17 +414,23 @@ class AIEmergencyProtocol {
      * Text-to-Speech with multilingual support
      */
     async speak(text, isUrgent = false, pitch = 1.0) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = currentLanguage === 'de' ? 'de-DE' : 
-                        currentLanguage === 'en' ? 'en-US' : 'tr-TR';
-        utterance.rate = isUrgent ? 0.8 : 0.9;
-        utterance.pitch = pitch;
-        utterance.volume = isUrgent ? 1.0 : 0.8;
-
-        return new Promise((resolve) => {
-            utterance.onend = resolve;
-            speechSynthesis.speak(utterance);
-        });
+        // TTS TEMP DISABLED
+        // const isCapacitorIos = Boolean(window.Capacitor) && /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+        // if (!text || !('speechSynthesis' in window) || isCapacitorIos) {
+        //     return Promise.resolve();
+        // }
+        // const utterance = new SpeechSynthesisUtterance(text);
+        // utterance.lang = currentLanguage === 'de' ? 'de-DE' : 
+        //                 currentLanguage === 'en' ? 'en-US' : 'tr-TR';
+        // utterance.rate = isUrgent ? 0.8 : 0.9;
+        // utterance.pitch = pitch;
+        // utterance.volume = isUrgent ? 1.0 : 0.8;
+        // return new Promise((resolve) => {
+        //     utterance.onend = resolve;
+        //     utterance.onerror = resolve;
+        //     speechSynthesis.speak(utterance);
+        // });
+        return Promise.resolve();
     }
 
     /**
@@ -350,7 +458,7 @@ class AIEmergencyProtocol {
      */
     async getLatestHealthData() {
         try {
-            const response = await fetch(`/api/health-analytics/${this.elderlyId}`);
+            const response = await fetchWithTimeout(`/api/health-analytics/${this.elderlyId}`, {}, API_TIMEOUT_MS);
             const data = await response.json();
             return data.analytics || {};
         } catch (error) {
