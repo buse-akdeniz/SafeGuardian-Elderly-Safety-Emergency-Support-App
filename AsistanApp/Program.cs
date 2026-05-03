@@ -88,7 +88,7 @@ builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
 var defaultSqliteConnection = builder.Environment.IsDevelopment()
     ? "Data Source=asistanapp.db"
-    : "Data Source=/var/lib/vitaguard/asistanapp-prod.db";
+    : "Data Source=asistanapp-prod.db";
 
 var sqliteConnection = FirstNonEmpty(
     Environment.GetEnvironmentVariable("DEFAULT_CONNECTION"),
@@ -122,8 +122,7 @@ catch
     // If parsing fails, keep original connection string and let normal DB init report details.
 }
 
-builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqliteConnection));
-builder.Services.AddCors(options =>
+builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqliteConnection))builder.Services.AddCors(options =>
 {
     var configuredOrigins = builder.Configuration
         .GetSection("Cors:AllowedOrigins")
@@ -142,13 +141,6 @@ builder.Services.AddCors(options =>
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToArray();
 
-    options.AddPolicy("AppCors", policy =>
-    {
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyMethod()
-              .AllowAnyHeader()
-              .AllowCredentials();
-    });
 });
 
 var app = builder.Build();
