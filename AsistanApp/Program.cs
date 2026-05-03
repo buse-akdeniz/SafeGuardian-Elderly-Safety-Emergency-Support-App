@@ -114,19 +114,18 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
-        if (configuredOrigins.Length > 0)
-        {
-            policy.WithOrigins(configuredOrigins)
-                  .AllowAnyMethod()
-                  .AllowAnyHeader();
-        }
-        else
-        {
-            policy.AllowAnyOrigin()
-                  .AllowAnyMethod()
-                  .AllowAnyHeader();
-        }
+        var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        var origins = (configuredOrigins != null && configuredOrigins.Length > 0)
+            ? configuredOrigins
+            : new[]
+            {
+                "https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app",
+                "capacitor://localhost"
+            };
+        policy.WithOrigins(origins)
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
 
