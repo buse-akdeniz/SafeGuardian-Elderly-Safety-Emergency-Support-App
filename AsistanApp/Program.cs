@@ -123,7 +123,7 @@ catch
     // If parsing fails, keep original connection string and let normal DB init report details.
 }
 
-builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqliteConnection))builder.Services.AddCors(options =>
+builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqliteConnection));>
 
 
 });
