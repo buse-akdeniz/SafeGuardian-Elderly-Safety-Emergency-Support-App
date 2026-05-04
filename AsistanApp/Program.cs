@@ -122,12 +122,7 @@ catch
 {
     // If parsing fails, keep original connection string and let normal DB init report details.
 }
-
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqliteConnection));
-
-
-});
-
 var app = builder.Build();
 app.UseCors("AllowAll");
 
@@ -280,11 +275,6 @@ if (rateLimitingEnabled)
 }
 
 app.UseRouting();
-app.UseCors(builder => builder
-    .AllowAnyOrigin()
-    .AllowAnyMethod()
-    .AllowAnyHeader());
-if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
     // app.UseHttpsRedirection();
