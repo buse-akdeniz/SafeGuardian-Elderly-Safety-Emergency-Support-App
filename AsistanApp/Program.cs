@@ -34,6 +34,7 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader();
     });
 });
+
 if (builder.Environment.IsDevelopment())
 {
     builder.WebHost.UseUrls("http://0.0.0.0:5007");
@@ -123,23 +124,7 @@ catch
 }
 
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqliteConnection))builder.Services.AddCors(options =>
-{
-    var configuredOrigins = builder.Configuration
-        .GetSection("Cors:AllowedOrigins")
-        .Get<string[]>()
-        ?? Array.Empty<string>();
 
-    var allowedOrigins = configuredOrigins
-        .Concat(new[]
-        {
-            "capacitor://localhost",
-            "http://localhost",
-            "https://localhost"
-        })
-        .Where(origin => !string.IsNullOrWhiteSpace(origin))
-        .Select(origin => origin.Trim())
-        .Distinct(StringComparer.OrdinalIgnoreCase)
-        .ToArray();
 
 });
 
