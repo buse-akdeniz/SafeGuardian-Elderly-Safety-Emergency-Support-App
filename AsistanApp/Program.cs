@@ -117,33 +117,12 @@ try
         sqliteBuilder.DataSource = resolvedPath;
         sqliteConnection = sqliteBuilder.ToString();
     }
-}
-catch
-{
-    // If parsing fails, keep original connection string and let normal DB init report details.
-}
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqliteConnection));
 var app = builder.Build();
-app.UseCors("AllowAll");
-
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.EnsureCreated();
-    db.Database.ExecuteSqlRaw(@"
-CREATE TABLE IF NOT EXISTS ElderlyUsers (
-    Id TEXT NOT NULL PRIMARY KEY,
-    Name TEXT NOT NULL,
-    Email TEXT NOT NULL,
-    PasswordHash TEXT NOT NULL,
-    PhoneNumber TEXT NULL,
-    BirthDate TEXT NULL,
-    BloodType TEXT NULL,
-    MedicalHistory TEXT NULL,
-    Allergies TEXT NULL,
-    DoctorPhone TEXT NULL,
-    CreatedAt TEXT NOT NULL,
-    IsActive INTEGER NOT NULL,
+app.UseCors(p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+app.UseAuthorization();
+app.MapControllers();
+app.Run();    IsActive INTEGER NOT NULL,
     Plan TEXT NOT NULL,
     SubscriptionStartDate TEXT NOT NULL,
     SubscriptionExpiresAt TEXT NOT NULL,
@@ -3941,3 +3920,4 @@ public class TwilioSettings
 }
 
 // SIGNALR HUB
+ 
