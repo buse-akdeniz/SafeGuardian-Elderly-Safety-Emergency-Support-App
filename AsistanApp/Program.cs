@@ -3,16 +3,17 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 var sqliteConnection = "Data Source=asistan.db";
 
-// Servis Tanımları (Hataları bu kısım çözer)
+// 1. Tüm servisleri buraya tek tek kaydediyoruz
 builder.Services.AddControllers();
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqliteConnection));
 
-// Eğer HealthDataService dosyası varsa, bu satır o 6 hatayı bitirir:
+// Hata veren servisler için kesin çözüm:
 builder.Services.AddScoped<HealthDataService>();
+builder.Services.AddScoped<AuthService>();
 
 var app = builder.Build();
 
-// Apple uygulaması erişimi için CORS ayarı
+// 2. Apple uygulaman için internet erişim izni (CORS)
 app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 
 app.UseAuthorization();
