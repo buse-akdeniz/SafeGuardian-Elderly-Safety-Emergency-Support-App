@@ -8,9 +8,9 @@ builder.Services.AddControllers();
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqliteConnection));
 
 // Hata veren servisler için kesin çözüm:
-builder.Services.AddScoped<HealthDataService>();
-builder.Services.AddScoped<AuthService>();
 
+builder.Services.AddScoped<AsistanApp.Services.HealthDataService>();
+builder.Services.AddScoped<AsistanApp.Services.AuthService>();
 var app = builder.Build();
 
 // 2. Apple uygulaman için internet erişim izni (CORS)

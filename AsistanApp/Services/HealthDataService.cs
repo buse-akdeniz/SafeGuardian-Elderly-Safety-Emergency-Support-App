@@ -1,16 +1,22 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace AsistanApp.Services 
+namespace AsistanApp.Services
 {
     public class HealthDataService
     {
-        public object GetElderlySession(string token) => new { Name = "Test", Email = "test@test.com", Id = 1 };
-        public List<object> GetFamilyMembers(int id) => new List<object>();
-        public List<object> GetHealthRecords(int id, object type = null) => new List<object>();
-        public object AuthenticateElderly(string user, string pass) => new { Token = "dummy", User = new { Id = 1, Name = "Buse" } };
-        public void AddHealthRecord(object record, string note = null, object value = null) { }
-        public object GetUserState(int id) => new { State = "Stable" };
-        public object SetUserState(int id, object state) => new { Success = true };
+        public async Task<dynamic> GetElderlySession(string token) => await Task.FromResult<dynamic>(new { Id = 1, Name = "Buse" });
+        public async Task<List<dynamic>> GetFamilyMembers(int id) => await Task.FromResult(new List<dynamic>());
+        public async Task<List<dynamic>> GetHealthRecords(int id, string type = null) => await Task.FromResult(new List<dynamic>());
+        public async Task<dynamic> AuthenticateElderly(string user, string pass) => await Task.FromResult<dynamic>(new { Token = "dummy", User = new { Id = 1 } });
+        public async Task AddHealthRecord(object record, string note = null, int? value = null) => await Task.CompletedTask;
+        public async Task<dynamic> GetUserState(int id) => await Task.FromResult<dynamic>(new { State = "Active" });
+        public async Task SetUserState(int id, object state) => await Task.CompletedTask;
+    }
+
+    public class AuthService
+    {
+        public async Task<bool> ValidateToken(string token) => await Task.FromResult(true);
     }
 }
