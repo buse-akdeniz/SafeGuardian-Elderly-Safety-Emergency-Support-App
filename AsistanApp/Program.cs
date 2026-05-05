@@ -1,4 +1,4 @@
-using AsistanApp.Services;using Microsoft.EntityFrameworkCore;
+using AsistanApp.Data;using AsistanApp.Services;using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 var sqliteConnection = "Data Source=asistan.db";
