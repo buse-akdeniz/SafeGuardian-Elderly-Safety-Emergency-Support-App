@@ -32,6 +32,16 @@ public class CompatibilityController : ControllerBase
         return string.IsNullOrWhiteSpace(fallbackEnv) ? string.Empty : (Environment.GetEnvironmentVariable(fallbackEnv) ?? string.Empty);
     }
 
+    private string GetFirstSetting(params (string key, string? env)[] candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            var value = GetSetting(candidate.key, candidate.env);
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+        }
+        return string.Empty;
+    }
+
     private bool IsReviewerModeEnabled()
     {
         var raw = GetSetting("ReviewerMode:Enabled", "REVIEWER_MODE_ENABLED");
@@ -531,9 +541,19 @@ public class CompatibilityController : ControllerBase
         var simulate = IsReviewerModeEnabled()
             || (!string.IsNullOrWhiteSpace(reviewerTestNumber) && normalizedPhone == reviewerTestNumber);
 
-        var sid = GetSetting("Sms:Twilio:AccountSid", "TWILIO_ACCOUNT_SID");
-        var authToken = GetSetting("Sms:Twilio:AuthToken", "TWILIO_AUTH_TOKEN");
-        var fromNumber = GetSetting("Sms:FromNumber", "TWILIO_PHONE_NUMBER");
+        var sid = GetFirstSetting(
+            ("Sms:Twilio:AccountSid", "TWILIO_ACCOUNT_SID"),
+            ("Twilio:AccountSid", "TWILIO_SID")
+        );
+        var authToken = GetFirstSetting(
+            ("Sms:Twilio:AuthToken", "TWILIO_AUTH_TOKEN"),
+            ("Twilio:AuthToken", "TWILIO_TOKEN")
+        );
+        var fromNumber = GetFirstSetting(
+            ("Sms:FromNumber", "TWILIO_PHONE_NUMBER"),
+            ("Sms:Twilio:FromNumber", "TWILIO_FROM_NUMBER"),
+            ("Twilio:FromNumber", "TWILIO_CALLER_ID")
+        );
         var providerConfigured = !string.IsNullOrWhiteSpace(sid)
             && !string.IsNullOrWhiteSpace(authToken)
             && !string.IsNullOrWhiteSpace(fromNumber);
