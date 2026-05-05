@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace AsistanApp.Data
+namespace ilk_projem.Data
 {
     public class AppDbContext : DbContext
     {
