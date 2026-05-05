@@ -524,6 +524,31 @@ async function removeStoredToken() {
     }
 }
 
+async function validateStoredSessionToken(token) {
+    const value = String(token || '').trim();
+    if (!value || isDemoOfflineToken(value) || isOfflineDemoModeEnabled()) return false;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/subscription?token=${encodeURIComponent(value)}`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (response.status === 401) {
+            await removeStoredToken();
+            localStorage.removeItem('userId');
+            localStorage.removeItem('userName');
+            localStorage.removeItem('rememberMe');
+            return false;
+        }
+
+        return true;
+    } catch {
+        // Network hatasında kullanıcıyı zorla logout etmeyiz.
+        return true;
+    }
+}
+
 function hasAuthTokenSync() {
     return Boolean(authTokenCache || localStorage.getItem('token') || isOfflineDemoModeEnabled());
 }
@@ -1986,9 +2011,20 @@ document.addEventListener('DOMContentLoaded', async function () {
     applyTranslations();
 
     // Otomatik giriş (Beni Hatırla)
-    const remember = localStorage.getItem('rememberMe') === 'true';
+    const remember = localStorage.getItem('rememberMe') !== 'false';
+    const rememberCheckbox = document.getElementById('rememberMe');
     const token = await getStoredToken();
+    const tokenValid = token ? await validateStoredSessionToken(token) : false;
+
+    if (rememberCheckbox && localStorage.getItem('rememberMe') === null) {
+        rememberCheckbox.checked = true;
+    }
+
     if (remember && token) {
+        if (!tokenValid) {
+            showScreen('loginScreen');
+            return;
+        }
         showScreen('homeScreen');
         updateGreeting();
         runPendingAssistantIntentIfAny();
@@ -1996,7 +2032,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         // Kayıtlı e-posta ve dil ayarını uygula
         const savedEmail = localStorage.getItem('rememberedEmail');
         const emailInput = document.getElementById('email');
-        const rememberCheckbox = document.getElementById('rememberMe');
         if (remember && savedEmail && emailInput) {
             emailInput.value = savedEmail;
             if (rememberCheckbox) rememberCheckbox.checked = true;
@@ -2217,7 +2252,7 @@ async function handleLogin(e) {
     e.preventDefault();
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value.trim();
-    const remember = document.getElementById('rememberMe')?.checked;
+    const remember = document.getElementById('rememberMe')?.checked ?? true;
 
     // Sunucuya bağlanmayı dene (sessiz hata modunda)
     try {
