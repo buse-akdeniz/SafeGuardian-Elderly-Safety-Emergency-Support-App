@@ -41,7 +41,10 @@ public class CompatibilityController : ControllerBase
     }
 
     private string GetReviewerTestPhoneNumber()
-        => GetSetting("ReviewerMode:TestPhoneNumber", "REVIEWER_TEST_PHONE_NUMBER");
+    {
+        var configured = GetSetting("ReviewerMode:TestPhoneNumber", "REVIEWER_TEST_PHONE_NUMBER");
+        return string.IsNullOrWhiteSpace(configured) ? "+1234567890" : configured;
+    }
 
     private static string NormalizePhone(string? value)
         => new string((value ?? string.Empty).Where(ch => char.IsDigit(ch) || ch == '+').ToArray());
