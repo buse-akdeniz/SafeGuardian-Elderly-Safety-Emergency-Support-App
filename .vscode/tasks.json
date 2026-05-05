@@ -210,6 +210,11 @@
 			"label": "temp-git-status-check",
 			"type": "shell",
 			"command": "repo=\"/Users/busenurakdeniz/Desktop/ilk projem\"; git -C \"$repo\" --no-pager status --short --branch; echo '---UNMERGED---'; git -C \"$repo\" diff --name-only --diff-filter=U"
+		},
+		{
+			"label": "appstore-endpoint-suite",
+			"type": "shell",
+			"command": "base=\"https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app\"; echo ROOT:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/\"); echo HEALTH_LIVE:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/health/live\"); echo SUB:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/api/subscription?token=dummy\"); echo SUB_CANCEL:$(curl -k -s -o /dev/null -w '%{http_code}' -X POST \"$base/api/subscription/cancel?token=dummy\" -H \"Content-Type: application/json\" -d '{}'); echo MOOD_SAVE:$(curl -k -s -o /dev/null -w '%{http_code}' -X POST \"$base/api/mood?token=dummy\" -H \"Content-Type: application/json\" -d '{\"moodScore\":7}'); echo MOOD_ANALYSIS:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/api/mood-analysis?token=dummy\"); echo HEALTHREC_SAVE:$(curl -k -s -o /dev/null -w '%{http_code}' -X POST \"$base/api/health-records?token=dummy\" -H \"Content-Type: application/json\" -d '{\"recordType\":\"tansiyon\",\"value\":12,\"unit\":\"mmHg\"}'); echo HEALTHREC_LIST:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/api/health-records?token=dummy\"); echo MED_ADD:$(curl -k -s -o /dev/null -w '%{http_code}' -X POST \"$base/api/medications?token=dummy\" -H \"Content-Type: application/json\" -d '{\"name\":\"Aspirin\",\"notes\":\"test\",\"scheduleTimes\":[\"09:00\"]}'); echo MED_LIST:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/api/medications?token=dummy\"); echo FAMILY_LAST:$(curl -k -s -o /dev/null -w '%{http_code}' \"$base/api/family/last-contact?token=dummy\"); echo ELDERLY_ACCOUNT_DELETE:$(curl -k -s -o /dev/null -w '%{http_code}' -X DELETE \"$base/api/elderly/account?token=dummy\" -H \"Content-Type: application/json\" -d '{\"password\":\"123\"}')"
 		}
 	]
 }

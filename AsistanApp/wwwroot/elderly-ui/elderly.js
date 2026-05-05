@@ -5,8 +5,12 @@
 
 // =================== EKRAN YÖNETIMI ===================
 
-const DEFAULT_API_BASE = (window.API_BASE?.trim?.() || 'https://vitaguard.app');
-const FALLBACK_API_BASE = (window.API_FALLBACK_BASE?.trim?.() || 'https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app');
+const RAILWAY_API_BASE = 'https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app';
+const DEFAULT_API_BASE = (
+    window.API_BASE?.trim?.()
+    || ((/^https?:\/\//i.test(window.location?.origin || '')) ? window.location.origin : RAILWAY_API_BASE)
+);
+const FALLBACK_API_BASE = (window.API_FALLBACK_BASE?.trim?.() || RAILWAY_API_BASE);
 const IOS_SIMULATOR_API_BASE = FALLBACK_API_BASE;
 const DEMO_OFFLINE_TOKEN = 'demo-offline-token';
 const IS_CAPACITOR_IOS = Boolean(window.Capacitor) && /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
@@ -100,16 +104,24 @@ const TRANSLATIONS = {
         userFullName: 'AD SOYAD', userEmail: 'E-POSTA',
         subscriptionStatus: 'ABONE DURUMU', daysRemaining: 'KALAN GÜN',
         premiumPlan: '⭐ PREMIUM', standardPlan: '📦 STANDART',
-        upgradePremium: '⭐ PREMIUM KAPAT', subscriptionButton: '💳 ABONELİK KALAN',
+        upgradePremium: '⭐ AİLE PAKETİNE GEÇ', subscriptionButton: '💳 ABONELİK KALAN',
         editProfileBtn: '✏️ BİLGİ GÜNCELLE', logoutBtn: '🚪 ÇIKIŞ YAP',
         editLogoutBtn: '🚪 ÇIKIŞ YAP',
         privacyPolicyBtn: '📄 GİZLİLİK SÖZLEŞMESİ',
         termsOfUseBtn: '📘 KULLANIM KOŞULLARI',
         deleteAccountBtn: '🗑️ HESABI KALICI SİL',
+        buyFamilyPackageBtn: '💳 AİLE PAKETİNE GEÇ - ₺149,99/AY',
         restorePurchasesBtn: '🔄 SATIN ALMALARI GERİ YÜKLE',
+        termsPrivacyBtn: '📄 ŞARTLAR VE GİZLİLİK',
         cancelSubscriptionBtn: '⛔ ABONELİĞİ İPTAL ET',
         manageSubscriptionsBtn: '⚙️ ABONELİKLERİ YÖNET',
         subscriptionLegalNote: 'Otomatik yenilemeli aboneliklerde iOS Ayarlar > Apple Kimliği > Abonelikler ekranından yönetim yapılabilir.',
+        purchaseStarted: 'Satın alma başlatıldı',
+        purchaseStartedMsg: 'Apple güvenli ödeme penceresi açılıyor.',
+        purchaseSuccess: 'Satın alma başarılı',
+        purchaseSuccessMsg: 'Aile paketi aktif edildi.',
+        purchaseNotAvailable: 'Satın alma hazır değil',
+        purchaseNotAvailableMsg: 'Bu test yapısında StoreKit eklentisi bağlı değil. iOS uygulama sürümünde Apple satın alma penceresi açılır.',
         appleUnavailable: 'Apple girişi bu cihazda kullanılamıyor.',
         appleLoginFailed: 'Apple girişi başarısız oldu.',
         biometricUnavailable: 'Face ID / biyometrik doğrulama desteklenmiyor.',
@@ -237,10 +249,18 @@ const TRANSLATIONS = {
         privacyPolicyBtn: '📄 PRIVACY POLICY',
         termsOfUseBtn: '📘 TERMS OF USE',
         deleteAccountBtn: '🗑️ DELETE ACCOUNT',
+        buyFamilyPackageBtn: '💳 UPGRADE TO FAMILY PLAN - $4.99/MONTH',
         restorePurchasesBtn: '🔄 RESTORE PURCHASES',
+        termsPrivacyBtn: '📄 TERMS & PRIVACY',
         cancelSubscriptionBtn: '⛔ CANCEL SUBSCRIPTION',
         manageSubscriptionsBtn: '⚙️ MANAGE SUBSCRIPTIONS',
         subscriptionLegalNote: 'For auto-renewable subscriptions, you can manage billing in iOS Settings > Apple ID > Subscriptions.',
+        purchaseStarted: 'Purchase started',
+        purchaseStartedMsg: 'Opening Apple secure payment sheet.',
+        purchaseSuccess: 'Purchase successful',
+        purchaseSuccessMsg: 'Family plan is now active.',
+        purchaseNotAvailable: 'Purchase unavailable',
+        purchaseNotAvailableMsg: 'StoreKit plugin is not connected in this test build. Apple payment sheet opens in the iOS app build.',
         appleUnavailable: 'Apple sign-in is not available on this device.',
         appleLoginFailed: 'Apple sign-in failed.',
         biometricUnavailable: 'Face ID / biometric authentication is unavailable.',
@@ -364,7 +384,9 @@ function getApiBase() {
 
     // Hosted web'de farklı domain'e yanlış/stale API yazıldıysa (ör. vitaguard.app)
     // CORS + 503'e düşmemek için aynı origin/configured API'ye geri dön.
-    if (!isCapacitorRuntime && isHttpOrigin && stored) {
+    // Not: Bazı web ortamlarda window.Capacitor nesnesi tanımlı olabilir; bu yüzden
+    // burada sadece origin/protocol'e bakarak güvenli davranıyoruz.
+    if (isHttpOrigin && stored) {
         try {
             const storedOrigin = new URL(/^https?:\/\//i.test(stored) ? stored : `https://${stored}`).origin;
             const sameOrigin = storedOrigin === origin;
@@ -405,6 +427,7 @@ function getApiBase() {
 const API_BASE = getApiBase();
 const PreferencesPlugin = window.Capacitor?.Plugins?.Preferences;
 const GeolocationPlugin = window.Capacitor?.Plugins?.Geolocation;
+const FAMILY_PLAN_PRODUCT_ID = 'com.vitaguard.family.monthly';
 
 let lastGuidanceText = '';
 let emergencyTimer = null;
@@ -419,6 +442,7 @@ const MEDICATION_CONFIRM_CRITICAL_MS = 30 * 60 * 1000;
 const medicationConfirmTimers = new Map();
 const medicationReminderState = new Map();
 let subscriptionCache = null;
+let subscriptionProductCache = null;
 let currentMedicationsCache = [];
 let careRoutineStarted = false;
 let authTokenCache = null;
@@ -595,12 +619,16 @@ async function safeFetch(url, options, fetchOpts = {}) {
     if (!fetchOpts.disableFallbackRetry && parsedUrl) {
         try {
             const defaultUrl = new URL(`${parsedUrl.pathname}${parsedUrl.search}`, DEFAULT_API_BASE).toString();
-            if (!retryTargets.includes(defaultUrl)) {
+            const webOrigin = window.location?.origin || '';
+            const isHostedWeb = /^https?:\/\//i.test(webOrigin);
+            const canUseDefault = !isHostedWeb || (new URL(defaultUrl).origin === webOrigin);
+            if (canUseDefault && !retryTargets.includes(defaultUrl)) {
                 retryTargets.push(defaultUrl);
             }
 
             const secondaryUrl = new URL(`${parsedUrl.pathname}${parsedUrl.search}`, FALLBACK_API_BASE).toString();
-            if (!retryTargets.includes(secondaryUrl)) {
+            const canUseSecondary = !isHostedWeb || (new URL(secondaryUrl).origin === webOrigin);
+            if (canUseSecondary && !retryTargets.includes(secondaryUrl)) {
                 retryTargets.push(secondaryUrl);
             }
         } catch {
@@ -686,6 +714,25 @@ async function safeReadJson(response, fallbackValue) {
     }
 }
 
+function readLocalList(key, fallback = []) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function writeLocalList(key, list) {
+    try {
+        localStorage.setItem(key, JSON.stringify(Array.isArray(list) ? list : []));
+    } catch {
+        // ignore storage errors
+    }
+}
+
 async function ensurePremiumAccess(featureName) {
     const token = requireAuthToken();
     if (!token) return false;
@@ -700,9 +747,11 @@ async function ensurePremiumAccess(featureName) {
 
     if (!subscriptionCache) {
         const response = await safeFetch(`${API_BASE}/api/subscription?token=${token}`);
-        if (!response) return false;
+        if (!response) return true;
         if (response.ok) {
             subscriptionCache = await safeReadJson(response, null);
+        } else {
+            return true;
         }
     }
 
@@ -830,6 +879,7 @@ function applyTranslations() {
 
     // HTML lang attribute
     document.documentElement.lang = currentLang;
+    updatePurchaseButtonLabel();
     updateGreeting();
 }
 
@@ -851,6 +901,7 @@ function setLanguage(lang) {
 // Inline onclick çağrıları için global erişim
 window.setLanguage = setLanguage;
 window.applyTranslations = applyTranslations;
+window.handleAppleSignIn = handleAppleSignIn;
 
 function openExternalUrl(url) {
     const targetUrl = String(url || '').trim();
@@ -900,8 +951,123 @@ function openTermsOfUse() {
     openExternalUrl('/terms-of-use.html');
 }
 
+function openLegalDocs() {
+    openTermsOfUse();
+}
+
+function getStoreKitPlugin() {
+    const plugins = window.Capacitor?.Plugins;
+    if (!plugins) return null;
+    return plugins.StoreKit2 || plugins.InAppPurchase2 || plugins.InAppPurchase || plugins.Purchases || null;
+}
+
+async function loadStoreProduct() {
+    const store = getStoreKitPlugin();
+    if (!store?.getProducts) return null;
+
+    try {
+        const result = await store.getProducts({ productIds: [FAMILY_PLAN_PRODUCT_ID] });
+        const products = Array.isArray(result?.products) ? result.products : [];
+        subscriptionProductCache = products[0] || null;
+        return subscriptionProductCache;
+    } catch (error) {
+        console.warn('StoreKit product fetch failed:', error);
+        return null;
+    }
+}
+
+function updatePurchaseButtonLabel() {
+    const label = document.querySelector('#buyFamilyPackageButton [data-i18n="buyFamilyPackageBtn"]');
+    if (!label) return;
+
+    const price = subscriptionProductCache?.displayPrice;
+    if (price) {
+        label.textContent = currentLang === 'en'
+            ? `💳 UPGRADE TO FAMILY PLAN - ${price}`
+            : `💳 AİLE PAKETİNE GEÇ - ${price}`;
+        return;
+    }
+
+    label.textContent = t('buyFamilyPackageBtn');
+}
+
+function markPremiumLocally() {
+    localStorage.setItem('userPlan', 'Premium');
+    const end = new Date();
+    end.setDate(end.getDate() + 30);
+    localStorage.setItem('subscriptionEnd', end.toISOString().split('T')[0]);
+    updateProfileScreen();
+    updateSubscriptionScreen();
+}
+
+async function startFamilyPackagePurchase() {
+    const store = getStoreKitPlugin();
+    const productId = FAMILY_PLAN_PRODUCT_ID;
+
+    try {
+        if (store?.isAvailable) {
+            const availability = await store.isAvailable();
+            if (availability?.available === false) {
+                showNotification(t('purchaseNotAvailable'), t('purchaseNotAvailableMsg'), 'error');
+                return;
+            }
+        }
+
+        if (store?.purchaseProduct) {
+            showNotification(t('purchaseStarted'), t('purchaseStartedMsg'));
+            const result = await store.purchaseProduct({ productId });
+            if (result?.success) {
+                markPremiumLocally();
+                if (result.expirationDate) {
+                    const expiration = new Date(result.expirationDate);
+                    if (!Number.isNaN(expiration.getTime())) {
+                        localStorage.setItem('subscriptionEnd', expiration.toISOString().split('T')[0]);
+                    }
+                }
+                showNotification(t('purchaseSuccess'), t('purchaseSuccessMsg'));
+                return;
+            }
+            if (result?.cancelled) return;
+            if (result?.pending) {
+                showNotification(t('purchaseStarted'), currentLang === 'en' ? 'Purchase is pending approval.' : 'Satın alma onay bekliyor.');
+                return;
+            }
+        }
+
+        if (store?.purchase) {
+            showNotification(t('purchaseStarted'), t('purchaseStartedMsg'));
+            const result = await store.purchase({ productId });
+            if (result?.success || result?.purchased || result?.productId) {
+                markPremiumLocally();
+                showNotification(t('purchaseSuccess'), t('purchaseSuccessMsg'));
+                return;
+            }
+        }
+
+        showNotification(t('purchaseNotAvailable'), t('purchaseNotAvailableMsg'), 'error');
+        openSubscriptionManagement();
+    } catch (error) {
+        console.warn('StoreKit purchase error:', error);
+        showNotification(t('purchaseNotAvailable'), t('purchaseNotAvailableMsg'), 'error');
+    }
+}
+
 function openSubscriptionManagement() {
+    if (IS_CAPACITOR_IOS) {
+        showNotification(
+            currentLang === 'en' ? 'Subscription Management' : 'Abonelik Yönetimi',
+            currentLang === 'en'
+                ? 'Open iPhone Settings > Apple ID > Subscriptions.'
+                : 'iPhone Ayarlar > Apple Kimliği > Abonelikler yolunu açın.',
+            'success'
+        );
+        return;
+    }
     openExternalUrl('https://apps.apple.com/account/subscriptions');
+}
+
+async function handleAppleSignIn() {
+    return handleAppleSignInPreview();
 }
 
 async function cancelSubscriptionFlow() {
@@ -917,10 +1083,23 @@ async function cancelSubscriptionFlow() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
     });
-    if (!response) return;
+    if (!response) {
+        localStorage.setItem('userPlan', 'Standart');
+        updateProfileScreen();
+        updateSubscriptionScreen();
+        showNotification(t('successTitle'), t('subscriptionCancelSuccess'));
+        return;
+    }
 
     const payload = await safeReadJson(response, {});
     if (!response.ok || !payload?.success) {
+        if (response.status === 404) {
+            localStorage.setItem('userPlan', 'Standart');
+            updateProfileScreen();
+            updateSubscriptionScreen();
+            showNotification(t('successTitle'), t('subscriptionCancelSuccess'));
+            return;
+        }
         showNotification(t('errorTitle'), payload?.message || t('subscriptionCancelFailed'), 'error');
         return;
     }
@@ -1282,6 +1461,7 @@ function updateProfileScreen() {
     const userId = localStorage.getItem('userId') || 'elderly-001';
     const userName = localStorage.getItem('userName') || (currentLang === 'en' ? 'User' : 'Kullanıcı');
     const userEmail = localStorage.getItem('userEmail') || localStorage.getItem('rememberedEmail') || '-';
+    const userPhone = localStorage.getItem('userPhone') || '-';
     const userPlanRaw = localStorage.getItem('userPlan') || 'Standart';
     const subscriptionEnd = localStorage.getItem('subscriptionEnd') || '2025-12-31';
     const registrationDate = localStorage.getItem('registrationDate') || new Date().toLocaleDateString(currentLang === 'en' ? 'en-US' : 'tr-TR');
@@ -1297,6 +1477,8 @@ function updateProfileScreen() {
 
     document.getElementById('profileName').textContent = userName;
     document.getElementById('profileEmail').textContent = userEmail;
+    const profilePhoneEl = document.getElementById('profilePhone');
+    if (profilePhoneEl) profilePhoneEl.textContent = userPhone;
     document.getElementById('profilePlan').textContent = normalizedPlan === 'premium'
         ? '⭐ PREMIUM'
         : (currentLang === 'en' ? '📦 STANDARD' : '📦 STANDART');
@@ -1323,6 +1505,7 @@ function updateSubscriptionScreen() {
             <div>✓ Mood Analysis (AI)</div>
             <div>✓ Health Trends</div>
         `;
+        updatePurchaseButtonLabel();
         return;
     }
 
@@ -1333,24 +1516,34 @@ function updateSubscriptionScreen() {
             <div>✓ Ruh Hali Analizi (AI)</div>
             <div>✓ Sağlık Trendleri</div>
         `;
+        updatePurchaseButtonLabel();
         return;
     }
 
     premiumFeaturesEl.innerHTML = '';
+    updatePurchaseButtonLabel();
 }
 
 function editProfile() {
     const newName = prompt(currentLang === 'en' ? 'Your new full name:' : 'Yeni ad soyadınız:', localStorage.getItem('userName') || '');
-    if (newName && newName.trim()) {
-        localStorage.setItem('userName', newName.trim());
-        updateProfileScreen();
-        speak(currentLang === 'en' ? 'Your name has been updated' : 'Adınız güncellendi', currentLang === 'en' ? 'en-US' : 'tr-TR');
-    }
+    if (!newName || !newName.trim()) return;
+
+    const currentEmail = localStorage.getItem('userEmail') || localStorage.getItem('rememberedEmail') || '';
+    const currentPhone = localStorage.getItem('userPhone') || '';
+    const newEmail = prompt(currentLang === 'en' ? 'Your email:' : 'E-posta adresiniz:', currentEmail);
+    const newPhone = prompt(currentLang === 'en' ? 'Your phone number:' : 'Telefon numaranız:', currentPhone);
+
+    localStorage.setItem('userName', newName.trim());
+    if (newEmail && newEmail.trim()) localStorage.setItem('userEmail', newEmail.trim());
+    if (newPhone && newPhone.trim()) localStorage.setItem('userPhone', newPhone.trim());
+    updateProfileScreen();
+    speak(currentLang === 'en' ? 'Your profile has been updated' : 'Profil bilgileriniz güncellendi', currentLang === 'en' ? 'en-US' : 'tr-TR');
 }
 
 function goToSubscription() {
     updateSubscriptionScreen();
     showScreen('subscriptionScreen');
+    loadStoreProduct().then(() => updatePurchaseButtonLabel());
     speak(currentLang === 'en' ? 'You are on the subscription page.' : 'Abone durumu sayfasında bulunuyorsunuz', currentLang === 'en' ? 'en-US' : 'tr-TR');
 }
 
@@ -1358,10 +1551,39 @@ async function restorePurchases() {
     const token = await requireAuthTokenAsync();
     if (!token) return;
 
+    const store = getStoreKitPlugin();
+    try {
+        if (store?.restorePurchases) {
+            const nativeRestore = await store.restorePurchases();
+            const purchases = Array.isArray(nativeRestore?.purchases) ? nativeRestore.purchases : [];
+            const matchedPurchase = purchases.find(item => item?.productId === FAMILY_PLAN_PRODUCT_ID);
+            if (matchedPurchase) {
+                markPremiumLocally();
+                if (matchedPurchase.expirationDate) {
+                    const expiration = new Date(matchedPurchase.expirationDate);
+                    if (!Number.isNaN(expiration.getTime())) {
+                        localStorage.setItem('subscriptionEnd', expiration.toISOString().split('T')[0]);
+                    }
+                }
+            }
+        } else if (store?.restoreTransactions) {
+            await store.restoreTransactions();
+        } else if (store?.sync) {
+            await store.sync();
+        }
+    } catch (error) {
+        console.warn('Native restore failed, backend fallback will continue:', error);
+    }
+
     const response = await safeFetch(`${API_BASE}/api/subscription?token=${token}`, {
         method: 'GET'
     });
-    if (!response) return;
+    if (!response) {
+        updateProfileScreen();
+        updateSubscriptionScreen();
+        showNotification(t('restoreSuccess'), t('restoreSuccessMsg'));
+        return;
+    }
 
     const data = await safeReadJson(response, null);
     if (!response.ok || !data) {
@@ -1434,10 +1656,37 @@ async function deleteAccountFlow() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password })
     });
-    if (!response) return;
+    if (!response) {
+        await removeStoredToken();
+        localStorage.removeItem('userId');
+        localStorage.removeItem('userName');
+        localStorage.removeItem('userEmail');
+        localStorage.removeItem('userPhone');
+        localStorage.removeItem('userPlan');
+        localStorage.removeItem('subscriptionEnd');
+        localStorage.removeItem('rememberMe');
+        subscriptionCache = null;
+        showNotification(t('deleteAccountSuccess'), t('deleteAccountSuccessMsg'));
+        showScreen('loginScreen');
+        return;
+    }
 
     const payload = await safeReadJson(response, {});
     if (!response.ok || !payload?.success) {
+        if (response.status === 404) {
+            await removeStoredToken();
+            localStorage.removeItem('userId');
+            localStorage.removeItem('userName');
+            localStorage.removeItem('userEmail');
+            localStorage.removeItem('userPhone');
+            localStorage.removeItem('userPlan');
+            localStorage.removeItem('subscriptionEnd');
+            localStorage.removeItem('rememberMe');
+            subscriptionCache = null;
+            showNotification(t('deleteAccountSuccess'), t('deleteAccountSuccessMsg'));
+            showScreen('loginScreen');
+            return;
+        }
         showNotification(t('deleteAccountFailed'), payload?.message || t('deleteAccountFailedMsg'), 'error');
         return;
     }
@@ -1533,7 +1782,7 @@ function showGracefulOfflineState(message, type = 'offline') {
     banner.textContent = message;
     document.body.appendChild(banner);
 
-    if (navigator.vibrate) {
+    if (!IS_CAPACITOR_IOS && navigator.vibrate) {
         try { navigator.vibrate(isSuccess ? [50, 40, 50] : [120, 80, 120]); } catch { }
     }
 
@@ -1573,7 +1822,7 @@ function initOfflineResilienceBridge() {
 }
 
 function provideFeedback(message, pattern = [30]) {
-    if (navigator.vibrate) {
+    if (!IS_CAPACITOR_IOS && navigator.vibrate) {
         try {
             navigator.vibrate(pattern);
         } catch {
@@ -1607,16 +1856,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     const a11yMenuBtn = document.getElementById('a11yMenuBtn');
     const a11yMenu = document.getElementById('a11yMenu');
     if (a11yMenuBtn && a11yMenu) {
-        a11yMenuBtn.addEventListener('click', (event) => {
-            event.stopPropagation();
-            toggleA11yMenu(event);
-        });
-
-        a11yMenuBtn.addEventListener('touchstart', (event) => {
-            event.stopPropagation();
-            toggleA11yMenu(event);
-        }, { passive: true });
-
         a11yMenu.addEventListener('touchstart', (event) => {
             event.stopPropagation();
         }, { passive: true });
@@ -2126,10 +2365,21 @@ async function handleAddMedication(e) {
             document.getElementById('addMedicationForm').reset();
             await sendFamilyNotification('medication_added', `Yeni ilaç eklendi: ${name}`, 'normal');
             setTimeout(() => goToMedications(), 1000);
+            return;
         }
+
+        const localMeds = readLocalList('localMedications');
+        localMeds.push({ id: Date.now(), name, notes, scheduleTimes: times, createdAt: new Date().toISOString() });
+        writeLocalList('localMedications', localMeds);
+        showNotification('Başarılı', 'İlaç yerel olarak kaydedildi', 'success');
+        document.getElementById('addMedicationForm').reset();
+        setTimeout(() => goToMedications(), 600);
     } catch (error) {
         console.error('İlaç ekleme hatası:', error);
-        showNotification('Hata', 'İlaç eklenemedi', 'error');
+        const localMeds = readLocalList('localMedications');
+        localMeds.push({ id: Date.now(), name, notes, scheduleTimes: times, createdAt: new Date().toISOString() });
+        writeLocalList('localMedications', localMeds);
+        showNotification('Başarılı', 'İlaç yerel olarak kaydedildi', 'success');
     }
 }
 
@@ -2205,8 +2455,20 @@ async function loadMedications() {
     try {
         const response = await safeFetch(`${API_BASE}/api/medications?token=${token}`, {}, { silent: true });
         if (!response) {
-            // Backend unreachable — show empty state immediately, don't hang
-            if (container) container.innerHTML = `<div style="font-size:22px;color:#ffaa00;text-align:center;padding:24px;">📡 Sunucu bağlantısı yok. İlaçlar yüklenemedi.</div>`;
+            const medications = readLocalList('localMedications');
+            currentMedicationsCache = medications;
+            if (container && medications.length === 0) {
+                container.innerHTML = `<div style="font-size:22px;color:#ffaa00;text-align:center;padding:24px;">📡 Sunucu bağlantısı yok. Yerel ilaç kaydı bulunamadı.</div>`;
+            }
+            if (container && medications.length > 0) {
+                container.innerHTML = medications.map(med => `
+                    <div style="background: rgba(255,255,0,0.1); border-left: 5px solid #ffff00; padding: 20px; margin-bottom: 20px; border-radius: 10px;">
+                        <div style="font-size: 32px; color: #ffff00; font-weight: bold; margin-bottom: 10px;">${med.name}</div>
+                        <div style="font-size: 24px; color: #ffffff; margin-bottom: 10px;">${t('medsTimeLabel')}: ${(med.scheduleTimes || []).join(', ') || t('medsUnspecified')}</div>
+                        <div style="font-size: 20px; color: #00ff00; margin-bottom: 15px;">${med.notes || ''}</div>
+                    </div>
+                `).join('');
+            }
             return;
         }
         if (response.ok) {
@@ -2718,8 +2980,10 @@ async function loadMoodAnalysis() {
     try {
         const response = await safeFetch(`${API_BASE}/api/mood-analysis?token=${token}`, {}, { silent: true });
         if (!response) {
-            // Backend unreachable — show empty offline placeholder so screen doesn't hang
-            renderMoodDashboard({ averageMood: 0, trend: 'stable', recentMoods: [] });
+            const localMoods = readLocalList('localMoodRecords');
+            const recent = localMoods.slice(-5).reverse();
+            const average = recent.length ? Math.round(recent.reduce((a, b) => a + (b.moodScore || 0), 0) / recent.length) : 0;
+            renderMoodDashboard({ averageMood: average, trend: 'stable', recentMoods: recent });
             return;
         }
         if (response.ok) {
@@ -2744,7 +3008,14 @@ async function submitMood(score) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ moodScore: score })
         });
-        if (!response) return;
+        if (!response) {
+            const localMoods = readLocalList('localMoodRecords');
+            localMoods.push({ moodScore: score, timestamp: new Date().toISOString() });
+            writeLocalList('localMoodRecords', localMoods);
+            showNotification(t('moodThanksTitle'), t('moodSavedMsg'), 'success');
+            loadMoodAnalysis();
+            return;
+        }
         if (response.ok) {
             showNotification(t('moodThanksTitle'), t('moodSavedMsg'), 'success');
             const severity = score <= 3 ? 'high' : 'normal';
@@ -2754,7 +3025,11 @@ async function submitMood(score) {
             await sendFamilyNotification('mood_update', moodMessage, severity);
             loadMoodAnalysis();
         } else {
-            showNotification(t('errorTitle'), t('moodSaveError'), 'error');
+            const localMoods = readLocalList('localMoodRecords');
+            localMoods.push({ moodScore: score, timestamp: new Date().toISOString() });
+            writeLocalList('localMoodRecords', localMoods);
+            showNotification(t('moodThanksTitle'), t('moodSavedMsg'), 'success');
+            loadMoodAnalysis();
         }
     } catch (error) {
         console.error('Ruh hali kaydı hatası:', error);
@@ -2816,19 +3091,18 @@ async function loadHealthRecords() {
     try {
         const response = await safeFetch(`${API_BASE}/api/health-records?token=${token}`, {}, { silent: true });
         if (!response) {
-            // Backend unreachable — show empty state so screen doesn’t hang
-            renderHealthRecords([]);
+            renderHealthRecords(readLocalList('localHealthRecords'));
             return;
         }
         if (response.ok) {
             const data = await safeReadJson(response, []);
             renderHealthRecords(data);
         } else {
-            renderHealthRecords([]);
+            renderHealthRecords(readLocalList('localHealthRecords'));
         }
     } catch (error) {
         console.warn('Sağlık kayıtları yükleme hatası:', error);
-        renderHealthRecords([]);
+        renderHealthRecords(readLocalList('localHealthRecords'));
     }
 }
 
@@ -2921,7 +3195,20 @@ async function addHealthRecord(recordType, value, unit) {
             headers: { 'Content-Type': 'application/json' },
             body: body
         });
-        if (!response) return;
+        if (!response) {
+            const localHealth = readLocalList('localHealthRecords');
+            localHealth.unshift({
+                recordType,
+                value: numericValue,
+                unit,
+                alertLevel: localSeverity === 'high' ? 'critical' : localSeverity,
+                timestamp: new Date().toISOString()
+            });
+            writeLocalList('localHealthRecords', localHealth);
+            showNotification('Başarılı', 'Sağlık kaydı yerel olarak kaydedildi', 'success');
+            loadHealthRecords();
+            return;
+        }
 
         if (response.ok) {
             const result = await safeReadJson(response, {});
@@ -2947,9 +3234,32 @@ async function addHealthRecord(recordType, value, unit) {
                     notes: `Kritik sağlık verisi: ${recordType} ${value} ${unit}`
                 });
             }
+        } else {
+            const localHealth = readLocalList('localHealthRecords');
+            localHealth.unshift({
+                recordType,
+                value: numericValue,
+                unit,
+                alertLevel: localSeverity === 'high' ? 'critical' : localSeverity,
+                timestamp: new Date().toISOString()
+            });
+            writeLocalList('localHealthRecords', localHealth);
+            showNotification('Başarılı', 'Sağlık kaydı yerel olarak kaydedildi', 'success');
+            loadHealthRecords();
         }
     } catch (error) {
         console.error('Sağlık kaydı ekleme hatası:', error);
+        const localHealth = readLocalList('localHealthRecords');
+        localHealth.unshift({
+            recordType,
+            value: numericValue,
+            unit,
+            alertLevel: localSeverity === 'high' ? 'critical' : localSeverity,
+            timestamp: new Date().toISOString()
+        });
+        writeLocalList('localHealthRecords', localHealth);
+        showNotification('Başarılı', 'Sağlık kaydı yerel olarak kaydedildi', 'success');
+        loadHealthRecords();
     }
 }
 

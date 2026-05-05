@@ -50,7 +50,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>SafeGuardian AI, galerinizden ilaç fotoğrafı seçebilmeniz için fotoğraf arşivinize erişir.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Bu uygulama acil durumlarda (SOS) konumunuzu belirlemek ve aile üyelerinize göndermek için konum iznine ihtiyaç duyar.</string>
+	<string>Acil bir durumda konumunuzu belirleyip aile üyelerinize güvenli şekilde iletmek için konum izni gereklidir.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>SafeGuardian AI, sesli komutlar ve güvenlik özellikleri için mikrofonunuzu kullanır.</string>
 	<key>UIApplicationSceneManifest</key>

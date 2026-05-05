@@ -12,14 +12,14 @@ namespace ilk_projem.Controllers;
 public class HealthController : ControllerBase
 {
     [HttpGet("records")]
-    public IResult Records([FromServices] HealthDataService svc)
+    public async Task<IResult> Records([FromServices] HealthDataService svc)
     {
         var token = AuthTokenService.ResolveToken(HttpContext);
-        var elderly = svc.GetElderlySession(token);
+        var elderly = await svc.GetElderlySession(token);
         if (elderly == null)
             return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
 
-        var records = svc.GetHealthRecords(elderly.Id, 30)
+        var records = (await svc.GetHealthRecords((int)elderly.Id))
             .OrderByDescending(r => r.Timestamp ?? r.RecordedAt)
             .Take(200)
             .ToList();
@@ -31,7 +31,7 @@ public class HealthController : ControllerBase
     public async Task<IResult> AddRecord([FromServices] HealthDataService svc, [FromServices] AppDbContext db)
     {
         var token = AuthTokenService.ResolveToken(HttpContext);
-        var elderly = svc.GetElderlySession(token);
+        var elderly = await svc.GetElderlySession(token);
         if (elderly == null)
             return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
 
@@ -41,11 +41,11 @@ public class HealthController : ControllerBase
         var metricType = root.TryGetProperty("recordType", out var rt) ? rt.GetString() ?? "manual" : "manual";
         var value = root.TryGetProperty("value", out var v) && v.TryGetDouble(out var d) ? d : 0;
 
-        svc.AddHealthRecord(elderly.Id, metricType, value);
+        await svc.AddHealthRecord(new { ElderlyId = elderly.Id, MetricType = metricType }, metricType, (int?)Math.Round(value));
 
         db.HealthRecords.Add(new StoredHealthRecord
         {
-            ElderlyId = elderly.Id,
+            ElderlyId = elderly.Id?.ToString() ?? string.Empty,
             MetricType = metricType,
             Value = value,
             HealthStatus = "normal",

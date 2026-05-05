@@ -1,5 +1,7 @@
+using AsistanApp.Services;
 using ilk_projem.Services;
 using ilk_projem.Models;
+using System.Text.Json;
 
 namespace ilk_projem.Controllers;
 
@@ -7,16 +9,16 @@ public static class StateController
 {
     public static IEndpointRouteBuilder MapStateEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/user-state", (HttpContext ctx, HealthDataService svc) =>
+        app.MapGet("/api/user-state", async (HttpContext ctx, HealthDataService svc) =>
         {
             var token = AuthTokenService.ResolveToken(ctx);
-            var elderly = svc.GetElderlySession(token);
+            var elderly = await svc.GetElderlySession(token);
             if (elderly == null)
             {
                 return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
             }
 
-            var state = svc.GetUserState(elderly.Id);
+            var state = await svc.GetUserState((int)elderly.Id);
             return Results.Json(new
             {
                 currentContext = state.CurrentContext,
@@ -33,7 +35,7 @@ public static class StateController
             {
                 var json = await JsonDocument.ParseAsync(ctx.Request.Body);
                 var token = AuthTokenService.ResolveToken(ctx, json.RootElement);
-                var elderly = svc.GetElderlySession(token);
+                var elderly = await svc.GetElderlySession(token);
                 if (elderly == null)
                 {
                     return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
@@ -44,7 +46,7 @@ public static class StateController
                 var screenPriority = json.RootElement.TryGetProperty("screenPriority", out var p) ? p.GetString() ?? "normal" : "normal";
                 var isAssistantActive = json.RootElement.TryGetProperty("isAssistantActive", out var ia) ? ia.GetBoolean() : true;
 
-                var updated = svc.SetUserState(elderly.Id, new UserState
+                await svc.SetUserState((int)elderly.Id, new UserState
                 {
                     ElderlyId = elderly.Id,
                     CurrentContext = currentContext,
@@ -54,7 +56,7 @@ public static class StateController
                     UpdatedAt = DateTime.Now
                 });
 
-                return Results.Json(new { success = true, state = updated });
+                return Results.Json(new { success = true });
             }
             catch
             {

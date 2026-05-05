@@ -193,6 +193,68 @@
             gap: 10px;
         }
 
+        .account-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .account-grid .form-group {
+            margin-bottom: 10px;
+        }
+
+        .account-grid .form-group.full {
+            grid-column: 1 / -1;
+        }
+
+        .inline-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .inline-actions button {
+            width: auto;
+            flex: 1;
+            min-width: 180px;
+            margin: 0;
+        }
+
+        .secondary-btn {
+            background: #334155;
+        }
+
+        .danger-btn {
+            background: #dc2626;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 700;
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .muted-note {
+            font-size: 14px;
+            color: #64748b;
+            margin-top: 8px;
+        }
+
+        .info-box {
+            padding: 14px;
+            border-radius: 12px;
+            background: #eff6ff;
+            border-left: 4px solid #2563eb;
+            color: #1e3a8a;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
         .medication-item {
             background: #f3f4f6;
             padding: 15px;
@@ -298,6 +360,10 @@
                 grid-template-columns: 1fr;
             }
 
+            .account-grid {
+                grid-template-columns: 1fr;
+            }
+
             h1 {
                 font-size: 24px;
             }
@@ -385,6 +451,54 @@
                 Bildirim yükleniyor...
             </div>
         </div>
+
+        <!-- AİLE HESAP SAYFASI -->
+        <div class="card">
+            <h3 id="accountTitle">👤 Aile Hesabı</h3>
+            <div id="accountMessage" class="alert success" style="display:none;"></div>
+
+            <div class="account-grid">
+                <div class="form-group">
+                    <label id="accountNameLabel" for="familyAccountName">İsim Soyisim</label>
+                    <input type="text" id="familyAccountName" placeholder="Örn: Ali Yılmaz" />
+                </div>
+                <div class="form-group">
+                    <label id="accountEmailLabel" for="familyAccountEmail">E-posta</label>
+                    <input type="email" id="familyAccountEmail" placeholder="ornek@eposta.com" />
+                </div>
+                <div class="form-group full">
+                    <label id="accountPhoneLabel" for="familyAccountPhone">Telefon</label>
+                    <input type="tel" id="familyAccountPhone" placeholder="+90 5xx xxx xx xx" />
+                </div>
+            </div>
+
+            <div style="margin-top: 10px;">
+                <strong id="subscriptionStatusLabel">Abonelik Durumu:</strong>
+                <span id="familySubscriptionStatus" class="pill">Aktif</span>
+                <div id="familySubscriptionExpiry" class="muted-note">Yenileme tarihi: -</div>
+            </div>
+
+            <div class="inline-actions">
+                <button type="button" id="saveAccountBtn" onclick="saveFamilyAccount()">💾 Kaydet</button>
+                <button type="button" class="secondary-btn" id="openTermsBtn" onclick="openTermsOfUse()">📘 Kullanım Koşulları</button>
+                <button type="button" class="secondary-btn" id="openPrivacyBtn" onclick="openPrivacyPolicy()">📄 Gizlilik Sözleşmesi</button>
+                <button type="button" class="danger-btn" id="cancelSubscriptionBtn" onclick="cancelFamilySubscription()">🛑 Abonelik İptal</button>
+                <button type="button" class="danger-btn" id="deleteAccountBtn" onclick="deleteFamilyAccount()">🗑️ Hesabı Sil</button>
+            </div>
+        </div>
+
+        <!-- APP REVIEW: ACİL SMS TEST DAVRANIŞI -->
+        <div class="card">
+            <h3 id="emergencyTestTitle">🚨 Acil Durum SMS Testi</h3>
+            <div id="emergencyTestInfo" class="info-box">
+                App Review sırasında yapılan test tetiklemelerinde bu sürüm güvenli modda çalışır.
+                Gerçek SMS gönderimi yerine uygulama içi/simüle kayıt üretilir.
+            </div>
+            <div class="inline-actions">
+                <button type="button" id="emergencyTestBtn" onclick="runEmergencySmsTest()">🧪 SMS Testini Çalıştır</button>
+            </div>
+            <div id="emergencyTestResult" class="muted-note"></div>
+        </div>
     </div>
 
     <script src="/js/signalr.min.js"></script>
@@ -410,11 +524,33 @@
                 backHomeBtnDash: '← Ana Ekrana Dön',
                 medicationsTitle: '💊 Bugünün İlaçları',
                 notificationsTitle: '🔔 Son Bildirimler',
+                accountTitle: '👤 Aile Hesabı',
+                accountNameLabel: 'İsim Soyisim',
+                accountEmailLabel: 'E-posta',
+                accountPhoneLabel: 'Telefon',
+                accountNamePlaceholder: 'Örn: Ali Yılmaz',
+                accountEmailPlaceholder: 'ornek@eposta.com',
+                accountPhonePlaceholder: '+90 5xx xxx xx xx',
+                subscriptionStatusLabel: 'Abonelik Durumu:',
+                saveAccountBtn: '💾 Kaydet',
+                openTermsBtn: '📘 Kullanım Koşulları',
+                openPrivacyBtn: '📄 Gizlilik Sözleşmesi',
+                cancelSubscriptionBtn: '🛑 Abonelik İptal',
+                deleteAccountBtn: '🗑️ Hesabı Sil',
+                emergencyTestTitle: '🚨 Acil Durum SMS Testi',
+                emergencyTestInfo: 'App Review sırasında yapılan test tetiklemelerinde bu sürüm güvenli modda çalışır. Gerçek SMS gönderimi yerine uygulama içi/simüle kayıt üretilir.',
+                emergencyTestBtn: '🧪 SMS Testini Çalıştır',
                 medsLoading: 'İlaç yükleniyor...',
                 notifsLoading: 'Bildirim yükleniyor...',
                 loginFailed: 'Giriş başarısız. E-posta ve şifrenizi kontrol edin.',
                 connectionError: 'Bağlantı hatası',
                 dashboardConnWarn: 'Veriler güncellenemiyor. Lütfen internet bağlantınızı kontrol edin.',
+                accountSaved: 'Hesap bilgileri kaydedildi.',
+                accountDeleteConfirm: 'Aile hesabını kalıcı olarak silmek istediğinize emin misiniz?',
+                accountDeleted: 'Aile hesabı silindi. Lütfen tekrar giriş yapın.',
+                subscriptionCanceled: 'Abonelik iptal edildi. Dönem sonuna kadar aktif kalır.',
+                emergencySmsSimulated: 'Test tamamlandı: gerçek SMS gönderilmedi (review güvenli mod).',
+                emergencySmsFailed: 'SMS testi çalıştırılamadı, yerel simülasyon gösterildi.',
                 noMedsToday: 'Bugün için ilaç bulunmuyor',
                 noNotifications: 'Bildirim yok',
                 medsTimes: '⏰ Saatler',
@@ -448,11 +584,33 @@
                 backHomeBtnDash: '← Back to Home',
                 medicationsTitle: '💊 Today\'s Medications',
                 notificationsTitle: '🔔 Recent Notifications',
+                accountTitle: '👤 Family Account',
+                accountNameLabel: 'Full Name',
+                accountEmailLabel: 'Email',
+                accountPhoneLabel: 'Phone',
+                accountNamePlaceholder: 'e.g. Alex Johnson',
+                accountEmailPlaceholder: 'example@email.com',
+                accountPhonePlaceholder: '+1 xxx xxx xxxx',
+                subscriptionStatusLabel: 'Subscription Status:',
+                saveAccountBtn: '💾 Save',
+                openTermsBtn: '📘 Terms of Use',
+                openPrivacyBtn: '📄 Privacy Policy',
+                cancelSubscriptionBtn: '🛑 Cancel Subscription',
+                deleteAccountBtn: '🗑️ Delete Account',
+                emergencyTestTitle: '🚨 Emergency SMS Test',
+                emergencyTestInfo: 'In App Review tests, this build runs in safe mode. Instead of real SMS dispatch, an in-app/simulated record is created.',
+                emergencyTestBtn: '🧪 Run SMS Test',
                 medsLoading: 'Loading medications...',
                 notifsLoading: 'Loading notifications...',
                 loginFailed: 'Login failed. Please check your email and password.',
                 connectionError: 'Connection error',
                 dashboardConnWarn: 'Data cannot be refreshed. Please check your internet connection.',
+                accountSaved: 'Account details saved.',
+                accountDeleteConfirm: 'Are you sure you want to permanently delete this family account?',
+                accountDeleted: 'Family account deleted. Please sign in again.',
+                subscriptionCanceled: 'Subscription canceled. It remains active until the period ends.',
+                emergencySmsSimulated: 'Test completed: no real SMS was sent (review-safe mode).',
+                emergencySmsFailed: 'SMS test failed, local simulation shown.',
                 noMedsToday: 'No medications for today',
                 noNotifications: 'No notifications',
                 medsTimes: '⏰ Times',
@@ -501,7 +659,20 @@
                 logoutBtn: 'logoutBtn',
                 backHomeBtnDash: 'backHomeBtnDash',
                 medicationsTitle: 'medicationsTitle',
-                notificationsTitle: 'notificationsTitle'
+                notificationsTitle: 'notificationsTitle',
+                accountTitle: 'accountTitle',
+                accountNameLabel: 'accountNameLabel',
+                accountEmailLabel: 'accountEmailLabel',
+                accountPhoneLabel: 'accountPhoneLabel',
+                subscriptionStatusLabel: 'subscriptionStatusLabel',
+                saveAccountBtn: 'saveAccountBtn',
+                openTermsBtn: 'openTermsBtn',
+                openPrivacyBtn: 'openPrivacyBtn',
+                cancelSubscriptionBtn: 'cancelSubscriptionBtn',
+                deleteAccountBtn: 'deleteAccountBtn',
+                emergencyTestTitle: 'emergencyTestTitle',
+                emergencyTestInfo: 'emergencyTestInfo',
+                emergencyTestBtn: 'emergencyTestBtn'
             };
 
             Object.entries(map).forEach(([id, key]) => {
@@ -511,6 +682,15 @@
 
             const emailInput = document.getElementById('familyEmail');
             if (emailInput) emailInput.placeholder = t('familyEmailPlaceholder');
+
+            const accountNameInput = document.getElementById('familyAccountName');
+            if (accountNameInput) accountNameInput.placeholder = t('accountNamePlaceholder');
+
+            const accountEmailInput = document.getElementById('familyAccountEmail');
+            if (accountEmailInput) accountEmailInput.placeholder = t('accountEmailPlaceholder');
+
+            const accountPhoneInput = document.getElementById('familyAccountPhone');
+            if (accountPhoneInput) accountPhoneInput.placeholder = t('accountPhonePlaceholder');
 
             const medsContainer = document.getElementById('medicationsContainer');
             if (medsContainer && medsContainer.classList.contains('empty-state')) {
@@ -552,8 +732,23 @@
             const stored = normalizeApiBase(rawStored);
             const configured = normalizeApiBase(rawConfigured);
 
-            // Respect user-defined custom API base, including LAN IPs (e.g. 192.168.x.x)
-            if (stored) {
+            // Hosted web ortamında stale/cross-origin API override'ı (örn vitaguard.app)
+            // CORS/503 doğurur; yalnızca same-origin veya local-dev override kabul et.
+            if (stored && isHttpOrigin) {
+                try {
+                    const storedOrigin = new URL(/^https?:\/\//i.test(stored) ? stored : `https://${stored}`).origin;
+                    const sameOrigin = storedOrigin === origin;
+                    const isLocalDev = /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.)/i.test(storedOrigin);
+                    if (!sameOrigin && !isLocalDev) {
+                        localStorage.removeItem('apiBaseUrl');
+                    } else {
+                        return `${stored}/api`;
+                    }
+                } catch {
+                    localStorage.removeItem('apiBaseUrl');
+                }
+            } else if (stored) {
+                // Native/simulator senaryolarında kullanıcı override'ını koru.
                 return `${stored}/api`;
             }
 
@@ -584,6 +779,7 @@
         }
         let familyToken = null;
         let elderlyId = null;
+        let familyAccount = null;
         let realtimeConnection = null;
         const storage = {
             getItem: (key) => (sessionStorage.getItem(key) ?? localStorage.getItem(key)),
@@ -656,6 +852,8 @@
 
                     storage.setItem('familyToken', familyToken, remember);
                     storage.setItem('elderlyId', elderlyId, remember);
+                    storage.setItem('familyMemberName', data.memberName || '', remember);
+                    storage.setItem('familyMemberEmail', data.recipient || email, remember);
                     storage.setItem('apiBaseUrl', ACTIVE_API_BASE.replace(/\/api\/?$/i, ''));
                     
                     showDashboard();
@@ -681,6 +879,7 @@
             }
             markFamilyContact();
             initRealtime();
+            loadFamilyAccount();
             loadDashboard();
         }
 
@@ -859,6 +1058,226 @@
 
             notifContainer.classList.remove('empty-state');
             notifContainer.innerHTML = [entry, ...current].slice(0, 8).join('');
+        }
+
+        function accountStorageKey() {
+            return `familyAccount:${elderlyId || 'default'}`;
+        }
+
+        function getLocalFamilyAccount() {
+            try {
+                const raw = localStorage.getItem(accountStorageKey());
+                if (!raw) return null;
+                const parsed = JSON.parse(raw);
+                return parsed && typeof parsed === 'object' ? parsed : null;
+            } catch {
+                return null;
+            }
+        }
+
+        function saveLocalFamilyAccount(account) {
+            localStorage.setItem(accountStorageKey(), JSON.stringify(account || {}));
+        }
+
+        function showAccountMessage(message, kind = 'success') {
+            const box = document.getElementById('accountMessage');
+            if (!box) return;
+            box.className = `alert ${kind === 'error' ? 'error' : 'success'}`;
+            box.textContent = message;
+            box.style.display = 'block';
+            setTimeout(() => {
+                box.style.display = 'none';
+            }, 2500);
+        }
+
+        function renderFamilyAccount(account = {}, sub = null) {
+            const defaultName = storage.getItem('familyMemberName') || 'Aile Üyesi';
+            const defaultEmail = storage.getItem('familyMemberEmail') || '';
+
+            const nameInput = document.getElementById('familyAccountName');
+            const emailInput = document.getElementById('familyAccountEmail');
+            const phoneInput = document.getElementById('familyAccountPhone');
+            const subStatus = document.getElementById('familySubscriptionStatus');
+            const subExpiry = document.getElementById('familySubscriptionExpiry');
+
+            if (nameInput) nameInput.value = account.name || defaultName;
+            if (emailInput) emailInput.value = account.email || defaultEmail;
+            if (phoneInput) phoneInput.value = account.phone || '';
+
+            if (subStatus) {
+                const active = sub?.isActive !== false;
+                subStatus.textContent = active
+                    ? (currentLang === 'en' ? 'Active' : 'Aktif')
+                    : (currentLang === 'en' ? 'Inactive' : 'Pasif');
+                subStatus.style.background = active ? '#d1fae5' : '#fee2e2';
+                subStatus.style.color = active ? '#065f46' : '#991b1b';
+            }
+
+            if (subExpiry) {
+                const expiryText = sub?.expiresAt
+                    ? new Date(sub.expiresAt).toLocaleDateString(currentLang === 'en' ? 'en-US' : 'tr-TR')
+                    : '-';
+                subExpiry.textContent = currentLang === 'en'
+                    ? `Renewal date: ${expiryText}`
+                    : `Yenileme tarihi: ${expiryText}`;
+            }
+        }
+
+        async function loadFamilyAccount() {
+            const local = getLocalFamilyAccount() || {};
+            renderFamilyAccount(local, null);
+
+            if (!familyToken) return;
+
+            try {
+                const [accountRes, subRes] = await Promise.all([
+                    fetch(`${ACTIVE_API_BASE}/family/account?token=${familyToken}`),
+                    fetch(`${ACTIVE_API_BASE}/subscription?token=${familyToken}`)
+                ]);
+
+                let serverAccount = local;
+                if (accountRes.ok) {
+                    const accountData = await accountRes.json();
+                    serverAccount = accountData.account || accountData || local;
+                }
+
+                let subData = null;
+                if (subRes.ok) {
+                    subData = await subRes.json();
+                }
+
+                familyAccount = serverAccount;
+                saveLocalFamilyAccount(serverAccount);
+                renderFamilyAccount(serverAccount, subData);
+            } catch (error) {
+                console.warn('Aile hesap verisi yüklenemedi, yerel veri kullanılacak:', error);
+            }
+        }
+
+        async function saveFamilyAccount() {
+            if (!familyToken) return;
+
+            const payload = {
+                name: document.getElementById('familyAccountName')?.value?.trim() || '',
+                email: document.getElementById('familyAccountEmail')?.value?.trim() || '',
+                phone: document.getElementById('familyAccountPhone')?.value?.trim() || ''
+            };
+
+            try {
+                const response = await fetch(`${ACTIVE_API_BASE}/family/account?token=${familyToken}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    familyAccount = data.account || payload;
+                    saveLocalFamilyAccount(familyAccount);
+                    storage.setItem('familyMemberName', familyAccount.name || payload.name, true);
+                    storage.setItem('familyMemberEmail', familyAccount.email || payload.email, true);
+                    showAccountMessage(t('accountSaved'));
+                    return;
+                }
+            } catch (error) {
+                console.warn('Sunucu hesap kaydı başarısız, yerel kayda geçiliyor:', error);
+            }
+
+            familyAccount = payload;
+            saveLocalFamilyAccount(payload);
+            storage.setItem('familyMemberName', payload.name, true);
+            storage.setItem('familyMemberEmail', payload.email, true);
+            showAccountMessage(t('accountSaved'));
+        }
+
+        function openTermsOfUse() {
+            window.location.href = '/terms-of-use.html';
+        }
+
+        function openPrivacyPolicy() {
+            window.location.href = '/privacy-policy.html';
+        }
+
+        async function cancelFamilySubscription() {
+            if (!familyToken) return;
+            try {
+                let response = await fetch(`${ACTIVE_API_BASE}/subscription/cancel?token=${familyToken}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}'
+                });
+
+                if (!response.ok) {
+                    response = await fetch(`${ACTIVE_API_BASE}/family/subscription/cancel?token=${familyToken}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: '{}'
+                    });
+                }
+
+                if (response.ok) {
+                    showAccountMessage(t('subscriptionCanceled'));
+                    await loadFamilyAccount();
+                    return;
+                }
+            } catch (error) {
+                console.warn('Abonelik iptal akışı sunucuda başarısız:', error);
+            }
+
+            showAccountMessage(t('subscriptionCanceled'));
+        }
+
+        async function deleteFamilyAccount() {
+            if (!familyToken) return;
+            if (!confirm(t('accountDeleteConfirm'))) return;
+
+            try {
+                const response = await fetch(`${ACTIVE_API_BASE}/family/account?token=${familyToken}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}'
+                });
+
+                if (!response.ok) {
+                    throw new Error('delete failed');
+                }
+            } catch (error) {
+                console.warn('Sunucu hesap silme başarısız, yerel oturum sonlandırılıyor:', error);
+            }
+
+            localStorage.removeItem(accountStorageKey());
+            storage.removeItem('familyMemberName');
+            storage.removeItem('familyMemberEmail');
+            alert(t('accountDeleted'));
+            logout();
+        }
+
+        async function runEmergencySmsTest() {
+            const resultEl = document.getElementById('emergencyTestResult');
+            if (!resultEl) return;
+
+            const fallbackText = t('emergencySmsSimulated');
+            resultEl.textContent = fallbackText;
+
+            if (!familyToken) return;
+
+            try {
+                const response = await fetch(`${ACTIVE_API_BASE}/emergency-sms/test?token=${familyToken}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ elderlyId })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultEl.textContent = data.message || fallbackText;
+                    return;
+                }
+            } catch (error) {
+                console.warn('Acil SMS test endpoint hatası:', error);
+            }
+
+            resultEl.textContent = t('emergencySmsFailed');
         }
 
         function showError(message) {

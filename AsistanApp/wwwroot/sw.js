@@ -1,7 +1,10 @@
 // Service Worker for Offline Support
-const CACHE_NAME = 'safeguardian-v4';
+const CACHE_NAME = 'safeguardian-v6';
 const urlsToCache = [
     '/',
+    '/family/',
+    '/family/index.html',
+    '/family-dashboard.html',
     '/index.html',
     '/index-elderly-ui.html',
     '/index-elderly-ui-v2.html',
@@ -205,11 +208,15 @@ const OFFLINE_FALLBACK = `
 // Install event - Cache files
 self.addEventListener('install', event => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then(cache => {
+        caches.open(CACHE_NAME).then(async cache => {
             console.log('Service Worker: Caching files...');
-            return cache.addAll(urlsToCache).catch(err => {
-                console.warn('Some files could not be cached:', err);
-            });
+            const results = await Promise.allSettled(
+                urlsToCache.map(url => cache.add(url))
+            );
+            const failed = results.filter(r => r.status === 'rejected').length;
+            if (failed > 0) {
+                console.warn(`Some files could not be cached: ${failed}`);
+            }
         })
     );
     self.skipWaiting();
@@ -315,20 +322,50 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // Cache first, then network for static files
+    // Network-first for app shell assets to avoid stale JS/HTML (e.g. old API base)
+    const isAppShellAsset =
+        request.method === 'GET' && (
+            request.destination === 'document' ||
+            request.destination === 'script' ||
+            request.destination === 'style' ||
+            /\.(html|js|css)$/i.test(url.pathname)
+        );
+
+    if (isAppShellAsset) {
+        event.respondWith(
+            fetch(request).then(response => {
+                if (response && response.status === 200 && response.type === 'basic') {
+                    const responseToCache = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(request, responseToCache));
+                }
+                return response;
+            }).catch(async () => {
+                const cached = await caches.match(request);
+                if (cached) return cached;
+                return new Response(OFFLINE_FALLBACK, {
+                    status: 503,
+                    statusText: 'Service Unavailable',
+                    headers: new Headers({
+                        'Content-Type': 'text/html; charset=utf-8'
+                    })
+                });
+            })
+        );
+        return;
+    }
+
+    // Cache-first for other static assets
     event.respondWith(
         caches.match(request).then(response => {
             if (response) {
                 return response;
             }
-            
+
             return fetch(request).then(response => {
-                // Don't cache if not a success response
                 if (!response || response.status !== 200 || response.type !== 'basic') {
                     return response;
                 }
 
-                // Clone the response
                 const responseToCache = response.clone();
                 caches.open(CACHE_NAME).then(cache => {
                     cache.put(request, responseToCache);
@@ -336,7 +373,6 @@ self.addEventListener('fetch', event => {
 
                 return response;
             }).catch(() => {
-                // Offline fallback - HTML sayfası döndür
                 return new Response(OFFLINE_FALLBACK, {
                     status: 503,
                     statusText: 'Service Unavailable',
@@ -613,5 +649,5 @@ async function syncTasks() {
     }
 }
 
-console.log('Service Worker loaded and ready for offline support - v3 with IndexedDB + Background Sync');
+console.log('Service Worker loaded and ready for offline support - v5 with IndexedDB + Background Sync');
 
