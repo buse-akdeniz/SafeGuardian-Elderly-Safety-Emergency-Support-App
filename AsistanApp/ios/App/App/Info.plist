@@ -53,6 +53,17 @@
 	<string>Acil bir durumda konumunuzu belirleyip aile üyelerinize güvenli şekilde iletmek için konum izni gereklidir.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>SafeGuardian AI, sesli komutlar ve güvenlik özellikleri için mikrofonunuzu kullanır.</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>Bu veriler, size daha kişiselleştirilmiş bir reklam deneyimi sunmak ve ödüllü özellikleri doğrulamak için kullanılacaktır.</string>
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-8847006171122424~5915620356</string>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

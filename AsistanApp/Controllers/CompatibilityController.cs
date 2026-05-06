@@ -78,16 +78,86 @@ public class CompatibilityController : ControllerBase
         var sub = SubscriptionByUser.GetOrAdd(userId, _ => new SubscriptionItem
         {
             Plan = "standard",
-            IsActive = true,
-            ExpiresAt = DateTime.UtcNow.AddMonths(1)
+            IsActive = false,
+            ExpiresAt = DateTime.UtcNow,
+            StartedAt = DateTime.UtcNow,
+            TrialEndsAt = DateTime.UtcNow.AddDays(7),
+            AdUnlockUntil = DateTime.UtcNow
         });
+
+        var now = DateTime.UtcNow;
+        if (sub.StartedAt == default)
+        {
+            sub.StartedAt = now;
+        }
+        if (sub.TrialEndsAt == default)
+        {
+            sub.TrialEndsAt = sub.StartedAt.AddDays(7);
+        }
+
+        var isPremium = string.Equals(sub.Plan, "premium", StringComparison.OrdinalIgnoreCase)
+            && sub.IsActive
+            && sub.ExpiresAt > now;
+        var isTrialActive = now <= sub.TrialEndsAt;
+        var isAdUnlockActive = sub.AdUnlockUntil > now;
+        var hasFullAccess = isPremium || isTrialActive || isAdUnlockActive;
+        var requiresSubscription = !hasFullAccess;
 
         return Results.Json(new
         {
             success = true,
             plan = sub.Plan,
-            isActive = sub.IsActive,
-            expiresAt = sub.ExpiresAt
+            isActive = hasFullAccess,
+            expiresAt = sub.ExpiresAt,
+            trialEndsAt = sub.TrialEndsAt,
+            isTrialActive,
+            adUnlockUntil = sub.AdUnlockUntil,
+            isAdUnlockActive,
+            hasFullAccess,
+            requiresSubscription
+        });
+    }
+
+    [HttpPost("subscription/ad-reward")]
+    public IResult GrantAdRewardAccess()
+    {
+        var userId = ResolveUserId();
+        var now = DateTime.UtcNow;
+        var sub = SubscriptionByUser.GetOrAdd(userId, _ => new SubscriptionItem
+        {
+            Plan = "standard",
+            IsActive = false,
+            ExpiresAt = now,
+            StartedAt = now,
+            TrialEndsAt = now.AddDays(7),
+            AdUnlockUntil = now
+        });
+
+        sub.AdUnlockUntil = now.AddHours(12);
+        SubscriptionByUser[userId] = sub;
+
+        var isTrialActive = now <= sub.TrialEndsAt;
+        var isAdUnlockActive = sub.AdUnlockUntil > now;
+        var isPremium = string.Equals(sub.Plan, "premium", StringComparison.OrdinalIgnoreCase)
+            && sub.IsActive
+            && sub.ExpiresAt > now;
+
+        return Results.Json(new
+        {
+            success = true,
+            message = "Reklam ödülü tanımlandı. Tüm özellikler 12 saat açık.",
+            entitlement = new
+            {
+                plan = sub.Plan,
+                isActive = isPremium || isTrialActive || isAdUnlockActive,
+                expiresAt = sub.ExpiresAt,
+                trialEndsAt = sub.TrialEndsAt,
+                isTrialActive,
+                adUnlockUntil = sub.AdUnlockUntil,
+                isAdUnlockActive,
+                hasFullAccess = isPremium || isTrialActive || isAdUnlockActive,
+                requiresSubscription = !(isPremium || isTrialActive || isAdUnlockActive)
+            }
         });
     }
 
@@ -95,11 +165,24 @@ public class CompatibilityController : ControllerBase
     public IResult CancelSubscription()
     {
         var userId = ResolveUserId();
+        var existing = SubscriptionByUser.GetOrAdd(userId, _ => new SubscriptionItem
+        {
+            Plan = "standard",
+            IsActive = false,
+            ExpiresAt = DateTime.UtcNow,
+            StartedAt = DateTime.UtcNow,
+            TrialEndsAt = DateTime.UtcNow.AddDays(7),
+            AdUnlockUntil = DateTime.UtcNow
+        });
+
         SubscriptionByUser[userId] = new SubscriptionItem
         {
             Plan = "standard",
-            IsActive = true,
-            ExpiresAt = DateTime.UtcNow.AddMonths(1)
+            IsActive = false,
+            ExpiresAt = DateTime.UtcNow,
+            StartedAt = existing.StartedAt == default ? DateTime.UtcNow : existing.StartedAt,
+            TrialEndsAt = existing.TrialEndsAt == default ? DateTime.UtcNow.AddDays(7) : existing.TrialEndsAt,
+            AdUnlockUntil = existing.AdUnlockUntil
         };
 
         return Results.Json(new
@@ -651,8 +734,11 @@ public class CompatibilityController : ControllerBase
     private sealed class SubscriptionItem
     {
         public string Plan { get; set; } = "standard";
-        public bool IsActive { get; set; } = true;
+        public bool IsActive { get; set; } = false;
         public DateTime ExpiresAt { get; set; }
+        public DateTime StartedAt { get; set; }
+        public DateTime TrialEndsAt { get; set; }
+        public DateTime AdUnlockUntil { get; set; }
     }
 
     private sealed class FamilyAccountItem

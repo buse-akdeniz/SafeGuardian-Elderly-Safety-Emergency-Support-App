@@ -450,7 +450,12 @@
                     Otomatik yenilemeli aboneliklerde iOS Ayarlar &gt; Apple Kimliği &gt; Abonelikler ekranından yönetim yapılabilir.
                 </p>
 
+                <div id="entitlementInfo" style="font-size:16px; color:#e0e0e0; margin-bottom:14px;"></div>
+
                 <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <button id="watchAdUnlockButton" class="btn-giant btn-blue" onclick="watchAdFor12HourAccess()" style="font-size: 20px;">
+                        🎬 REKLAM İZLE - 12 SAAT TÜM ÖZELLİKLERİ AÇ
+                    </button>
                     <button id="buyFamilyPackageButton" class="btn-giant btn-green" onclick="startFamilyPackagePurchase()" style="font-size: 22px;">
                         <span data-i18n="buyFamilyPackageBtn">💳 AİLE PAKETİNE GEÇ - ₺149,99/AY</span>
                     </button>
@@ -547,6 +552,7 @@
         })();
     </script>
     <script src="config.js?v=20260505"></script>
+    <script src="../js/admob.js?v=20260506"></script>
     <script src="elderly.js?v=20260505"></script>
     <script src="voice-assistant.js?v=20260505"></script>
 </body>

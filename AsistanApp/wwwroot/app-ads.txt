@@ -1,0 +1,2 @@
+# app-ads.txt for SafeGuardian AI
+google.com, pub-8847006171122424, DIRECT, f08c47fec0942fa0

@@ -758,39 +758,114 @@ function writeLocalList(key, list) {
     }
 }
 
+function isPremiumPlan(planValue) {
+    const normalized = String(planValue || '').trim().toLowerCase();
+    return normalized === 'premium';
+}
+
+function getLocalEntitlementState() {
+    const now = new Date();
+    const planRaw = localStorage.getItem('userPlan') || 'standard';
+    const trialEndsAtRaw = localStorage.getItem('trialEndsAt') || '';
+    const adUnlockUntilRaw = localStorage.getItem('adUnlockUntil') || '';
+    const subEndRaw = localStorage.getItem('subscriptionEnd') || '';
+
+    const trialEndsAt = trialEndsAtRaw ? new Date(trialEndsAtRaw) : null;
+    const adUnlockUntil = adUnlockUntilRaw ? new Date(adUnlockUntilRaw) : null;
+    const subEnd = subEndRaw ? new Date(subEndRaw) : null;
+
+    const isTrialActive = Boolean(trialEndsAt && !Number.isNaN(trialEndsAt.getTime()) && trialEndsAt > now);
+    const isAdUnlockActive = Boolean(adUnlockUntil && !Number.isNaN(adUnlockUntil.getTime()) && adUnlockUntil > now);
+    const isPremiumActive = isPremiumPlan(planRaw) && Boolean(subEnd && !Number.isNaN(subEnd.getTime()) && subEnd > now);
+
+    return {
+        plan: isPremiumActive ? 'premium' : 'standard',
+        isTrialActive,
+        trialEndsAt,
+        isAdUnlockActive,
+        adUnlockUntil,
+        hasFullAccess: isPremiumActive || isTrialActive || isAdUnlockActive,
+        requiresSubscription: !(isPremiumActive || isTrialActive || isAdUnlockActive)
+    };
+}
+
+function applyEntitlementFromSubscription(subscription) {
+    const now = new Date();
+    const planRaw = String(subscription?.plan || subscription?.Plan || 'standard').toLowerCase();
+    const isActive = subscription?.isActive ?? subscription?.IsActive ?? false;
+    const expiresAtRaw = subscription?.expiresAt || subscription?.ExpiresAt || '';
+    const trialEndsAtRaw = subscription?.trialEndsAt || subscription?.TrialEndsAt || '';
+    const adUnlockUntilRaw = subscription?.adUnlockUntil || subscription?.AdUnlockUntil || '';
+    const isTrialActiveServer = subscription?.isTrialActive ?? subscription?.IsTrialActive;
+    const isAdUnlockActiveServer = subscription?.isAdUnlockActive ?? subscription?.IsAdUnlockActive;
+
+    const expiresAt = expiresAtRaw ? new Date(expiresAtRaw) : null;
+    const trialEndsAt = trialEndsAtRaw ? new Date(trialEndsAtRaw) : null;
+    const adUnlockUntil = adUnlockUntilRaw ? new Date(adUnlockUntilRaw) : null;
+
+    const isPremiumActive = planRaw === 'premium' && isActive && Boolean(expiresAt && expiresAt > now);
+    const isTrialActive = typeof isTrialActiveServer === 'boolean'
+        ? isTrialActiveServer
+        : Boolean(trialEndsAt && trialEndsAt > now);
+    const isAdUnlockActive = typeof isAdUnlockActiveServer === 'boolean'
+        ? isAdUnlockActiveServer
+        : Boolean(adUnlockUntil && adUnlockUntil > now);
+
+    localStorage.setItem('userPlan', isPremiumActive ? 'premium' : 'standard');
+    if (expiresAt && !Number.isNaN(expiresAt.getTime())) {
+        localStorage.setItem('subscriptionEnd', expiresAt.toISOString().split('T')[0]);
+    }
+    if (trialEndsAt && !Number.isNaN(trialEndsAt.getTime())) {
+        localStorage.setItem('trialEndsAt', trialEndsAt.toISOString());
+    }
+    if (adUnlockUntil && !Number.isNaN(adUnlockUntil.getTime())) {
+        localStorage.setItem('adUnlockUntil', adUnlockUntil.toISOString());
+    }
+
+    return {
+        plan: isPremiumActive ? 'premium' : 'standard',
+        isTrialActive,
+        trialEndsAt,
+        isAdUnlockActive,
+        adUnlockUntil,
+        hasFullAccess: isPremiumActive || isTrialActive || isAdUnlockActive,
+        requiresSubscription: !(isPremiumActive || isTrialActive || isAdUnlockActive)
+    };
+}
+
+async function fetchEntitlementState(forceRefresh = false) {
+    if (!forceRefresh && subscriptionCache) {
+        return applyEntitlementFromSubscription(subscriptionCache);
+    }
+
+    const token = requireAuthToken();
+    if (!token) return getLocalEntitlementState();
+
+    const response = await safeFetch(`${API_BASE}/api/subscription?token=${token}`);
+    if (!response || !response.ok) return getLocalEntitlementState();
+
+    const payload = await safeReadJson(response, null);
+    if (!payload) return getLocalEntitlementState();
+    subscriptionCache = payload;
+    return applyEntitlementFromSubscription(payload);
+}
+
 async function ensurePremiumAccess(featureName) {
     const token = requireAuthToken();
     if (!token) return false;
 
-    const storedPlan = localStorage.getItem('userPlan');
-    if (storedPlan && storedPlan !== 'premium') {
-        speak('Bu özellik sadece aile paketi üyeleri içindir.');
-        showNotification('Abonelik Gerekli', 'Lütfen abone olun.', 'error');
-        return false;
-    }
-    if (storedPlan === 'premium') return true;
+    const entitlement = await fetchEntitlementState(true);
+    if (entitlement.hasFullAccess) return true;
 
-    if (!subscriptionCache) {
-        const response = await safeFetch(`${API_BASE}/api/subscription?token=${token}`);
-        if (!response) return true;
-        if (response.ok) {
-            subscriptionCache = await safeReadJson(response, null);
-        } else {
-            return true;
-        }
-    }
+    const message = currentLang === 'en'
+        ? `${featureName} requires subscription. You can watch an ad to unlock all features for 12 hours.`
+        : `${featureName} için abonelik gerekir. 12 saatlik tam erişim için reklam izleyebilirsiniz.`;
 
-    const plan = subscriptionCache?.plan || subscriptionCache?.Plan || 'standard';
-    const isActive = subscriptionCache?.isActive ?? subscriptionCache?.IsActive ?? true;
-    localStorage.setItem('userPlan', String(plan).toLowerCase());
-
-    const isPremium = String(plan).toLowerCase() === 'premium' && isActive;
-    if (!isPremium) {
-        speak('Bu özellik sadece aile paketi üyeleri içindir.');
-        showNotification('Abonelik Gerekli', `${featureName} için premium abonelik gerekir.`, 'error');
-        return false;
-    }
-    return true;
+    speak(currentLang === 'en'
+        ? 'Subscription required. You can watch an ad for temporary full access.'
+        : 'Abonelik gerekli. Geçici tam erişim için reklam izleyebilirsiniz.');
+    showNotification(currentLang === 'en' ? 'Subscription Required' : 'Abonelik Gerekli', message, 'error');
+    return false;
 }
 
 
@@ -810,6 +885,9 @@ function showScreen(screenId) {
         return;
     }
     targetScreen.classList.add('active');
+    if (window.SafeGuardianAds?.updateByElderlyScreen) {
+        window.SafeGuardianAds.updateByElderlyScreen(screenId);
+    }
 
     // Her ekrana giriş yapılırken otomatik sesli rehberlik
     triggerVoiceGuidance(screenId);
@@ -1193,9 +1271,6 @@ function initSpeechRecognition() {
         lastVoiceCommand = command;
         lastVoiceCommandAt = now;
 
-        if (command !== 'test') {
-            console.log('Gelen komut:', command);
-        }
         handleVoiceCommand(command);
     };
 
@@ -1477,6 +1552,9 @@ function logout() {
     localStorage.removeItem('rememberMe');
     subscriptionCache = null;
     localStorage.removeItem('userPlan');
+    localStorage.removeItem('trialEndsAt');
+    localStorage.removeItem('adUnlockUntil');
+    localStorage.removeItem('subscriptionEnd');
     showScreen('loginScreen');
 }
 
@@ -1511,14 +1589,57 @@ function updateProfileScreen() {
 }
 
 function updateSubscriptionScreen() {
-    const userPlanRaw = localStorage.getItem('userPlan') || 'Standart';
-    const subscriptionEnd = localStorage.getItem('subscriptionEnd') || '2025-12-31';
-    const isPremium = String(userPlanRaw).toLowerCase().includes('premium');
+    const subscriptionEnd = localStorage.getItem('subscriptionEnd') || '-';
+    const entitlement = getLocalEntitlementState();
+    const isPremium = entitlement.plan === 'premium';
 
     document.getElementById('subCurrentPlan').textContent = isPremium
         ? (currentLang === 'en' ? '⭐ PREMIUM (All Features)' : '⭐ PREMIUM (Tüm Özellikler)')
         : (currentLang === 'en' ? '📦 STANDARD' : '📦 STANDART');
     document.getElementById('subEndDate').textContent = subscriptionEnd;
+
+    const entitlementInfo = document.getElementById('entitlementInfo');
+    if (entitlementInfo) {
+        if (entitlement.isTrialActive && entitlement.trialEndsAt) {
+            entitlementInfo.textContent = currentLang === 'en'
+                ? `🎁 Free trial active until ${entitlement.trialEndsAt.toLocaleString('en-US')}.`
+                : `🎁 Ücretsiz deneme ${entitlement.trialEndsAt.toLocaleString('tr-TR')} tarihine kadar aktif.`;
+        } else if (entitlement.isAdUnlockActive && entitlement.adUnlockUntil) {
+            entitlementInfo.textContent = currentLang === 'en'
+                ? `🎬 Ad reward active until ${entitlement.adUnlockUntil.toLocaleString('en-US')}.`
+                : `🎬 Reklam ödülü ${entitlement.adUnlockUntil.toLocaleString('tr-TR')} tarihine kadar aktif.`;
+        } else if (isPremium) {
+            entitlementInfo.textContent = currentLang === 'en'
+                ? '✅ Premium access is active.'
+                : '✅ Premium erişim aktif.';
+        } else {
+            entitlementInfo.textContent = currentLang === 'en'
+                ? '⛔ Free trial ended. Subscribe or watch an ad for 12-hour full access.'
+                : '⛔ Ücretsiz deneme bitti. Abone olun veya 12 saatlik tam erişim için reklam izleyin.';
+        }
+    }
+
+    const watchAdButton = document.getElementById('watchAdUnlockButton');
+    if (watchAdButton) {
+        watchAdButton.disabled = isPremium || entitlement.isTrialActive || entitlement.isAdUnlockActive;
+        if (isPremium) {
+            watchAdButton.textContent = currentLang === 'en'
+                ? '✅ PREMIUM ACTIVE'
+                : '✅ PREMIUM AKTİF';
+        } else if (entitlement.isTrialActive) {
+            watchAdButton.textContent = currentLang === 'en'
+                ? '🎁 FREE TRIAL ACTIVE'
+                : '🎁 ÜCRETSİZ DENEME AKTİF';
+        } else if (entitlement.isAdUnlockActive) {
+            watchAdButton.textContent = currentLang === 'en'
+                ? '🎬 AD REWARD ACTIVE'
+                : '🎬 REKLAM ÖDÜLÜ AKTİF';
+        } else {
+            watchAdButton.textContent = currentLang === 'en'
+                ? '🎬 WATCH AD - UNLOCK ALL FEATURES FOR 12 HOURS'
+                : '🎬 REKLAM İZLE - 12 SAAT TÜM ÖZELLİKLERİ AÇ';
+        }
+    }
 
     const premiumFeaturesEl = document.getElementById('premiumFeatures');
     if (!premiumFeaturesEl) return;
@@ -1549,6 +1670,69 @@ function updateSubscriptionScreen() {
     updatePurchaseButtonLabel();
 }
 
+async function watchAdFor12HourAccess() {
+    const token = await requireAuthTokenAsync();
+    if (!token) return;
+
+    const result = await window.SafeGuardianAds?.showRewardedAdUnlock?.();
+    if (!result || !result.ok) {
+        showNotification(
+            currentLang === 'en' ? 'Ad Not Available' : 'Reklam Kullanılamıyor',
+            currentLang === 'en'
+                ? 'Rewarded ad could not be started on this device.'
+                : 'Bu cihazda ödüllü reklam başlatılamadı.',
+            'error'
+        );
+        return;
+    }
+
+    if (!result.rewarded) {
+        showNotification(
+            currentLang === 'en' ? 'Reward Not Earned' : 'Ödül Alınamadı',
+            currentLang === 'en'
+                ? 'Watch the ad until the end to unlock features.'
+                : 'Ödül için reklamı sonuna kadar izlemelisiniz.',
+            'error'
+        );
+        return;
+    }
+
+    const response = await safeFetch(`${API_BASE}/api/subscription/ad-reward?token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+    });
+
+    if (!response || !response.ok) {
+        showNotification(
+            currentLang === 'en' ? 'Error' : 'Hata',
+            currentLang === 'en'
+                ? 'Reward received but entitlement could not be updated. Please retry.'
+                : 'Ödül alındı ancak erişim güncellenemedi. Tekrar deneyin.',
+            'error'
+        );
+        return;
+    }
+
+    const data = await safeReadJson(response, null);
+    if (data?.entitlement) {
+        subscriptionCache = data.entitlement;
+        applyEntitlementFromSubscription(data.entitlement);
+    } else {
+        await fetchEntitlementState(true);
+    }
+
+    updateProfileScreen();
+    updateSubscriptionScreen();
+    showNotification(
+        currentLang === 'en' ? 'Success' : 'Başarılı',
+        currentLang === 'en'
+            ? 'All features unlocked for 12 hours.'
+            : 'Tüm özellikler 12 saatliğine açıldı.',
+        'success'
+    );
+}
+
 function editProfile() {
     const newName = prompt(currentLang === 'en' ? 'Your new full name:' : 'Yeni ad soyadınız:', localStorage.getItem('userName') || '');
     if (!newName || !newName.trim()) return;
@@ -1568,6 +1752,10 @@ function editProfile() {
 function goToSubscription() {
     updateSubscriptionScreen();
     showScreen('subscriptionScreen');
+    fetchEntitlementState(true).then(() => {
+        updateProfileScreen();
+        updateSubscriptionScreen();
+    }).catch(() => { });
     loadStoreProduct().then(() => updatePurchaseButtonLabel());
     speak(currentLang === 'en' ? 'You are on the subscription page.' : 'Abone durumu sayfasında bulunuyorsunuz', currentLang === 'en' ? 'en-US' : 'tr-TR');
 }
@@ -2110,6 +2298,10 @@ window.addEventListener('load', async () => {
         showScreen('homeScreen');
         updateGreeting();
     }
+    const activeScreen = document.querySelector('.screen.active')?.id || 'loginScreen';
+    if (window.SafeGuardianAds?.updateByElderlyScreen) {
+        window.SafeGuardianAds.updateByElderlyScreen(activeScreen);
+    }
     startCareRoutine();
 });
 
@@ -2512,7 +2704,6 @@ async function loadMedications() {
                 ? payload
                 : (Array.isArray(payload?.items) ? payload.items : (Array.isArray(payload?.medications) ? payload.medications : []));
             currentMedicationsCache = medications;
-            console.log('Gelen Veri (ilaçlar):', medications);
             const container = document.getElementById('medicationsList');
             if (!container) return;
             if (!medications.length) {
@@ -2623,7 +2814,6 @@ async function loadFamilyMembers() {
         if (response.ok) {
             const payload = await safeReadJson(response, { members: [] });
             const members = Array.isArray(payload) ? payload : (payload.members || []);
-            console.log('Gelen Veri (aile):', members);
             const container = document.getElementById('familyList');
             container.innerHTML = members.map(member => `
                 <div style="background: rgba(0,255,100,0.1); border-left: 5px solid #00ff00; padding: 20px; margin-bottom: 20px; border-radius: 10px;">

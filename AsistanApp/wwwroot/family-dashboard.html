@@ -502,6 +502,7 @@
     </div>
 
     <script src="/js/signalr.min.js"></script>
+    <script src="/js/admob.js?v=20260506"></script>
     <script>
         const I18N = {
             tr: {
@@ -874,6 +875,9 @@
         function showDashboard() {
             document.getElementById('loginContainer').classList.remove('active');
             document.getElementById('dashboardContainer').classList.add('active');
+            if (window.SafeGuardianAds?.updateByFamilyView) {
+                window.SafeGuardianAds.updateByFamilyView('dashboard');
+            }
             if (!history.state || history.state.view !== 'dashboard') {
                 history.pushState({ view: 'dashboard' }, '', window.location.href);
             }
@@ -951,6 +955,9 @@
         function showLogin() {
             document.getElementById('loginContainer').classList.add('active');
             document.getElementById('dashboardContainer').classList.remove('active');
+            if (window.SafeGuardianAds?.updateByFamilyView) {
+                window.SafeGuardianAds.updateByFamilyView('login');
+            }
         }
 
         async function loadDashboard() {
@@ -1293,6 +1300,9 @@
             }
             storage.removeItem('familyToken');
             storage.removeItem('elderlyId');
+            if (window.SafeGuardianAds?.updateByFamilyView) {
+                window.SafeGuardianAds.updateByFamilyView('login');
+            }
             showLogin();
             document.getElementById('loginForm').reset();
             history.replaceState({ view: 'login' }, '', window.location.href);
@@ -1314,6 +1324,8 @@
                 familyToken = token;
                 elderlyId = eId;
                 showDashboard();
+            } else if (window.SafeGuardianAds?.updateByFamilyView) {
+                window.SafeGuardianAds.updateByFamilyView('login');
             }
         });
 
