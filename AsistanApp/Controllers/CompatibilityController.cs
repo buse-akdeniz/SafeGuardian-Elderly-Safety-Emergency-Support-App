@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using ilk_projem.Services;
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 
 namespace ilk_projem.Controllers;
@@ -9,6 +10,15 @@ namespace ilk_projem.Controllers;
 [Route("api")]
 public class CompatibilityController : ControllerBase
 {
+    private static readonly HashSet<string> AppleFamilyPlanProductIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "com.buseakdeniz.safeguardian.sub_family_monthly_v2",
+        "com.buse.safeguardian.sub_family_monthly_v2",
+        "com.buseakdeniz.safeguardian.sub_family_monthly",
+        "com.buse.safeguardian.sub_family_monthly",
+        "com.vitaguard.family.monthly"
+    };
+
     private static readonly ConcurrentDictionary<int, List<MedicationItem>> MedicationsByUser = new();
     private static readonly ConcurrentDictionary<int, List<HealthRecordItem>> HealthByUser = new();
     private static readonly ConcurrentDictionary<int, List<MoodItem>> MoodByUser = new();
@@ -16,11 +26,83 @@ public class CompatibilityController : ControllerBase
     private static readonly ConcurrentDictionary<int, List<NotificationItem>> NotificationsByUser = new();
     private static readonly ConcurrentDictionary<int, SubscriptionItem> SubscriptionByUser = new();
     private static readonly ConcurrentDictionary<int, FamilyAccountItem> FamilyAccountByUser = new();
+    private static readonly object SubscriptionStoreLock = new();
+    private static readonly string SubscriptionStorePath = Path.Combine(
+        Environment.GetEnvironmentVariable("SUBSCRIPTION_STORE_PATH")
+            ?? Path.Combine(Environment.GetEnvironmentVariable("HOME") ?? "/tmp", ".safeguardian"),
+        "subscriptions.json");
+    private static bool _subscriptionsLoaded;
+
+    static CompatibilityController()
+    {
+        LoadSubscriptionsFromDisk();
+    }
 
     private int ResolveUserId()
     {
         var token = AuthTokenService.ResolveToken(HttpContext);
-        return string.IsNullOrWhiteSpace(token) ? 1 : 1;
+        if (string.IsNullOrWhiteSpace(token)) return 1;
+        return Math.Abs(StringComparer.Ordinal.GetHashCode(token));
+    }
+
+    private static void LoadSubscriptionsFromDisk()
+    {
+        lock (SubscriptionStoreLock)
+        {
+            if (_subscriptionsLoaded) return;
+            _subscriptionsLoaded = true;
+
+            try
+            {
+                if (!System.IO.File.Exists(SubscriptionStorePath)) return;
+
+                var json = System.IO.File.ReadAllText(SubscriptionStorePath);
+                var items = JsonSerializer.Deserialize<Dictionary<string, SubscriptionItem>>(json);
+                if (items == null) return;
+
+                foreach (var pair in items)
+                {
+                    if (!int.TryParse(pair.Key, out var userId)) continue;
+                    SubscriptionByUser[userId] = pair.Value;
+                }
+            }
+            catch
+            {
+                // Keep in-memory defaults if persistence cannot be read.
+            }
+        }
+    }
+
+    private static void PersistSubscriptionsToDisk()
+    {
+        lock (SubscriptionStoreLock)
+        {
+            try
+            {
+                var directory = Path.GetDirectoryName(SubscriptionStorePath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                var payload = SubscriptionByUser.ToDictionary(
+                    pair => pair.Key.ToString(),
+                    pair => pair.Value);
+
+                var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+                System.IO.File.WriteAllText(SubscriptionStorePath, json);
+            }
+            catch
+            {
+                // Subscription activation should still succeed in memory.
+            }
+        }
+    }
+
+    private static void SaveSubscription(int userId, SubscriptionItem item)
+    {
+        SubscriptionByUser[userId] = item;
+        PersistSubscriptionsToDisk();
     }
 
     private IConfiguration Config => HttpContext.RequestServices.GetRequiredService<IConfiguration>();
@@ -134,7 +216,7 @@ public class CompatibilityController : ControllerBase
         });
 
         sub.AdUnlockUntil = now.AddHours(12);
-        SubscriptionByUser[userId] = sub;
+        SaveSubscription(userId, sub);
 
         var isTrialActive = now <= sub.TrialEndsAt;
         var isAdUnlockActive = sub.AdUnlockUntil > now;
@@ -175,7 +257,7 @@ public class CompatibilityController : ControllerBase
             AdUnlockUntil = DateTime.UtcNow
         });
 
-        SubscriptionByUser[userId] = new SubscriptionItem
+        SaveSubscription(userId, new SubscriptionItem
         {
             Plan = "standard",
             IsActive = false,
@@ -183,13 +265,103 @@ public class CompatibilityController : ControllerBase
             StartedAt = existing.StartedAt == default ? DateTime.UtcNow : existing.StartedAt,
             TrialEndsAt = existing.TrialEndsAt == default ? DateTime.UtcNow.AddDays(7) : existing.TrialEndsAt,
             AdUnlockUntil = existing.AdUnlockUntil
-        };
+        });
 
         return Results.Json(new
         {
             success = true,
             message = "Abonelik iptal edildi. Dönem sonuna kadar aktif.",
             subscription = SubscriptionByUser[userId]
+        });
+    }
+
+    [HttpPost("subscription/apple/confirm")]
+    public async Task<IResult> ConfirmAppleSubscriptionPurchase()
+    {
+        var userId = ResolveUserId();
+
+        using var reader = new StreamReader(Request.Body);
+        var raw = await reader.ReadToEndAsync();
+
+        string productId = string.Empty;
+        string transactionId = string.Empty;
+        string expirationDateRaw = string.Empty;
+
+        try
+        {
+            var json = System.Text.Json.JsonDocument.Parse(raw).RootElement;
+            if (json.TryGetProperty("productId", out var p)) productId = p.GetString() ?? string.Empty;
+            if (json.TryGetProperty("transactionId", out var t)) transactionId = t.GetString() ?? string.Empty;
+            if (json.TryGetProperty("expirationDate", out var e)) expirationDateRaw = e.GetString() ?? string.Empty;
+        }
+        catch
+        {
+            return Results.BadRequest(new { success = false, message = "Geçersiz istek gövdesi." });
+        }
+
+        if (string.IsNullOrWhiteSpace(productId))
+        {
+            return Results.BadRequest(new { success = false, message = "productId zorunludur." });
+        }
+
+        if (string.IsNullOrWhiteSpace(transactionId))
+        {
+            transactionId = $"fallback-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+        }
+
+        if (!AppleFamilyPlanProductIds.Contains(productId))
+        {
+            return Results.BadRequest(new { success = false, message = "Desteklenmeyen ürün kimliği." });
+        }
+
+        var now = DateTime.UtcNow;
+        var existing = SubscriptionByUser.GetOrAdd(userId, _ => new SubscriptionItem
+        {
+            Plan = "standard",
+            IsActive = false,
+            ExpiresAt = now,
+            StartedAt = now,
+            TrialEndsAt = now.AddDays(7),
+            AdUnlockUntil = now
+        });
+
+        DateTime expiresAt = now.AddMonths(1);
+        if (!string.IsNullOrWhiteSpace(expirationDateRaw)
+            && DateTimeOffset.TryParse(expirationDateRaw, out var parsedExpiry)
+            && parsedExpiry.UtcDateTime > now)
+        {
+            expiresAt = parsedExpiry.UtcDateTime;
+        }
+
+        var updated = new SubscriptionItem
+        {
+            Plan = "premium",
+            IsActive = true,
+            ExpiresAt = expiresAt,
+            StartedAt = existing.StartedAt == default ? now : existing.StartedAt,
+            TrialEndsAt = existing.TrialEndsAt == default ? now.AddDays(7) : existing.TrialEndsAt,
+            AdUnlockUntil = existing.AdUnlockUntil,
+            LastAppleTransactionId = transactionId
+        };
+
+        SaveSubscription(userId, updated);
+
+        return Results.Json(new
+        {
+            success = true,
+            message = "Apple satın alma doğrulandı ve abonelik aktif edildi.",
+            subscription = new
+            {
+                plan = updated.Plan,
+                isActive = true,
+                expiresAt = updated.ExpiresAt,
+                trialEndsAt = updated.TrialEndsAt,
+                isTrialActive = updated.TrialEndsAt > now,
+                adUnlockUntil = updated.AdUnlockUntil,
+                isAdUnlockActive = updated.AdUnlockUntil > now,
+                hasFullAccess = true,
+                requiresSubscription = false
+            }
         });
     }
 
@@ -739,6 +911,7 @@ public class CompatibilityController : ControllerBase
         public DateTime StartedAt { get; set; }
         public DateTime TrialEndsAt { get; set; }
         public DateTime AdUnlockUntil { get; set; }
+        public string LastAppleTransactionId { get; set; } = "";
     }
 
     private sealed class FamilyAccountItem

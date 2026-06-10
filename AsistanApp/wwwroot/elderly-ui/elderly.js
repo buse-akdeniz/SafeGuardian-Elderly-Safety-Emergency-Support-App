@@ -13,7 +13,18 @@ const DEFAULT_API_BASE = (
 const FALLBACK_API_BASE = (window.API_FALLBACK_BASE?.trim?.() || RAILWAY_API_BASE);
 const IOS_SIMULATOR_API_BASE = FALLBACK_API_BASE;
 const DEMO_OFFLINE_TOKEN = 'demo-offline-token';
-const IS_CAPACITOR_IOS = Boolean(window.Capacitor) && /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+const IS_CAPACITOR_IOS = (() => {
+    const cap = window.Capacitor;
+    if (!cap) return false;
+
+    const platform = cap.getPlatform?.();
+    if (platform) return platform === 'ios';
+
+    const ua = navigator.userAgent || '';
+    const isiPhoneLike = /iPhone|iPad|iPod/i.test(ua);
+    const isDesktopModeiPad = navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1;
+    return isiPhoneLike || isDesktopModeiPad;
+})();
 const API_TIMEOUT_MS = 12000;
 
 // --- TTS ENGINE TEMPORARILY DISABLED ---
@@ -99,12 +110,12 @@ const TRANSLATIONS = {
         relationSibling: 'Kardeş', relationOther: 'Diğer',
         accountBtn: '👤 HESAP',
         profileTitle: '👤 HESAP',
-        subscriptionTitle: '💳 ABONELİK',
+        subscriptionTitle: '💳 ABONELİK (IN-APP PURCHASE)',
         profileCardTitle: '👤 HESAP BİLGİLERİ',
         userFullName: 'AD SOYAD', userEmail: 'E-POSTA',
         subscriptionStatus: 'ABONE DURUMU', daysRemaining: 'KALAN GÜN',
         premiumPlan: '⭐ PREMIUM', standardPlan: '📦 STANDART',
-        upgradePremium: '⭐ AİLE PAKETİNE GEÇ', subscriptionButton: '💳 ABONELİK KALAN',
+        upgradePremium: '⭐ AİLE PAKETİNE GEÇ', subscriptionButton: '💳 ABONELİK (IN-APP PURCHASE)',
         editProfileBtn: '✏️ BİLGİ GÜNCELLE', logoutBtn: '🚪 ÇIKIŞ YAP',
         editLogoutBtn: '🚪 ÇIKIŞ YAP',
         privacyPolicyBtn: '📄 GİZLİLİK SÖZLEŞMESİ',
@@ -116,12 +127,24 @@ const TRANSLATIONS = {
         cancelSubscriptionBtn: '⛔ ABONELİĞİ İPTAL ET',
         manageSubscriptionsBtn: '⚙️ ABONELİKLERİ YÖNET',
         subscriptionLegalNote: 'Otomatik yenilemeli aboneliklerde iOS Ayarlar > Apple Kimliği > Abonelikler ekranından yönetim yapılabilir.',
+        autoRenewDisclosure: 'Satın alma işlemini onayladığınızda ödeme Apple hesabınızdan tahsil edilir. Abonelik, mevcut dönem bitmeden en az 24 saat önce iptal edilmediği sürece seçilen paket yenileme dönemine göre (Aylık) otomatik olarak yenilenir. Aboneliğinizi Ayarlar > Apple Kimliği > Abonelikler bölümünden yönetebilir veya iptal edebilirsiniz.',
+        subscriptionPrivacyBtn: '📄 GİZLİLİK POLİTİKASI',
+        subscriptionTermsBtn: '⚖️ KULLANIM KOŞULLARI (EULA)',
+        termsOfUseBtn: '⚖️ KULLANIM KOŞULLARI (EULA)',
+        subscriptionDisclosureTitle: 'ABONELİK DETAYLARI',
+        subscriptionMonthlyLine: 'Safeguardian Premium Monthly — 1 month —',
+        subscriptionYearlyLine: '',
+        privacyPolicyLinkLabel: 'Privacy Policy',
+        termsOfUseLinkLabel: 'Terms of Use (EULA)',
+        subscriptionPriceLoading: 'App Store fiyatı yükleniyor',
         purchaseStarted: 'Satın alma başlatıldı',
         purchaseStartedMsg: 'Apple güvenli ödeme penceresi açılıyor.',
         purchaseSuccess: 'Satın alma başarılı',
         purchaseSuccessMsg: 'Aile paketi aktif edildi.',
         purchaseNotAvailable: 'Satın alma hazır değil',
-        purchaseNotAvailableMsg: 'Bu test yapısında StoreKit eklentisi bağlı değil. iOS uygulama sürümünde Apple satın alma penceresi açılır.',
+        purchaseNotAvailableMsg: 'Satın alma şu anda başlatılamadı. Lütfen internet bağlantınızı ve App Store hesabınızı kontrol edip tekrar deneyin.',
+        purchaseProductUnavailableMsg: 'Ürün App Store Connect Sandbox ortamında bulunamadı. Lütfen ürün kimliğini ve sözleşmeleri kontrol edin.',
+        purchaseTechnicalErrorMsg: 'Satın alma sırasında bir hata oluştu. Lütfen tekrar deneyin veya Satın Almaları Geri Yükle seçeneğini kullanın.',
         appleUnavailable: 'Apple girişi bu cihazda kullanılamıyor.',
         appleLoginFailed: 'Apple girişi başarısız oldu.',
         biometricUnavailable: 'Face ID / biyometrik doğrulama desteklenmiyor.',
@@ -238,29 +261,41 @@ const TRANSLATIONS = {
         relationSibling: 'Sibling', relationOther: 'Other',
         accountBtn: '👤 ACCOUNT',
         profileTitle: '👤 ACCOUNT',
-        subscriptionTitle: '💳 SUBSCRIPTION',
+        subscriptionTitle: '💳 SUBSCRIPTION (IN-APP PURCHASE)',
         profileCardTitle: '👤 ACCOUNT DETAILS',
         userFullName: 'FULL NAME', userEmail: 'EMAIL',
         subscriptionStatus: 'SUBSCRIPTION STATUS', daysRemaining: 'DAYS LEFT',
         premiumPlan: '⭐ PREMIUM', standardPlan: '📦 STANDARD',
-        upgradePremium: '⭐ UPGRADE PREMIUM', subscriptionButton: '💳 VIEW SUBSCRIPTION',
+        upgradePremium: '⭐ UPGRADE TO FAMILY PLAN', subscriptionButton: '💳 SUBSCRIPTION (IN-APP PURCHASE)',
         editProfileBtn: '✏️ UPDATE INFO', logoutBtn: '🚪 LOGOUT',
         editLogoutBtn: '🚪 LOGOUT',
         privacyPolicyBtn: '📄 PRIVACY POLICY',
         termsOfUseBtn: '📘 TERMS OF USE',
         deleteAccountBtn: '🗑️ DELETE ACCOUNT',
-        buyFamilyPackageBtn: '💳 UPGRADE TO FAMILY PLAN - $4.99/MONTH',
+        buyFamilyPackageBtn: '💳 UPGRADE TO FAMILY PLAN - $3.99/MONTH',
         restorePurchasesBtn: '🔄 RESTORE PURCHASES',
         termsPrivacyBtn: '📄 TERMS & PRIVACY',
         cancelSubscriptionBtn: '⛔ CANCEL SUBSCRIPTION',
         manageSubscriptionsBtn: '⚙️ MANAGE SUBSCRIPTIONS',
         subscriptionLegalNote: 'For auto-renewable subscriptions, you can manage billing in iOS Settings > Apple ID > Subscriptions.',
+        autoRenewDisclosure: 'Payment will be charged to your Apple account at confirmation of purchase. The subscription automatically renews unless cancelled at least 24 hours before the end of the current period. Manage or cancel your subscription in Settings > Apple ID > Subscriptions.',
+        subscriptionPrivacyBtn: '📄 PRIVACY POLICY',
+        subscriptionTermsBtn: '⚖️ TERMS OF USE (EULA)',
+        termsOfUseBtn: '⚖️ TERMS OF USE (EULA)',
+        subscriptionDisclosureTitle: 'SUBSCRIPTION DETAILS',
+        subscriptionMonthlyLine: 'Safeguardian Premium Monthly — 1 month —',
+        subscriptionYearlyLine: '',
+        privacyPolicyLinkLabel: 'Privacy Policy',
+        termsOfUseLinkLabel: 'Terms of Use (EULA)',
+        subscriptionPriceLoading: 'Loading App Store price',
         purchaseStarted: 'Purchase started',
         purchaseStartedMsg: 'Opening Apple secure payment sheet.',
         purchaseSuccess: 'Purchase successful',
         purchaseSuccessMsg: 'Family plan is now active.',
         purchaseNotAvailable: 'Purchase unavailable',
-        purchaseNotAvailableMsg: 'StoreKit plugin is not connected in this test build. Apple payment sheet opens in the iOS app build.',
+        purchaseNotAvailableMsg: 'Purchase could not be started right now. Please check your internet connection and App Store account, then try again.',
+        purchaseProductUnavailableMsg: 'The product was not found in App Store Connect Sandbox. Please verify product identifiers and agreements.',
+        purchaseTechnicalErrorMsg: 'A purchase error occurred. Please try again or use Restore Purchases.',
         appleUnavailable: 'Apple sign-in is not available on this device.',
         appleLoginFailed: 'Apple sign-in failed.',
         biometricUnavailable: 'Face ID / biometric authentication is unavailable.',
@@ -427,7 +462,14 @@ function getApiBase() {
 const API_BASE = getApiBase();
 const PreferencesPlugin = window.Capacitor?.Plugins?.Preferences;
 const GeolocationPlugin = window.Capacitor?.Plugins?.Geolocation;
-const FAMILY_PLAN_PRODUCT_ID = 'com.vitaguard.family.monthly';
+const FAMILY_PLAN_PRODUCT_ID = 'com.buseakdeniz.safeguardian.sub_family_monthly_v2';
+const FAMILY_PLAN_PRODUCT_ID_CANDIDATES = [
+    FAMILY_PLAN_PRODUCT_ID,
+    'com.buse.safeguardian.sub_family_monthly_v2',
+    'com.buseakdeniz.safeguardian.sub_family_monthly',
+    'com.buse.safeguardian.sub_family_monthly'
+];
+const ALL_FAMILY_PLAN_PRODUCT_IDS = Array.from(new Set(FAMILY_PLAN_PRODUCT_ID_CANDIDATES));
 
 let lastGuidanceText = '';
 let emergencyTimer = null;
@@ -443,6 +485,7 @@ const medicationConfirmTimers = new Map();
 const medicationReminderState = new Map();
 let subscriptionCache = null;
 let subscriptionProductCache = null;
+let selectedFamilyPlanProductId = FAMILY_PLAN_PRODUCT_ID;
 let currentMedicationsCache = [];
 let careRoutineStarted = false;
 let authTokenCache = null;
@@ -528,10 +571,14 @@ async function validateStoredSessionToken(token) {
     const value = String(token || '').trim();
     if (!value || isDemoOfflineToken(value) || isOfflineDemoModeEnabled()) return false;
 
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 2200) : null;
+
     try {
         const response = await fetch(`${API_BASE}/api/subscription?token=${encodeURIComponent(value)}`, {
             method: 'GET',
-            headers: { 'Accept': 'application/json' }
+            headers: { 'Accept': 'application/json' },
+            signal: controller?.signal
         });
 
         if (response.status === 401) {
@@ -546,6 +593,8 @@ async function validateStoredSessionToken(token) {
     } catch {
         // Network hatasında kullanıcıyı zorla logout etmeyiz.
         return true;
+    } finally {
+        if (timeoutId) clearTimeout(timeoutId);
     }
 }
 
@@ -789,7 +838,20 @@ function getLocalEntitlementState() {
     };
 }
 
-function applyEntitlementFromSubscription(subscription) {
+function hasActiveLocalPremium() {
+    const local = getLocalEntitlementState();
+    return local.plan === 'premium' && local.hasFullAccess;
+}
+
+function applyEntitlementFromSubscription(subscription, options = {}) {
+    const preserveLocalPremium = options.preserveLocalPremium !== false;
+    if (preserveLocalPremium && hasActiveLocalPremium()) {
+        const serverPlan = String(subscription?.plan || subscription?.Plan || 'standard').toLowerCase();
+        if (serverPlan !== 'premium') {
+            return getLocalEntitlementState();
+        }
+    }
+
     const now = new Date();
     const planRaw = String(subscription?.plan || subscription?.Plan || 'standard').toLowerCase();
     const isActive = subscription?.isActive ?? subscription?.IsActive ?? false;
@@ -834,20 +896,33 @@ function applyEntitlementFromSubscription(subscription) {
 }
 
 async function fetchEntitlementState(forceRefresh = false) {
+    const localBefore = getLocalEntitlementState();
+
     if (!forceRefresh && subscriptionCache) {
         return applyEntitlementFromSubscription(subscriptionCache);
     }
 
     const token = requireAuthToken();
-    if (!token) return getLocalEntitlementState();
+    if (!token) return localBefore;
 
     const response = await safeFetch(`${API_BASE}/api/subscription?token=${token}`);
-    if (!response || !response.ok) return getLocalEntitlementState();
+    if (!response || !response.ok) return localBefore;
 
     const payload = await safeReadJson(response, null);
-    if (!payload) return getLocalEntitlementState();
+    if (!payload) return localBefore;
+
     subscriptionCache = payload;
-    return applyEntitlementFromSubscription(payload);
+    const serverState = applyEntitlementFromSubscription(payload);
+
+    if (localBefore.plan === 'premium' && serverState.plan !== 'premium') {
+        const localSubEnd = localStorage.getItem('subscriptionEnd');
+        const localEnd = localSubEnd ? new Date(localSubEnd) : null;
+        if (localEnd && !Number.isNaN(localEnd.getTime()) && localEnd > new Date()) {
+            return localBefore;
+        }
+    }
+
+    return serverState;
 }
 
 async function ensurePremiumAccess(featureName) {
@@ -982,6 +1057,7 @@ function applyTranslations() {
 
     // HTML lang attribute
     document.documentElement.lang = currentLang;
+    updateSubscriptionDisclosurePrices();
     updatePurchaseButtonLabel();
     updateGreeting();
 }
@@ -1059,9 +1135,28 @@ function openLegalDocs() {
 }
 
 function getStoreKitPlugin() {
-    const plugins = window.Capacitor?.Plugins;
-    if (!plugins) return null;
-    return plugins.StoreKit2 || plugins.InAppPurchase2 || plugins.InAppPurchase || plugins.Purchases || null;
+    const capacitor = window.Capacitor;
+    const plugins = capacitor?.Plugins;
+    if (plugins) {
+        const detected = plugins.StoreKit2
+            || plugins.StoreKit2Plugin
+            || plugins.InAppPurchase2
+            || plugins.InAppPurchase
+            || plugins.Purchases;
+        if (detected) return detected;
+    }
+
+    if (typeof capacitor?.registerPlugin === 'function') {
+        try {
+            return capacitor.registerPlugin('StoreKit2');
+        } catch { }
+
+        try {
+            return capacitor.registerPlugin('StoreKit2Plugin');
+        } catch { }
+    }
+
+    return null;
 }
 
 async function loadStoreProduct() {
@@ -1069,17 +1164,37 @@ async function loadStoreProduct() {
     if (!store?.getProducts) return null;
 
     try {
-        const result = await store.getProducts({ productIds: [FAMILY_PLAN_PRODUCT_ID] });
+        const result = await store.getProducts({ productIds: ALL_FAMILY_PLAN_PRODUCT_IDS });
         const products = Array.isArray(result?.products) ? result.products : [];
-        subscriptionProductCache = products[0] || null;
+        const monthlyPriority = [...FAMILY_PLAN_PRODUCT_ID_CANDIDATES, ...ALL_FAMILY_PLAN_PRODUCT_IDS];
+
+        subscriptionProductCache = monthlyPriority
+            .map(id => products.find(p => p?.id === id))
+            .find(Boolean)
+            || products[0]
+            || null;
+
+        selectedFamilyPlanProductId = subscriptionProductCache?.id || FAMILY_PLAN_PRODUCT_ID;
+        updateSubscriptionDisclosurePrices();
         return subscriptionProductCache;
     } catch (error) {
         console.warn('StoreKit product fetch failed:', error);
+        updateSubscriptionDisclosurePrices();
         return null;
     }
 }
 
+function updateSubscriptionDisclosurePrices() {
+    const monthlyPriceEl = document.getElementById('subscriptionMonthlyPrice');
+    if (!monthlyPriceEl) return;
+
+    const loadingText = t('subscriptionPriceLoading');
+
+    monthlyPriceEl.textContent = subscriptionProductCache?.displayPrice || loadingText;
+}
+
 function updatePurchaseButtonLabel() {
+    updateSubscriptionDisclosurePrices();
     const label = document.querySelector('#buyFamilyPackageButton [data-i18n="buyFamilyPackageBtn"]');
     if (!label) return;
 
@@ -1094,18 +1209,89 @@ function updatePurchaseButtonLabel() {
     label.textContent = t('buyFamilyPackageBtn');
 }
 
-function markPremiumLocally() {
-    localStorage.setItem('userPlan', 'Premium');
-    const end = new Date();
-    end.setDate(end.getDate() + 30);
-    localStorage.setItem('subscriptionEnd', end.toISOString().split('T')[0]);
+function resolvePremiumExpirationDate(purchase) {
+    const now = new Date();
+    const expRaw = String(purchase?.expirationDate || '').trim();
+    if (expRaw) {
+        const parsed = new Date(expRaw);
+        if (!Number.isNaN(parsed.getTime()) && parsed > now) {
+            return parsed;
+        }
+    }
+
+    const fallback = new Date(now);
+    fallback.setMonth(fallback.getMonth() + 1);
+    return fallback;
+}
+
+function applyPremiumFromApplePurchase(purchase) {
+    const expiresAt = resolvePremiumExpirationDate(purchase);
+    const transactionId = String(purchase?.transactionId || purchase?.originalTransactionId || '').trim();
+
+    localStorage.setItem('userPlan', 'premium');
+    localStorage.setItem('subscriptionEnd', expiresAt.toISOString().split('T')[0]);
+    if (transactionId) {
+        localStorage.setItem('applePremiumTransactionId', transactionId);
+    }
+
+    subscriptionCache = {
+        plan: 'premium',
+        isActive: true,
+        expiresAt: expiresAt.toISOString(),
+        hasFullAccess: true,
+        requiresSubscription: false
+    };
+
     updateProfileScreen();
     updateSubscriptionScreen();
+    return subscriptionCache;
+}
+
+function markPremiumLocally(purchase) {
+    applyPremiumFromApplePurchase(purchase || {});
+}
+
+async function confirmApplePurchaseWithServer(token, purchase) {
+    if (!token) return false;
+
+    const payload = {
+        productId: String(purchase?.productId || selectedFamilyPlanProductId || FAMILY_PLAN_PRODUCT_ID),
+        transactionId: String(purchase?.transactionId || purchase?.originalTransactionId || ''),
+        expirationDate: String(purchase?.expirationDate || '')
+    };
+
+    if (!payload.transactionId) {
+        console.warn('Apple purchase confirm skipped: missing transactionId');
+        return false;
+    }
+
+    const response = await safeFetch(`${API_BASE}/api/subscription/apple/confirm?token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response) return false;
+
+    const data = await safeReadJson(response, null);
+    if (!response.ok || !data?.success) {
+        console.warn('Apple purchase confirm failed:', data);
+        return false;
+    }
+
+    subscriptionCache = data.subscription || data || null;
+    if (subscriptionCache) {
+        applyEntitlementFromSubscription(subscriptionCache);
+    }
+
+    return true;
 }
 
 async function startFamilyPackagePurchase() {
     const store = getStoreKitPlugin();
-    const productId = FAMILY_PLAN_PRODUCT_ID;
+    const fallbackProductId = selectedFamilyPlanProductId || FAMILY_PLAN_PRODUCT_ID;
+    const token = await requireAuthTokenAsync();
+    if (!token) return;
 
     try {
         if (store?.isAvailable) {
@@ -1116,17 +1302,28 @@ async function startFamilyPackagePurchase() {
             }
         }
 
+        const product = await loadStoreProduct();
+        const productId = product?.id || fallbackProductId;
+        if (!product?.id) {
+            console.warn('StoreKit product metadata unavailable; attempting purchase with configured product id:', productId);
+        }
+
         if (store?.purchaseProduct) {
             showNotification(t('purchaseStarted'), t('purchaseStartedMsg'));
             const result = await store.purchaseProduct({ productId });
             if (result?.success) {
-                markPremiumLocally();
-                if (result.expirationDate) {
-                    const expiration = new Date(result.expirationDate);
-                    if (!Number.isNaN(expiration.getTime())) {
-                        localStorage.setItem('subscriptionEnd', expiration.toISOString().split('T')[0]);
-                    }
-                }
+                const purchasePayload = {
+                    productId: result.productId || productId,
+                    transactionId: result.transactionId || '',
+                    expirationDate: result.expirationDate || ''
+                };
+                applyPremiumFromApplePurchase(purchasePayload);
+                await confirmApplePurchaseWithServer(token, purchasePayload).catch((error) => {
+                    console.warn('Apple purchase confirmed locally; server sync deferred:', error);
+                });
+                await fetchEntitlementState(true).catch(() => { });
+                updateProfileScreen();
+                updateSubscriptionScreen();
                 showNotification(t('purchaseSuccess'), t('purchaseSuccessMsg'));
                 return;
             }
@@ -1141,17 +1338,33 @@ async function startFamilyPackagePurchase() {
             showNotification(t('purchaseStarted'), t('purchaseStartedMsg'));
             const result = await store.purchase({ productId });
             if (result?.success || result?.purchased || result?.productId) {
-                markPremiumLocally();
+                const purchasePayload = {
+                    productId: result.productId || productId,
+                    transactionId: result.transactionId || result.originalTransactionId || '',
+                    expirationDate: result.expirationDate || ''
+                };
+                applyPremiumFromApplePurchase(purchasePayload);
+                await confirmApplePurchaseWithServer(token, purchasePayload).catch((error) => {
+                    console.warn('Apple purchase confirmed locally; server sync deferred:', error);
+                });
+                await fetchEntitlementState(true).catch(() => { });
+                updateProfileScreen();
+                updateSubscriptionScreen();
                 showNotification(t('purchaseSuccess'), t('purchaseSuccessMsg'));
                 return;
             }
         }
 
         showNotification(t('purchaseNotAvailable'), t('purchaseNotAvailableMsg'), 'error');
-        openSubscriptionManagement();
     } catch (error) {
         console.warn('StoreKit purchase error:', error);
-        showNotification(t('purchaseNotAvailable'), t('purchaseNotAvailableMsg'), 'error');
+        const msg = String(error?.message || error || '');
+        const likelyProductIssue = /product|not found|identifier|404/i.test(msg);
+        showNotification(
+            t('purchaseNotAvailable'),
+            likelyProductIssue ? t('purchaseProductUnavailableMsg') : t('purchaseTechnicalErrorMsg'),
+            'error'
+        );
     }
 }
 
@@ -1160,8 +1373,8 @@ function openSubscriptionManagement() {
         showNotification(
             currentLang === 'en' ? 'Subscription Management' : 'Abonelik Yönetimi',
             currentLang === 'en'
-                ? 'Open iPhone Settings > Apple ID > Subscriptions.'
-                : 'iPhone Ayarlar > Apple Kimliği > Abonelikler yolunu açın.',
+                ? 'Open Settings > Apple Account > Subscriptions.'
+                : 'Ayarlar > Apple Hesabı > Abonelikler yolunu açın.',
             'success'
         );
         return;
@@ -1170,7 +1383,15 @@ function openSubscriptionManagement() {
 }
 
 async function handleAppleSignIn() {
-    return handleAppleSignInPreview();
+    const errorCode = 'APPLE_AUTH_UNAVAILABLE';
+    console.warn(`[${errorCode}] Sign in with Apple is not enabled in this build.`);
+    showNotification(
+        currentLang === 'en' ? 'Apple Sign-In' : 'Apple Girişi',
+        currentLang === 'en'
+            ? 'Sign in with Apple is temporarily unavailable in this version. Please sign in with email and password.'
+            : 'Sign in with Apple bu sürümde geçici olarak kapalı. Lütfen e-posta ve şifre ile giriş yapın.',
+        'error'
+    );
 }
 
 async function cancelSubscriptionFlow() {
@@ -1752,38 +1973,66 @@ function editProfile() {
 function goToSubscription() {
     updateSubscriptionScreen();
     showScreen('subscriptionScreen');
-    fetchEntitlementState(true).then(() => {
-        updateProfileScreen();
-        updateSubscriptionScreen();
-    }).catch(() => { });
+    syncAppleEntitlementsFromStore()
+        .then(() => fetchEntitlementState(true))
+        .then(() => {
+            updateProfileScreen();
+            updateSubscriptionScreen();
+        })
+        .catch(() => { });
     loadStoreProduct().then(() => updatePurchaseButtonLabel());
     speak(currentLang === 'en' ? 'You are on the subscription page.' : 'Abone durumu sayfasında bulunuyorsunuz', currentLang === 'en' ? 'en-US' : 'tr-TR');
+}
+
+async function syncAppleEntitlementsFromStore() {
+    if (!IS_CAPACITOR_IOS) return null;
+
+    const store = getStoreKitPlugin();
+    if (!store) return null;
+
+    let purchases = [];
+    try {
+        if (store.getEntitlements) {
+            const entitlements = await store.getEntitlements();
+            purchases = Array.isArray(entitlements?.purchases) ? entitlements.purchases : [];
+        } else if (store.restorePurchases) {
+            const nativeRestore = await store.restorePurchases();
+            purchases = Array.isArray(nativeRestore?.purchases) ? nativeRestore.purchases : [];
+        } else if (store.restoreTransactions) {
+            await store.restoreTransactions();
+        } else if (store.sync) {
+            await store.sync();
+        }
+    } catch (error) {
+        console.warn('Native entitlement sync failed:', error);
+        return null;
+    }
+
+    const matchedPurchase = purchases.find(item => ALL_FAMILY_PLAN_PRODUCT_IDS.includes(String(item?.productId || '')));
+    if (!matchedPurchase) return null;
+
+    applyPremiumFromApplePurchase(matchedPurchase);
+
+    const token = await getStoredToken();
+    if (token && !isDemoOfflineToken(token)) {
+        await confirmApplePurchaseWithServer(token, {
+            productId: matchedPurchase.productId,
+            transactionId: matchedPurchase.transactionId,
+            expirationDate: matchedPurchase.expirationDate
+        }).catch((error) => {
+            console.warn('Restore confirmed locally; server sync deferred:', error);
+        });
+    }
+
+    return matchedPurchase;
 }
 
 async function restorePurchases() {
     const token = await requireAuthTokenAsync();
     if (!token) return;
 
-    const store = getStoreKitPlugin();
     try {
-        if (store?.restorePurchases) {
-            const nativeRestore = await store.restorePurchases();
-            const purchases = Array.isArray(nativeRestore?.purchases) ? nativeRestore.purchases : [];
-            const matchedPurchase = purchases.find(item => item?.productId === FAMILY_PLAN_PRODUCT_ID);
-            if (matchedPurchase) {
-                markPremiumLocally();
-                if (matchedPurchase.expirationDate) {
-                    const expiration = new Date(matchedPurchase.expirationDate);
-                    if (!Number.isNaN(expiration.getTime())) {
-                        localStorage.setItem('subscriptionEnd', expiration.toISOString().split('T')[0]);
-                    }
-                }
-            }
-        } else if (store?.restoreTransactions) {
-            await store.restoreTransactions();
-        } else if (store?.sync) {
-            await store.sync();
-        }
+        await syncAppleEntitlementsFromStore();
     } catch (error) {
         console.warn('Native restore failed, backend fallback will continue:', error);
     }
@@ -1805,23 +2054,11 @@ async function restorePurchases() {
     }
 
     const subscription = data.subscription || data;
-    const planRaw = String(subscription.plan || subscription.Plan || 'standard').toLowerCase();
-    const normalizedPlan = planRaw === 'premium' ? 'Premium' : 'Standart';
-    const expiresAtRaw = subscription.expiresAt || subscription.ExpiresAt || '';
-    const isActive = subscription.isActive ?? subscription.IsActive ?? false;
-
-    localStorage.setItem('userPlan', isActive ? normalizedPlan : 'Standart');
-    if (expiresAtRaw) {
-        const parsedDate = new Date(expiresAtRaw);
-        if (!Number.isNaN(parsedDate.getTime())) {
-            localStorage.setItem('subscriptionEnd', parsedDate.toISOString().split('T')[0]);
-        }
-    }
-
     subscriptionCache = subscription;
+    const entitlement = applyEntitlementFromSubscription(subscription, { preserveLocalPremium: true });
     updateProfileScreen();
     updateSubscriptionScreen();
-    if (!isActive) {
+    if (entitlement.plan !== 'premium') {
         showNotification(
             t('restoreSuccess'),
             currentLang === 'en'
@@ -1918,7 +2155,7 @@ async function deleteAccountFlow() {
 }
 
 function goToPremium() {
-    const isPremium = localStorage.getItem('userPlan') === 'Premium';
+    const isPremium = hasActiveLocalPremium();
     if (isPremium) {
         showNotification('Premium Aktif', 'Zaten premium aboneniz!');
     } else {
@@ -2201,31 +2438,57 @@ document.addEventListener('DOMContentLoaded', async function () {
     // Otomatik giriş (Beni Hatırla)
     const remember = localStorage.getItem('rememberMe') !== 'false';
     const rememberCheckbox = document.getElementById('rememberMe');
-    const token = await getStoredToken();
-    const tokenValid = token ? await validateStoredSessionToken(token) : false;
+    const tokenPromise = getStoredToken();
+    const localTokenSnapshot = authTokenCache || localStorage.getItem('token');
 
     if (rememberCheckbox && localStorage.getItem('rememberMe') === null) {
         rememberCheckbox.checked = true;
     }
 
-    if (remember && token) {
-        if (!tokenValid) {
-            showScreen('loginScreen');
-            return;
-        }
+    if (remember && localTokenSnapshot) {
         showScreen('homeScreen');
         updateGreeting();
         runPendingAssistantIntentIfAny();
 
-        // Kayıtlı e-posta ve dil ayarını uygula
         const savedEmail = localStorage.getItem('rememberedEmail');
         const emailInput = document.getElementById('email');
-        if (remember && savedEmail && emailInput) {
+        if (savedEmail && emailInput) {
             emailInput.value = savedEmail;
             if (rememberCheckbox) rememberCheckbox.checked = true;
         }
+    }
 
-        // Kayıtlı dil ayarı zaten yukarıda uygulandı
+    const token = await tokenPromise;
+    if (remember && token && !localTokenSnapshot) {
+        showScreen('homeScreen');
+        updateGreeting();
+        runPendingAssistantIntentIfAny();
+
+        const savedEmail = localStorage.getItem('rememberedEmail');
+        const emailInput = document.getElementById('email');
+        if (savedEmail && emailInput) {
+            emailInput.value = savedEmail;
+            if (rememberCheckbox) rememberCheckbox.checked = true;
+        }
+    }
+
+    if (remember && token) {
+        validateStoredSessionToken(token).then((tokenValid) => {
+            if (!tokenValid) {
+                showScreen('loginScreen');
+            }
+        }).catch(() => {
+            // Ağ/timeout hatasında kullanıcıyı ekrandan düşürmeyiz.
+        });
+    }
+
+    if (rememberCheckbox && remember) {
+        const savedEmail = localStorage.getItem('rememberedEmail');
+        const emailInput = document.getElementById('email');
+        if (savedEmail && emailInput) {
+            emailInput.value = savedEmail;
+            rememberCheckbox.checked = true;
+        }
     }
 
     if (isOfflineDemoModeEnabled()) {
@@ -2236,6 +2499,15 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // Capacitor iOS: if the backend is not reachable on startup, don't hang on loading screens.
     // Proactively test connectivity and immediately enable offline mode if unreachable.
+    if (IS_CAPACITOR_IOS && hasAuthTokenSync() && !isOfflineDemoModeEnabled()) {
+        syncAppleEntitlementsFromStore()
+            .then(() => {
+                updateProfileScreen();
+                updateSubscriptionScreen();
+            })
+            .catch(() => { });
+    }
+
     if (IS_CAPACITOR_IOS && !isOfflineDemoModeEnabled()) {
         (async () => {
             try {
@@ -2297,6 +2569,14 @@ window.addEventListener('load', async () => {
     if ((token || isOfflineDemoModeEnabled()) && (path.includes('login') || path === '/' || path.endsWith('/index.html'))) {
         showScreen('homeScreen');
         updateGreeting();
+    }
+    if (IS_CAPACITOR_IOS && token && !isDemoOfflineToken(token)) {
+        syncAppleEntitlementsFromStore()
+            .then(() => {
+                updateProfileScreen();
+                updateSubscriptionScreen();
+            })
+            .catch(() => { });
     }
     const activeScreen = document.querySelector('.screen.active')?.id || 'loginScreen';
     if (window.SafeGuardianAds?.updateByElderlyScreen) {
@@ -2465,15 +2745,19 @@ async function handleLogin(e) {
                 localStorage.setItem('userName', data.name || email);
                 localStorage.setItem('rememberMe', remember ? 'true' : 'false');
                 if (remember) localStorage.setItem('rememberedEmail', email);
-                localStorage.removeItem('userPlan');
                 subscriptionCache = null;
-                safeFetch(`${API_BASE}/api/subscription?token=${data.token}`)
+                const syncEntitlements = IS_CAPACITOR_IOS
+                    ? syncAppleEntitlementsFromStore().catch(() => null)
+                    : Promise.resolve(null);
+                syncEntitlements
+                    .then(() => safeFetch(`${API_BASE}/api/subscription?token=${data.token}`))
                     .then(res => res ? safeReadJson(res, null) : null)
                     .then(sub => {
                         if (!sub) return;
                         subscriptionCache = sub;
-                        const plan = sub?.plan || sub?.Plan;
-                        if (plan) localStorage.setItem('userPlan', String(plan).toLowerCase());
+                        applyEntitlementFromSubscription(sub, { preserveLocalPremium: true });
+                        updateProfileScreen();
+                        updateSubscriptionScreen();
                     })
                     .catch(() => { });
                 showScreen('homeScreen');
@@ -2611,8 +2895,7 @@ async function handleAddMedication(e) {
 }
 
 async function handleAppleSignInPreview() {
-    showNotification('Apple Giriş', 'Sign in with Apple taslağı hazır. Üretimde Apple kimlik doğrulama akışı aktif edilecektir.', 'success');
-    speak('Apple ile giriş seçeneği hazır. Mağaza uyumluluğu için aktif edilecek.');
+    return handleAppleSignIn();
 }
 
 async function handleRegister(e) {
