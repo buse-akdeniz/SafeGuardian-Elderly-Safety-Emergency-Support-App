@@ -474,8 +474,8 @@ const FAMILY_PLAN_PRODUCT_ID_CANDIDATES = [
     'com.buse.safeguardian.sub_family_monthly'
 ];
 const ALL_FAMILY_PLAN_PRODUCT_IDS = Array.from(new Set(FAMILY_PLAN_PRODUCT_ID_CANDIDATES));
-// Build 25: disable StoreKit purchase flow until Connect IAP linkage is fixed (re-enable in v1.1).
-const STOREKIT_PURCHASES_ENABLED = false;
+// App Review requires the full purchase/renewal flow to be accessible (Guideline 2.1).
+const STOREKIT_PURCHASES_ENABLED = true; // Build 26: keep purchase flow enabled for App Review
 
 let lastGuidanceText = '';
 let emergencyTimer = null;
