@@ -142,6 +142,8 @@ const TRANSLATIONS = {
         purchaseSuccess: 'Satın alma başarılı',
         purchaseSuccessMsg: 'Aile paketi aktif edildi.',
         purchaseNotAvailable: 'Satın alma hazır değil',
+        subscriptionComingSoonTitle: 'Abonelik yakında',
+        subscriptionComingSoonMsg: 'Uygulama içi abonelik 1.1 sürümünde açılacak. 12 saat tam erişim için reklam izleyebilir veya demo hesapla giriş yapabilirsiniz.',
         purchaseNotAvailableMsg: 'Satın alma şu anda başlatılamadı. Lütfen internet bağlantınızı ve App Store hesabınızı kontrol edip tekrar deneyin.',
         purchaseProductUnavailableMsg: 'Ürün App Store Connect Sandbox ortamında bulunamadı. Lütfen ürün kimliğini ve sözleşmeleri kontrol edin.',
         purchaseTechnicalErrorMsg: 'Satın alma sırasında bir hata oluştu. Lütfen tekrar deneyin veya Satın Almaları Geri Yükle seçeneğini kullanın.',
@@ -293,6 +295,8 @@ const TRANSLATIONS = {
         purchaseSuccess: 'Purchase successful',
         purchaseSuccessMsg: 'Family plan is now active.',
         purchaseNotAvailable: 'Purchase unavailable',
+        subscriptionComingSoonTitle: 'Subscription coming soon',
+        subscriptionComingSoonMsg: 'In-app subscription will be available in version 1.1. Watch an ad for 12-hour access or sign in with the demo account.',
         purchaseNotAvailableMsg: 'Purchase could not be started right now. Please check your internet connection and App Store account, then try again.',
         purchaseProductUnavailableMsg: 'The product was not found in App Store Connect Sandbox. Please verify product identifiers and agreements.',
         purchaseTechnicalErrorMsg: 'A purchase error occurred. Please try again or use Restore Purchases.',
@@ -470,6 +474,8 @@ const FAMILY_PLAN_PRODUCT_ID_CANDIDATES = [
     'com.buse.safeguardian.sub_family_monthly'
 ];
 const ALL_FAMILY_PLAN_PRODUCT_IDS = Array.from(new Set(FAMILY_PLAN_PRODUCT_ID_CANDIDATES));
+// Build 25: disable StoreKit purchase flow until Connect IAP linkage is fixed (re-enable in v1.1).
+const STOREKIT_PURCHASES_ENABLED = false;
 
 let lastGuidanceText = '';
 let emergencyTimer = null;
@@ -1174,11 +1180,18 @@ async function loadStoreProduct() {
             || products[0]
             || null;
 
+        if (!subscriptionProductCache) {
+            // Products returned empty – product IDs not found in App Store Connect Sandbox.
+            // This typically means Paid Apps Agreement is not accepted, or products are not Active.
+            console.warn('[IAP] getProducts returned 0 results for IDs:', ALL_FAMILY_PLAN_PRODUCT_IDS,
+                '– Verify: 1) Paid Apps Agreement accepted in App Store Connect > Business > Agreements, 2) Products are Active/Ready to Submit.');
+        }
+
         selectedFamilyPlanProductId = subscriptionProductCache?.id || FAMILY_PLAN_PRODUCT_ID;
         updateSubscriptionDisclosurePrices();
         return subscriptionProductCache;
     } catch (error) {
-        console.warn('StoreKit product fetch failed:', error);
+        console.warn('[IAP] StoreKit product fetch failed:', error);
         updateSubscriptionDisclosurePrices();
         return null;
     }
@@ -1193,7 +1206,31 @@ function updateSubscriptionDisclosurePrices() {
     monthlyPriceEl.textContent = subscriptionProductCache?.displayPrice || loadingText;
 }
 
+function applyStoreKitPurchaseUiVisibility() {
+    const enabled = STOREKIT_PURCHASES_ENABLED;
+    const buyBtn = document.getElementById('buyFamilyPackageButton');
+    const autoRenew = document.getElementById('autoRenewDisclosure');
+    const restoreBtn = document.querySelector('#subscriptionScreen button[onclick="restorePurchases()"]');
+    const cancelBtn = document.querySelector('#subscriptionScreen button[onclick="cancelSubscriptionFlow()"]');
+    const manageBtn = document.querySelector('#subscriptionScreen button[onclick="openSubscriptionManagement()"]');
+    const priceEl = document.getElementById('subscriptionMonthlyPrice');
+
+    if (buyBtn) buyBtn.style.display = enabled ? '' : 'none';
+    if (autoRenew) autoRenew.style.display = enabled ? '' : 'none';
+    if (restoreBtn) restoreBtn.style.display = enabled ? '' : 'none';
+    if (cancelBtn) cancelBtn.style.display = enabled ? '' : 'none';
+    if (manageBtn) manageBtn.style.display = enabled ? '' : 'none';
+
+    if (!enabled && priceEl) {
+        priceEl.textContent = currentLang === 'en' ? 'Coming in v1.1' : 'v1.1 ile gelecek';
+    }
+}
+
 function updatePurchaseButtonLabel() {
+    if (!STOREKIT_PURCHASES_ENABLED) {
+        applyStoreKitPurchaseUiVisibility();
+        return;
+    }
     updateSubscriptionDisclosurePrices();
     const label = document.querySelector('#buyFamilyPackageButton [data-i18n="buyFamilyPackageBtn"]');
     if (!label) return;
@@ -1288,10 +1325,24 @@ async function confirmApplePurchaseWithServer(token, purchase) {
 }
 
 async function startFamilyPackagePurchase() {
+    if (!STOREKIT_PURCHASES_ENABLED) {
+        showNotification(t('subscriptionComingSoonTitle'), t('subscriptionComingSoonMsg'));
+        return;
+    }
+
     const store = getStoreKitPlugin();
     const fallbackProductId = selectedFamilyPlanProductId || FAMILY_PLAN_PRODUCT_ID;
     const token = await requireAuthTokenAsync();
     if (!token) return;
+
+    // Guard: on iOS Capacitor, StoreKit plugin must be available
+    if (!store && IS_CAPACITOR_IOS) {
+        const noPluginMsg = currentLang === 'en'
+            ? 'StoreKit plugin not found. Rebuild the app with the StoreKit2Plugin registered in capacitor.config.json.'
+            : 'StoreKit eklentisi bulunamadı. Uygulamayı capacitor.config.json\'da StoreKit2Plugin kayıtlı şekilde yeniden oluşturun.';
+        showNotification(t('purchaseNotAvailable'), noPluginMsg, 'error');
+        return;
+    }
 
     try {
         if (store?.isAvailable) {
@@ -1332,6 +1383,14 @@ async function startFamilyPackagePurchase() {
                 showNotification(t('purchaseStarted'), currentLang === 'en' ? 'Purchase is pending approval.' : 'Satın alma onay bekliyor.');
                 return;
             }
+            // Handle resolved error result (productNotFound or other non-fatal error)
+            if (result?.productNotFound || result?.error) {
+                const errMsg = currentLang === 'en'
+                    ? `Product "${productId}" not found in App Store Sandbox. Ensure: 1) Product is Active in App Store Connect, 2) Paid Apps Agreement is accepted under Business > Agreements.`
+                    : `"${productId}" ürünü App Store Sandbox'ta bulunamadı. Kontrol: 1) Ürün App Store Connect'te Aktif, 2) İşletme > Sözleşmeler bölümünde Ücretli Uygulamalar Sözleşmesi kabul edildi.`;
+                showNotification(t('purchaseNotAvailable'), errMsg, 'error');
+                return;
+            }
         }
 
         if (store?.purchase) {
@@ -1355,16 +1414,33 @@ async function startFamilyPackagePurchase() {
             }
         }
 
-        showNotification(t('purchaseNotAvailable'), t('purchaseNotAvailableMsg'), 'error');
+        // StoreKit plugin found but purchase method unavailable
+        const pluginMissingMsg = currentLang === 'en'
+            ? 'In-App Purchase is not available on this device.'
+            : 'Bu cihazda uygulama içi satın alma kullanılamıyor.';
+        showNotification(t('purchaseNotAvailable'), pluginMissingMsg, 'error');
     } catch (error) {
         console.warn('StoreKit purchase error:', error);
-        const msg = String(error?.message || error || '');
-        const likelyProductIssue = /product|not found|identifier|404/i.test(msg);
-        showNotification(
-            t('purchaseNotAvailable'),
-            likelyProductIssue ? t('purchaseProductUnavailableMsg') : t('purchaseTechnicalErrorMsg'),
-            'error'
-        );
+        const msg = String(error?.message || error?.code || error || '');
+        const isProductNotFound = /PRODUCT_NOT_FOUND|product|not found|identifier|404|sandbox/i.test(msg);
+        const isPaymentNotAllowed = /paymentNotAllowed|not authorized|cannot make|parental/i.test(msg);
+
+        let errorDetail;
+        if (isProductNotFound) {
+            errorDetail = currentLang === 'en'
+                ? `Product "${productId}" not found in App Store Sandbox. Check: 1) Product ID is Active in App Store Connect, 2) Paid Apps Agreement accepted (Business > Agreements), 3) Bundle ID is com.buse.safeguardian.`
+                : `"${productId}" App Store Sandbox'ta bulunamadı. Kontrol: 1) Ürün kimliği App Store Connect'te Aktif, 2) Ücretli Uygulamalar Sözleşmesi kabul edildi (İşletme > Sözleşmeler), 3) Bundle ID: com.buse.safeguardian.`;
+        } else if (isPaymentNotAllowed) {
+            errorDetail = currentLang === 'en'
+                ? 'Purchases are not allowed on this device. Check Screen Time / parental controls.'
+                : 'Bu cihazda satın alma yapılamıyor. Ekran Süresi / ebeveyn denetimlerini kontrol edin.';
+        } else {
+            errorDetail = msg || (currentLang === 'en'
+                ? 'An unexpected error occurred. Please try again.'
+                : 'Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.');
+        }
+
+        showNotification(t('purchaseNotAvailable'), errorDetail, 'error');
     }
 }
 
@@ -1813,15 +1889,24 @@ function updateSubscriptionScreen() {
     const subscriptionEnd = localStorage.getItem('subscriptionEnd') || '-';
     const entitlement = getLocalEntitlementState();
     const isPremium = entitlement.plan === 'premium';
+    
+    // Check if subscription is expired (requiresSubscription = true and no trial/ad unlock active)
+    const isExpired = entitlement.requiresSubscription && !entitlement.isTrialActive && !entitlement.isAdUnlockActive;
 
-    document.getElementById('subCurrentPlan').textContent = isPremium
+    document.getElementById('subCurrentPlan').textContent = isExpired
+        ? (currentLang === 'en' ? '⛔ EXPIRED' : '⛔ SÜRESİ DOLDU')
+        : isPremium
         ? (currentLang === 'en' ? '⭐ PREMIUM (All Features)' : '⭐ PREMIUM (Tüm Özellikler)')
         : (currentLang === 'en' ? '📦 STANDARD' : '📦 STANDART');
     document.getElementById('subEndDate').textContent = subscriptionEnd;
 
     const entitlementInfo = document.getElementById('entitlementInfo');
     if (entitlementInfo) {
-        if (entitlement.isTrialActive && entitlement.trialEndsAt) {
+        if (isExpired) {
+            entitlementInfo.textContent = currentLang === 'en'
+                ? '⛔ Subscription expired. Renew to continue access.'
+                : '⛔ Aboneliğinizin süresi dolmuş. Erişim devam ettirmek için yenileyin.';
+        } else if (entitlement.isTrialActive && entitlement.trialEndsAt) {
             entitlementInfo.textContent = currentLang === 'en'
                 ? `🎁 Free trial active until ${entitlement.trialEndsAt.toLocaleString('en-US')}.`
                 : `🎁 Ücretsiz deneme ${entitlement.trialEndsAt.toLocaleString('tr-TR')} tarihine kadar aktif.`;
@@ -1833,6 +1918,10 @@ function updateSubscriptionScreen() {
             entitlementInfo.textContent = currentLang === 'en'
                 ? '✅ Premium access is active.'
                 : '✅ Premium erişim aktif.';
+        } else if (!STOREKIT_PURCHASES_ENABLED) {
+            entitlementInfo.textContent = currentLang === 'en'
+                ? '📅 In-app subscription launches in v1.1. Watch an ad for 12-hour full access.'
+                : '📅 Uygulama içi abonelik v1.1 ile gelecek. 12 saat tam erişim için reklam izleyin.';
         } else {
             entitlementInfo.textContent = currentLang === 'en'
                 ? '⛔ Free trial ended. Subscribe or watch an ad for 12-hour full access.'
@@ -1889,6 +1978,7 @@ function updateSubscriptionScreen() {
 
     premiumFeaturesEl.innerHTML = '';
     updatePurchaseButtonLabel();
+    applyStoreKitPurchaseUiVisibility();
 }
 
 async function watchAdFor12HourAccess() {
@@ -1973,18 +2063,29 @@ function editProfile() {
 function goToSubscription() {
     updateSubscriptionScreen();
     showScreen('subscriptionScreen');
-    syncAppleEntitlementsFromStore()
-        .then(() => fetchEntitlementState(true))
-        .then(() => {
-            updateProfileScreen();
-            updateSubscriptionScreen();
-        })
-        .catch(() => { });
-    loadStoreProduct().then(() => updatePurchaseButtonLabel());
+    applyStoreKitPurchaseUiVisibility();
+    if (STOREKIT_PURCHASES_ENABLED) {
+        syncAppleEntitlementsFromStore()
+            .then(() => fetchEntitlementState(true))
+            .then(() => {
+                updateProfileScreen();
+                updateSubscriptionScreen();
+            })
+            .catch(() => { });
+        loadStoreProduct().then(() => updatePurchaseButtonLabel());
+    } else {
+        fetchEntitlementState(true)
+            .then(() => {
+                updateProfileScreen();
+                updateSubscriptionScreen();
+            })
+            .catch(() => { });
+    }
     speak(currentLang === 'en' ? 'You are on the subscription page.' : 'Abone durumu sayfasında bulunuyorsunuz', currentLang === 'en' ? 'en-US' : 'tr-TR');
 }
 
 async function syncAppleEntitlementsFromStore() {
+    if (!STOREKIT_PURCHASES_ENABLED) return null;
     if (!IS_CAPACITOR_IOS) return null;
 
     const store = getStoreKitPlugin();
@@ -2030,6 +2131,14 @@ async function syncAppleEntitlementsFromStore() {
 async function restorePurchases() {
     const token = await requireAuthTokenAsync();
     if (!token) return;
+
+    if (!STOREKIT_PURCHASES_ENABLED) {
+        showNotification(t('subscriptionComingSoonTitle'), t('subscriptionComingSoonMsg'));
+        await fetchEntitlementState(true).catch(() => { });
+        updateProfileScreen();
+        updateSubscriptionScreen();
+        return;
+    }
 
     try {
         await syncAppleEntitlementsFromStore();

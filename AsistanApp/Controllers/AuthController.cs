@@ -8,6 +8,11 @@ namespace ilk_projem.Controllers;
 [Route("api")]
 public class AuthController : ControllerBase
 {
+    // Demo account for App Review - expired subscription
+    private const string DemoEmail = "review.elderly@safeguardian.app";
+    private const string DemoPassword = "Review123!";
+    private const string DemoToken = "demo-review-elderly-expired-token";
+
     [HttpPost("elderly/login")]
     public async Task<IResult> ElderlyLogin([FromServices] HealthDataService svc)
     {
@@ -26,6 +31,18 @@ public class AuthController : ControllerBase
 
             if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
                 return Results.Json(new { success = false, message = "E-posta ve şifre zorunludur" }, statusCode: 400);
+
+            // Check for demo account
+            if (string.Equals(email, DemoEmail, StringComparison.OrdinalIgnoreCase) && password == DemoPassword)
+            {
+                return Results.Json(new
+                {
+                    success = true,
+                    token = DemoToken,
+                    userId = 999,
+                    name = "Test User"
+                });
+            }
 
             var result = await svc.AuthenticateElderly(email, password);
             if (!result.HasValue)

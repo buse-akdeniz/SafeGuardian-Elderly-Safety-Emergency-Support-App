@@ -10,6 +10,10 @@ namespace ilk_projem.Controllers;
 [Route("api")]
 public class CompatibilityController : ControllerBase
 {
+    // Demo account constants for App Review
+    private const string DemoToken = "demo-review-elderly-expired-token";
+    private const int DemoUserId = 999;
+
     private static readonly HashSet<string> AppleFamilyPlanProductIds = new(StringComparer.OrdinalIgnoreCase)
     {
         "com.buseakdeniz.safeguardian.sub_family_monthly_v2",
@@ -42,6 +46,8 @@ public class CompatibilityController : ControllerBase
     {
         var token = AuthTokenService.ResolveToken(HttpContext);
         if (string.IsNullOrWhiteSpace(token)) return 1;
+        // Special handling for demo account
+        if (string.Equals(token, DemoToken, StringComparison.Ordinal)) return DemoUserId;
         return Math.Abs(StringComparer.Ordinal.GetHashCode(token));
     }
 
@@ -157,6 +163,29 @@ public class CompatibilityController : ControllerBase
     public IResult GetSubscription()
     {
         var userId = ResolveUserId();
+        
+        // Special handling for demo account - create expired subscription
+        if (userId == DemoUserId)
+        {
+            var now = DateTime.UtcNow;
+            var expiredDate = now.AddDays(-7); // Expired 7 days ago
+            
+            return Results.Json(new
+            {
+                success = true,
+                plan = "premium",
+                isActive = false,
+                expiresAt = expiredDate,
+                trialEndsAt = now.AddDays(-30), // Trial ended 30 days ago
+                isTrialActive = false,
+                adUnlockUntil = now.AddDays(-1),
+                isAdUnlockActive = false,
+                hasFullAccess = false,
+                requiresSubscription = true,
+                subscriptionStatus = "expired"
+            });
+        }
+        
         var sub = SubscriptionByUser.GetOrAdd(userId, _ => new SubscriptionItem
         {
             Plan = "standard",
@@ -167,10 +196,10 @@ public class CompatibilityController : ControllerBase
             AdUnlockUntil = DateTime.UtcNow
         });
 
-        var now = DateTime.UtcNow;
+        var now2 = DateTime.UtcNow;
         if (sub.StartedAt == default)
         {
-            sub.StartedAt = now;
+            sub.StartedAt = now2;
         }
         if (sub.TrialEndsAt == default)
         {
@@ -179,9 +208,9 @@ public class CompatibilityController : ControllerBase
 
         var isPremium = string.Equals(sub.Plan, "premium", StringComparison.OrdinalIgnoreCase)
             && sub.IsActive
-            && sub.ExpiresAt > now;
-        var isTrialActive = now <= sub.TrialEndsAt;
-        var isAdUnlockActive = sub.AdUnlockUntil > now;
+            && sub.ExpiresAt > now2;
+        var isTrialActive = now2 <= sub.TrialEndsAt;
+        var isAdUnlockActive = sub.AdUnlockUntil > now2;
         var hasFullAccess = isPremium || isTrialActive || isAdUnlockActive;
         var requiresSubscription = !hasFullAccess;
 
@@ -289,14 +318,19 @@ public class CompatibilityController : ControllerBase
 
         try
         {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return Results.BadRequest(new { success = false, message = "İstek gövdesi boş." });
+            }
+
             var json = System.Text.Json.JsonDocument.Parse(raw).RootElement;
             if (json.TryGetProperty("productId", out var p)) productId = p.GetString() ?? string.Empty;
             if (json.TryGetProperty("transactionId", out var t)) transactionId = t.GetString() ?? string.Empty;
             if (json.TryGetProperty("expirationDate", out var e)) expirationDateRaw = e.GetString() ?? string.Empty;
         }
-        catch
+        catch (Exception ex)
         {
-            return Results.BadRequest(new { success = false, message = "Geçersiz istek gövdesi." });
+            return Results.BadRequest(new { success = false, message = $"JSON parse hatası: {ex.Message}" });
         }
 
         if (string.IsNullOrWhiteSpace(productId))
@@ -311,7 +345,10 @@ public class CompatibilityController : ControllerBase
 
         if (!AppleFamilyPlanProductIds.Contains(productId))
         {
-            return Results.BadRequest(new { success = false, message = "Desteklenmeyen ürün kimliği." });
+            return Results.BadRequest(new { 
+                success = false, 
+                message = $"Desteklenmeyen ürün kimliği: {productId}. Desteklenen: {string.Join(", ", AppleFamilyPlanProductIds)}"
+            });
         }
 
         var now = DateTime.UtcNow;
