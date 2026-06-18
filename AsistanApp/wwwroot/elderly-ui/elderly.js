@@ -491,6 +491,7 @@ const medicationConfirmTimers = new Map();
 const medicationReminderState = new Map();
 let subscriptionCache = null;
 let subscriptionProductCache = null;
+let subscriptionProductLoadAttempted = false;
 let selectedFamilyPlanProductId = FAMILY_PLAN_PRODUCT_ID;
 let currentMedicationsCache = [];
 let careRoutineStarted = false;
@@ -1087,6 +1088,36 @@ function setLanguage(lang) {
 window.setLanguage = setLanguage;
 window.applyTranslations = applyTranslations;
 window.handleAppleSignIn = handleAppleSignIn;
+window.shareDoctorReport = shareDoctorReport;
+
+// iPad event handling: Add touchend fallback for Doktora Göster button
+document.addEventListener('DOMContentLoaded', () => {
+    const shareDoctorBtn = document.getElementById('shareDoctorReportBtn');
+    if (shareDoctorBtn && !shareDoctorBtn.__touchHandlerAdded) {
+        shareDoctorBtn.__touchHandlerAdded = true;
+        shareDoctorBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[iPad Fix] touchend on shareDoctorReportBtn, calling shareDoctorReport');
+            shareDoctorReport();
+        }, { passive: false });
+    }
+});
+
+function getPublicWebBaseUrl() {
+    const stored = String(localStorage.getItem('apiBaseUrl') || '').trim();
+    if (stored && /^https?:\/\//i.test(stored)) {
+        return stored.replace(/\/$/, '');
+    }
+    if (/^https?:\/\//i.test(DEFAULT_API_BASE)) {
+        return DEFAULT_API_BASE.replace(/\/$/, '');
+    }
+    return RAILWAY_API_BASE.replace(/\/$/, '');
+}
+
+function buildDoctorReportUrl(token) {
+    return `${getPublicWebBaseUrl()}/doctor-report.html?token=${encodeURIComponent(token)}`;
+}
 
 function openExternalUrl(url) {
     const targetUrl = String(url || '').trim();
@@ -1166,12 +1197,22 @@ function getStoreKitPlugin() {
 }
 
 async function loadStoreProduct() {
+    console.log('[StoreKit] loadStoreProduct called');
     const store = getStoreKitPlugin();
-    if (!store?.getProducts) return null;
+    if (!store?.getProducts) {
+        console.warn('[StoreKit] No getProducts method available');
+        subscriptionProductLoadAttempted = true;
+        updateSubscriptionDisclosurePrices();
+        return null;
+    }
 
     try {
+        console.log('[StoreKit] Fetching products:', ALL_FAMILY_PLAN_PRODUCT_IDS);
         const result = await store.getProducts({ productIds: ALL_FAMILY_PLAN_PRODUCT_IDS });
+        console.log('[StoreKit] Got result:', result);
         const products = Array.isArray(result?.products) ? result.products : [];
+        console.log('[StoreKit] Products array count:', products.length);
+        
         const monthlyPriority = [...FAMILY_PLAN_PRODUCT_ID_CANDIDATES, ...ALL_FAMILY_PLAN_PRODUCT_IDS];
 
         subscriptionProductCache = monthlyPriority
@@ -1180,10 +1221,12 @@ async function loadStoreProduct() {
             || products[0]
             || null;
 
+        console.log('[StoreKit] Selected subscription product:', subscriptionProductCache);
+
         if (!subscriptionProductCache) {
             // Products returned empty – product IDs not found in App Store Connect Sandbox.
             // This typically means Paid Apps Agreement is not accepted, or products are not Active.
-            console.warn('[IAP] getProducts returned 0 results for IDs:', ALL_FAMILY_PLAN_PRODUCT_IDS,
+            console.warn('[StoreKit] getProducts returned 0 results for IDs:', ALL_FAMILY_PLAN_PRODUCT_IDS,
                 '– Verify: 1) Paid Apps Agreement accepted in App Store Connect > Business > Agreements, 2) Products are Active/Ready to Submit.');
         }
 
@@ -1191,9 +1234,19 @@ async function loadStoreProduct() {
         updateSubscriptionDisclosurePrices();
         return subscriptionProductCache;
     } catch (error) {
-        console.warn('[IAP] StoreKit product fetch failed:', error);
+        console.error('[StoreKit] Product fetch error:', error);
+        console.error('[StoreKit] Error details:', {
+            message: error?.message,
+            name: error?.name,
+            code: error?.code,
+            stack: error?.stack
+        });
         updateSubscriptionDisclosurePrices();
         return null;
+    } finally {
+        subscriptionProductLoadAttempted = true;
+        console.log('[StoreKit] loadStoreProduct finished, attempted=true');
+        updateSubscriptionDisclosurePrices();
     }
 }
 
@@ -1201,9 +1254,19 @@ function updateSubscriptionDisclosurePrices() {
     const monthlyPriceEl = document.getElementById('subscriptionMonthlyPrice');
     if (!monthlyPriceEl) return;
 
-    const loadingText = t('subscriptionPriceLoading');
+    if (subscriptionProductCache?.displayPrice) {
+        monthlyPriceEl.textContent = subscriptionProductCache.displayPrice;
+        return;
+    }
 
-    monthlyPriceEl.textContent = subscriptionProductCache?.displayPrice || loadingText;
+    if (subscriptionProductLoadAttempted) {
+        monthlyPriceEl.textContent = currentLang === 'en'
+            ? 'Price unavailable (tap Upgrade to retry)'
+            : 'Fiyat yüklenemedi (Yükselt ile yeniden dene)';
+        return;
+    }
+
+    monthlyPriceEl.textContent = t('subscriptionPriceLoading');
 }
 
 function applyStoreKitPurchaseUiVisibility() {
@@ -1624,24 +1687,72 @@ function toggleListening() {
 }
 
 async function shareDoctorReport() {
-    const token = requireAuthToken();
-    if (!token) return;
-    const url = `${window.location.origin}/doctor-report.html?token=${encodeURIComponent(token)}`;
+    console.log('[iPad Fix] shareDoctorReport called');
+    const token = await requireAuthTokenAsync();
+    if (!token) {
+        console.log('[iPad Fix] No token available');
+        showNotification(
+            currentLang === 'en' ? 'Sign in required' : 'Giriş gerekli',
+            currentLang === 'en' ? 'Please sign in to share your doctor report.' : 'Doktor raporunu paylaşmak için giriş yapın.',
+            'error'
+        );
+        return;
+    }
+
+    const url = buildDoctorReportUrl(token);
+    const shareTitle = currentLang === 'en' ? 'Doctor Report' : 'Doktor Raporu';
+    const shareText = currentLang === 'en' ? 'Doctor report link' : 'Doktor raporu bağlantısı';
+    console.log('[iPad Fix] Doctor report URL built');
+
     if (navigator.share) {
         try {
-            await navigator.share({ title: 'Doktor Raporu', text: 'Doktor raporu bağlantısı', url });
-            showNotification('Paylaşıldı', 'Doktor raporu gönderildi', 'success');
+            console.log('[iPad Fix] Attempting native share');
+            await navigator.share({ title: shareTitle, text: shareText, url });
+            showNotification(
+                currentLang === 'en' ? 'Shared' : 'Paylaşıldı',
+                currentLang === 'en' ? 'Doctor report link sent.' : 'Doktor raporu gönderildi.',
+                'success'
+            );
             return;
         } catch (error) {
-            console.warn('Paylaşım iptal edildi:', error);
+            if (error?.name === 'AbortError') {
+                console.log('[iPad Fix] Share aborted by user');
+                return;
+            }
+            console.warn('[iPad Fix] Share error:', error);
         }
     }
+
+    const browserPlugin = window.Capacitor?.Plugins?.Browser;
+    if (browserPlugin?.open) {
+        try {
+            console.log('[iPad Fix] Attempting Capacitor Browser.open');
+            await browserPlugin.open({ url });
+            showNotification(
+                currentLang === 'en' ? 'Opened' : 'Açıldı',
+                currentLang === 'en' ? 'Doctor report opened in browser.' : 'Doktor raporu tarayıcıda açıldı.',
+                'success'
+            );
+            return;
+        } catch (error) {
+            console.warn('Browser open failed:', error);
+        }
+    }
+
     try {
         await navigator.clipboard.writeText(url);
-        showNotification('Kopyalandı', 'Doktor raporu bağlantısı kopyalandı', 'success');
+        showNotification(
+            currentLang === 'en' ? 'Copied' : 'Kopyalandı',
+            currentLang === 'en' ? 'Doctor report link copied.' : 'Doktor raporu bağlantısı kopyalandı.',
+            'success'
+        );
     } catch (error) {
         console.error('Kopyalama hatası:', error);
-        showNotification('Hata', 'Bağlantı kopyalanamadı', 'error');
+        showNotification(
+            currentLang === 'en' ? 'Error' : 'Hata',
+            currentLang === 'en' ? 'Could not share or copy the report link.' : 'Rapor bağlantısı paylaşılamadı veya kopyalanamadı.',
+            'error'
+        );
     }
 }
 
@@ -2615,6 +2726,11 @@ document.addEventListener('DOMContentLoaded', async function () {
                 updateSubscriptionScreen();
             })
             .catch(() => { });
+        if (STOREKIT_PURCHASES_ENABLED) {
+            loadStoreProduct()
+                .then(() => updatePurchaseButtonLabel())
+                .catch(() => { });
+        }
     }
 
     if (IS_CAPACITOR_IOS && !isOfflineDemoModeEnabled()) {
@@ -2686,6 +2802,11 @@ window.addEventListener('load', async () => {
                 updateSubscriptionScreen();
             })
             .catch(() => { });
+        if (STOREKIT_PURCHASES_ENABLED) {
+            loadStoreProduct()
+                .then(() => updatePurchaseButtonLabel())
+                .catch(() => { });
+        }
     }
     const activeScreen = document.querySelector('.screen.active')?.id || 'loginScreen';
     if (window.SafeGuardianAds?.updateByElderlyScreen) {

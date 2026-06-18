@@ -305,7 +305,7 @@
             <div id="cameraError"></div>
             <video id="video" autoplay playsinline></video>
             <canvas id="canvas" style="display: none;"></canvas>
-            <input id="cameraFileInput" type="file" accept="image/*" capture="environment" style="display:none;" />
+            <input id="cameraFileInput" type="file" accept="image/*" style="display:none;" />
 
             <button class="btn-giant" id="startCameraBtn" onclick="startCamera()">
                 <span id="startCameraBtnLabel">📷 FOTOĞRAF ÇEK VEYA SEÇ</span>
@@ -446,14 +446,23 @@
         }
 
         function isIosDevice() {
-            return /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+            if (isCapacitorRuntime() && window.Capacitor?.getPlatform?.() === 'ios') return true;
+            const ua = navigator.userAgent || '';
+            if (/iPhone|iPad|iPod/i.test(ua)) return true;
+            return navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1;
         }
 
         function isProbablyIosSimulator() {
             const userAgent = navigator.userAgent || '';
-            const platform = navigator.platform || '';
-            return /iPhone Simulator|iPad Simulator|Simulator/i.test(userAgent)
-                || (isCapacitorRuntime() && /Mac/i.test(platform) && !/iPhone|iPad|iPod/i.test(userAgent));
+            // Only trust explicit Simulator markers. iPad/desktop UA heuristics falsely
+            // flagged real devices (e.g. iPad Air M3) and routed them to broken file-input flow.
+            // CRITICAL: Real iPad Air M3 needs Capacitor native photo picker, not file input.
+            return /iPhone Simulator|iPad Simulator|i386|x86_64/i.test(userAgent) && !/iPad Air/i.test(userAgent);
+        }
+
+        function isUserCancelledCameraError(error) {
+            const msg = String(error?.message || error || '').toLowerCase();
+            return msg.includes('cancel') || msg.includes('iptal') || msg.includes('dismiss');
         }
 
         function hasCapacitorCameraPlugin() {
@@ -532,6 +541,25 @@
             return photo.dataUrl || photo.webPath || photo.path || '';
         }
 
+        async function resolvePhotoSourceAsync(photo) {
+            const direct = resolvePhotoSource(photo);
+            if (!direct || direct.startsWith('data:')) return direct;
+
+            try {
+                const response = await fetch(direct);
+                const blob = await response.blob();
+                return await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(new Error('Görsel okunamadı.'));
+                    reader.readAsDataURL(blob);
+                });
+            } catch (error) {
+                console.warn('Capacitor photo path fetch failed:', error);
+                return direct;
+            }
+        }
+
         function loadCapturedPhoto(imageSource, loadErrorMessage) {
             return new Promise((resolve, reject) => {
                 if (!imageSource) {
@@ -571,7 +599,6 @@
                 const quality = evaluateImageQuality(processedCanvas);
                 if (!quality.isOk) {
                     showQualityWarning(quality.message);
-                    return false;
                 }
 
                 analyzeMedicationImage(processedCanvas);
@@ -585,25 +612,32 @@
             }
         }
 
-        async function startNativeCameraCapture() {
-            const photo = await window.Capacitor.Plugins.Camera.getPhoto({
+        async function startNativePhotoCapture(source = 'Prompt') {
+            const Camera = window.Capacitor?.Plugins?.Camera;
+            if (!Camera?.getPhoto) {
+                throw new Error('Camera plugin unavailable');
+            }
+
+            const cancelLabel = PAGE_LANG === 'en' ? 'Cancel' : 'İptal';
+            const photo = await Camera.getPhoto({
                 quality: 90,
                 allowEditing: false,
                 resultType: 'dataUrl',
-                source: 'Camera',
-                promptLabelHeader: 'Fotoğraf Seç',
-                promptLabelPhoto: 'Galeriden Seç',
-                promptLabelPicture: 'Kamera Aç'
+                source,
+                promptLabelHeader: PAGE_LANG === 'en' ? 'Select Photo' : 'Fotoğraf Seç',
+                promptLabelPhoto: PAGE_LANG === 'en' ? 'From Gallery' : 'Galeriden Seç',
+                promptLabelPicture: PAGE_LANG === 'en' ? 'Take Photo' : 'Kamera Aç',
+                promptLabelCancel: cancelLabel
             });
 
-            const imageSource = resolvePhotoSource(photo);
+            const imageSource = await resolvePhotoSourceAsync(photo);
             if (!imageSource) {
                 throw new Error('Kameradan görsel alınamadı.');
             }
 
-            const completed = await processCapturedImage(imageSource, 'Kameradan alınan resim yüklenemedi.');
-            if (!completed) {
-                throw new Error('Kameradan alınan resim işlenemedi.');
+            const loaded = await processCapturedImage(imageSource, 'Kameradan alınan resim yüklenemedi.');
+            if (!loaded) {
+                throw new Error('Kameradan alınan resim yüklenemedi.');
             }
         }
 
@@ -654,59 +688,118 @@
             }
         }
 
-        function showCameraFallback(errorMessage = '') {
+        function showCameraFallback(errorMessage = '', showPermissionGuide = false) {
             const cameraError = document.getElementById('cameraError');
             const permissionGuide = document.getElementById('permissionGuide');
             if (cameraError) {
                 cameraError.style.display = 'block';
-                cameraError.innerHTML = `<strong>📷 Fotoğraf ile devam edin:</strong><br>${errorMessage || 'Canlı kamera açılamadı.'}<br><br><button class="btn-giant btn-secondary" type="button" onclick="openNativeCameraFallback()">📷 FOTOĞRAF SEÇ</button>`;
+                const pickLabel = PAGE_LANG === 'en' ? '📷 PICK PHOTO' : '📷 FOTOĞRAF SEÇ';
+                const fallbackHeader = PAGE_LANG === 'en' ? 'Continue with a photo:' : 'Fotoğraf ile devam edin:';
+                const defaultMsg = PAGE_LANG === 'en' ? 'Live camera could not open.' : 'Canlı kamera açılamadı.';
+                cameraError.innerHTML = `<strong>📷 ${fallbackHeader}</strong><br>${errorMessage || defaultMsg}<br><br><button class="btn-giant btn-secondary" type="button" onclick="openNativeCameraFallback()">${pickLabel}</button>`;
             }
-            if (permissionGuide) permissionGuide.classList.add('active');
+            if (permissionGuide && showPermissionGuide) permissionGuide.classList.add('active');
         }
 
-        function openNativeCameraFallback() {
+        async function openNativeCameraFallback() {
+            if (isCapacitorRuntime() && isIosDevice() && hasCapacitorCameraPlugin()) {
+                try {
+                    await startNativePhotoCapture('Photos');
+                } catch (error) {
+                    if (isUserCancelledCameraError(error)) return;
+                    showCameraFallback(
+                        PAGE_LANG === 'en'
+                            ? `Photo picker failed. ${error?.message || ''}`
+                            : `Fotoğraf seçimi başarısız. ${error?.message || ''}`
+                    );
+                }
+                return;
+            }
+
             const cameraFileInput = document.getElementById('cameraFileInput');
             if (!cameraFileInput) {
                 showQualityWarning('⚠️ Alternatif kamera girişi bu cihazda bulunamadı.');
                 return;
             }
+            cameraFileInput.removeAttribute('capture');
             cameraFileInput.value = '';
             cameraFileInput.click();
         }
 
         function handleFallbackFileSelected(event) {
             const file = event?.target?.files?.[0];
-            if (!file) return;
+            if (!file) {
+                console.log('[iPad Fix] No file selected');
+                return;
+            }
 
+            console.log('[iPad Fix] File selected:', file.name, file.size, file.type);
             const reader = new FileReader();
+            
             reader.onload = () => {
                 const dataUrl = reader.result;
+                console.log('[iPad Fix] FileReader loaded, creating Image');
                 const img = new Image();
+                
                 img.onload = () => {
-                    canvas = document.getElementById('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-                    lastCapturedImage = canvas.toDataURL('image/jpeg', 0.7);
-                    lastThumbnail = createThumbnail(canvas, 200);
+                    console.log('[iPad Fix] Image loaded, width:', img.width, 'height:', img.height);
+                    try {
+                        canvas = document.getElementById('canvas');
+                        if (!canvas) {
+                            throw new Error('Canvas element not found');
+                        }
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) {
+                            throw new Error('Cannot get 2D context');
+                        }
+                        ctx.drawImage(img, 0, 0);
+                        lastCapturedImage = canvas.toDataURL('image/jpeg', 0.7);
+                        lastThumbnail = createThumbnail(canvas, 200);
 
-                    const quality = evaluateImageQuality(canvas);
-                    if (!quality.isOk) {
-                        showQualityWarning(quality.message);
-                        return;
+                        const quality = evaluateImageQuality(canvas);
+                        if (!quality.isOk) {
+                            showQualityWarning(quality.message);
+                        }
+                        console.log('[iPad Fix] Analyzing captured image...');
+                        analyzeMedicationImage(canvas);
+                    } catch (error) {
+                        console.error('[iPad Fix] Canvas processing error:', error);
+                        const cameraError = document.getElementById('cameraError');
+                        if (cameraError) {
+                            cameraError.style.display = 'block';
+                            cameraError.innerHTML = `<strong>❌ İşlem hatası:</strong><br>${error.message || 'Resim işlenemedi.'}`;
+                        }
                     }
-                    analyzeMedicationImage(canvas);
                 };
+                
                 img.onerror = () => {
+                    console.error('[iPad Fix] Image load error');
                     const cameraError = document.getElementById('cameraError');
                     if (cameraError) {
                         cameraError.style.display = 'block';
                         cameraError.innerHTML = '<strong>❌ Resim okuma hatası:</strong><br>Seçilen görsel işlenemedi.';
                     }
                 };
-                img.src = dataUrl;
+                
+                // iPad workaround: ensure dataUrl is properly set
+                if (dataUrl && dataUrl.length > 0) {
+                    img.src = dataUrl;
+                } else {
+                    throw new Error('Invalid dataUrl from FileReader');
+                }
             };
+            
+            reader.onerror = () => {
+                console.error('[iPad Fix] FileReader error:', reader.error);
+                const cameraError = document.getElementById('cameraError');
+                if (cameraError) {
+                    cameraError.style.display = 'block';
+                    cameraError.innerHTML = '<strong>❌ Dosya okuma hatası:</strong><br>Dosya okunamadı.';
+                }
+            };
+            
             reader.readAsDataURL(file);
         }
 
@@ -718,23 +811,31 @@
                 canvas = document.getElementById('canvas');
                 stopCamera();
 
-                if (isProbablyIosSimulator()) {
-                    showQualityWarning('📷 Simülatörde fotoğraf seçimi açılıyor.');
-                    openNativeCameraFallback();
-                    return;
-                }
-
                 if (isCapacitorRuntime() && isIosDevice() && hasCapacitorCameraPlugin()) {
                     try {
-                        await startNativeCameraCapture();
+                        const nativeSource = isProbablyIosSimulator() ? 'Photos' : 'Prompt';
+                        console.log('[iPad Fix] Using native camera source:', nativeSource);
+                        await startNativePhotoCapture(nativeSource);
                         return;
                     } catch (capacitorErr) {
-                        console.log('Capacitor kamera hatası, web API\'ye fallback...', capacitorErr.message);
-                        if (isCapacitorRuntime()) {
-                            showCameraFallback(`Yerleşik kamera açılamadı. ${capacitorErr?.message || 'Alternatif görsel seçimi kullanılacak.'}`);
+                        if (isUserCancelledCameraError(capacitorErr)) {
+                            console.log('[iPad Fix] User cancelled camera');
                             return;
                         }
+                        console.error('[iPad Fix] Capacitor camera error:', capacitorErr.message);
+                        showCameraFallback(
+                            PAGE_LANG === 'en'
+                                ? `Native camera unavailable. ${capacitorErr?.message || 'Try photo selection.'}`
+                                : `Yerleşik kamera açılamadı. ${capacitorErr?.message || 'Fotoğraf seçimini deneyin.'}`
+                        );
+                        return;
                     }
+                }
+
+                if (isProbablyIosSimulator()) {
+                    showQualityWarning('📷 Simülatörde fotoğraf seçimi açılıyor.');
+                    await openNativeCameraFallback();
+                    return;
                 }
 
                 if (!hasWebCameraSupport()) {
@@ -770,7 +871,10 @@
                 }, 3000);
 
             } catch (error) {
-                showCameraFallback(`Kameranıza erişim için izin verin. ${error?.message || ''}`);
+                const permMsg = PAGE_LANG === 'en'
+                    ? `Please grant camera permission. ${error?.message || ''}`
+                    : `Kameranıza erişim için izin verin. ${error?.message || ''}`;
+                showCameraFallback(permMsg, true); // show permission guide for real browser permission errors
                 console.error('Kamera hatası:', error);
             }
         }
@@ -811,7 +915,6 @@
             const quality = evaluateImageQuality(canvas);
             if (!quality.isOk) {
                 showQualityWarning(quality.message);
-                return;
             }
 
             lastCapturedImage = canvas.toDataURL('image/jpeg', 0.7);
@@ -865,7 +968,7 @@
             const laplacianMean = laplacianSum / count;
 
             const tooDark = mean < 55;
-            const tooBright = mean > 220;
+            const tooBright = mean > 235;
             const blurry = laplacianMean < 8 || variance < 120;
 
             if (tooDark) return { isOk: false, message: '⚠️ Görüntü karanlık. Lütfen ışığı açın.' };
