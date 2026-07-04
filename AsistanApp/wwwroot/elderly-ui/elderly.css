@@ -21,6 +21,10 @@ html, body {
     line-height: 1.4;
 }
 
+:root {
+    --sg-ad-banner-offset: 0px;
+}
+
 body {
     background: #1a1a1a;
     overflow-y: auto;
@@ -51,6 +55,19 @@ body.high-contrast {
 
 .screen.active {
     display: flex;
+}
+
+/* AdMob banner görünürken alttaki içerik/butonlar banner altında kalmasın */
+body.ad-banner-visible .screen {
+    padding-bottom: calc(var(--sg-ad-banner-offset) + env(safe-area-inset-bottom, 0px));
+}
+
+body.ad-banner-visible .main-area {
+    padding-bottom: calc(12px + var(--sg-ad-banner-offset) + env(safe-area-inset-bottom, 0px));
+}
+
+body.ad-banner-visible .form-container {
+    padding-bottom: calc(var(--sg-ad-banner-offset) + 16px);
 }
 
 /* ===========================
@@ -104,11 +121,23 @@ body.high-contrast {
 }
 
 .logo-area h1 {
-    font-size: clamp(34px, 8vw, 52px);
+    font-size: clamp(28px, 7vw, 44px);
     color: #ffff00;
     font-weight: 900;
-    letter-spacing: 1.5px;
+    letter-spacing: 1px;
     text-shadow: 3px 3px 0px rgba(255, 255, 0, 0.3);
+    line-height: 1.15;
+    word-break: break-word;
+    padding: 0 8px;
+}
+
+.brand-title-line {
+    display: block;
+}
+
+.brand-ai {
+    font-size: 0.85em;
+    letter-spacing: 3px;
 }
 
 .logo-subtitle {
@@ -252,15 +281,16 @@ body.high-contrast {
 }
 
 .top-bar h1 {
-    font-size: 40px;
+    font-size: clamp(22px, 5.5vw, 32px);
     color: #ffff00;
     font-weight: 900;
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 32px;
+    overflow: visible;
+    text-overflow: initial;
+    white-space: normal;
+    line-height: 1.2;
+    word-break: break-word;
 }
 
 .home-top-bar {
@@ -498,6 +528,18 @@ body.high-contrast .voice-guidance {
    Erişilebilirlik: 48px+ Touch Target, Hızlı Visual Feedback
    ========================== */
 
+#buyFamilyPackageButton {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(0, 255, 255, 0.25);
+    cursor: pointer;
+    position: relative;
+    z-index: 2;
+}
+
+#buyFamilyPackageButton:disabled {
+    opacity: 0.65;
+}
+
 .btn-giant {
     min-height: 110px;
     font-size: 28px;
@@ -537,6 +579,10 @@ body.high-contrast .voice-guidance {
     position: fixed;
     padding-bottom: env(safe-area-inset-bottom);
     background: rgba(0, 0, 0, 0.001);
+}
+
+body.ad-banner-visible .a11y-controls {
+    bottom: calc(12px + var(--sg-ad-banner-offset) + env(safe-area-inset-bottom, 0px));
 }
 
 .a11y-menu-btn {
@@ -619,7 +665,8 @@ body.high-contrast .voice-guidance {
 }
 
 body.large-text .logo-area h1 {
-    font-size: 60px;
+    font-size: clamp(30px, 7vw, 46px);
+    line-height: 1.15;
 }
 
 body.large-text .input-group label {
@@ -632,7 +679,9 @@ body.large-text .input-group select {
 }
 
 body.large-text .top-bar h1 {
-    font-size: 46px;
+    font-size: clamp(26px, 6vw, 38px);
+    white-space: normal;
+    line-height: 1.2;
 }
 
 body.large-text .btn-giant {
@@ -853,6 +902,10 @@ body.high-contrast .btn-apple {
     box-shadow: 0 8px 20px rgba(255, 0, 0, 0.45);
 }
 
+body.ad-banner-visible .sos-floating {
+    bottom: calc(100px + var(--sg-ad-banner-offset) + env(safe-area-inset-bottom, 0px));
+}
+
 .sos-floating:active,
 .sos-floating:focus {
     transform: scale(0.98);
@@ -883,6 +936,10 @@ body.high-contrast .btn-apple {
     justify-content: center;
     animation: pulse 1s infinite;
     z-index: 1000;
+}
+
+body.ad-banner-visible .voice-indicator {
+    bottom: calc(20px + var(--sg-ad-banner-offset) + env(safe-area-inset-bottom, 0px));
 }
 
 .voice-indicator:empty {
@@ -963,6 +1020,79 @@ body.high-contrast .btn-apple {
 /* ===========================
    DUYARLI TASARIM
    ========================== */
+
+@media (min-width: 820px) {
+    #loginScreen {
+        padding: 36px 24px;
+    }
+
+    #loginScreen .form-container {
+        max-width: 760px;
+        background: #111;
+        border: 3px solid #ffff00;
+        border-radius: 18px;
+        padding: 24px;
+    }
+
+    #loginScreen .input-group {
+        margin-bottom: 22px;
+    }
+
+    #loginScreen .btn-giant {
+        min-height: 84px;
+        font-size: 25px;
+    }
+
+    .main-area {
+        width: 100%;
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 24px;
+        gap: 24px;
+    }
+
+    .help-content {
+        width: 100%;
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 24px;
+    }
+
+    .top-bar {
+        padding-left: 24px;
+        padding-right: 24px;
+    }
+
+    .top-bar h1 {
+        font-size: 36px;
+    }
+
+    .btn-giant,
+    .btn-small {
+        min-width: 0;
+    }
+}
+
+@media (min-width: 1024px) {
+    .three-button-layout {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+    }
+
+    .btn-mega {
+        height: 140px;
+        font-size: 34px;
+    }
+
+    .btn-icon {
+        font-size: 74px;
+    }
+
+    .btn-text {
+        font-size: 28px;
+    }
+}
 
 @media (max-width: 600px) {
     .button-grid {
@@ -1208,4 +1338,160 @@ body.high-contrast .btn-apple {
 
 .voice-guidance:empty {
     display: none;
+}
+
+/* ===========================
+   iPAD OPTİMİZASYONU (Guideline 4)
+   iPad Air 11-inch: 820pt wide, 1180pt tall
+   ========================== */
+@media only screen and (min-width: 768px) and (max-width: 1366px) and (-webkit-min-device-pixel-ratio: 1) {
+
+    /* Screen container: centered column with comfortable margins */
+    .screen {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 24px 32px;
+    }
+
+    /* Top bar sizing */
+    .top-bar {
+        padding: 16px 32px;
+        min-height: 72px;
+    }
+
+    .top-bar h1 {
+        font-size: 38px;
+    }
+
+    /* Form layout: wider, more comfortable */
+    .form-container {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 28px 32px;
+        border-radius: 20px;
+    }
+
+    .input-group {
+        margin-bottom: 24px;
+    }
+
+    .input-group label {
+        font-size: 24px;
+        margin-bottom: 10px;
+    }
+
+    .input-group input,
+    .input-group select {
+        font-size: 26px;
+        padding: 18px 16px;
+        border-radius: 12px;
+        min-height: 64px;
+    }
+
+    /* Giant buttons more comfortable on iPad */
+    .btn-giant {
+        min-height: 88px;
+        font-size: 26px;
+        border-radius: 16px;
+        padding: 0 28px;
+    }
+
+    .btn-small {
+        font-size: 20px;
+        padding: 12px 20px;
+        min-height: 52px;
+    }
+
+    /* Main area centered */
+    .main-area {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 28px 32px;
+        gap: 20px;
+    }
+
+    /* Three-button grid: 2 columns on iPad */
+    .three-button-layout {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+
+    .btn-mega {
+        height: 180px;
+        font-size: 30px;
+        border-radius: 20px;
+    }
+
+    .btn-icon {
+        font-size: 72px;
+    }
+
+    .btn-text {
+        font-size: 28px;
+    }
+
+    /* Emergency button full width */
+    .emergency-main {
+        min-height: 96px;
+        font-size: 30px;
+    }
+
+    /* Mood buttons row */
+    .mood-quick-buttons {
+        display: flex;
+        flex-direction: row;
+        gap: 16px;
+        justify-content: center;
+    }
+
+    .mood-quick-btn {
+        flex: 1;
+        min-height: 80px;
+        font-size: 22px;
+    }
+
+    /* Profile / cards */
+    .medication-card {
+        padding: 20px;
+        border-radius: 16px;
+    }
+
+    .medication-card .btn-take-med {
+        min-height: 72px;
+        font-size: 22px;
+        min-width: 140px;
+    }
+
+    /* Voice guidance */
+    .voice-guidance {
+        font-size: 26px;
+        padding: 18px;
+    }
+
+    /* Accessibility menu */
+    .a11y-controls {
+        bottom: 28px;
+        right: 28px;
+    }
+
+    .a11y-menu {
+        min-width: 280px;
+        padding: 20px;
+    }
+
+    /* Modal */
+    .modal-content {
+        max-width: 560px;
+        padding: 36px;
+        border-radius: 20px;
+    }
+
+    .modal-content h2 {
+        font-size: 32px;
+    }
+
+    .modal-content p {
+        font-size: 22px;
+    }
 }

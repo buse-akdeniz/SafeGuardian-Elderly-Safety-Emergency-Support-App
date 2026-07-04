@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Yaşlı Yakınız - Aile Kontrol Paneli</title>
     <style>
         * {
@@ -15,7 +15,23 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: max(12px, env(safe-area-inset-top)) 12px max(20px, env(safe-area-inset-bottom));
+        }
+
+        @media (max-width: 640px) {
+            body { padding-left: 10px; padding-right: 10px; }
+            .login-container { margin: 24px auto; padding: 24px 18px; }
+            h1 { font-size: clamp(22px, 6vw, 30px); line-height: 1.2; }
+            .dashboard-header {
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 12px;
+            }
+            .dashboard-header > div:last-child {
+                text-align: left !important;
+            }
+            .medication-name { font-size: 18px; word-break: break-word; }
+            .card { padding: 16px; }
         }
 
         .login-container {
@@ -409,7 +425,7 @@
             </p>
         </form>
 
-        <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+        <div id="devApiSection" style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #e5e7eb; display: none;">
             <div class="form-group">
                 <label id="apiBaseLabel" for="apiBaseInput">API Adresi</label>
                 <input type="url" id="apiBaseInput" placeholder="https://api.yasliyakini.com" />
@@ -425,9 +441,9 @@
     <div class="dashboard-container" id="dashboardContainer">
         <div class="dashboard-header">
             <div class="elderly-info">
-                <h2 id="elderlyName">Ayşe Hanım</h2>
-                <p><span id="agePrefix">👤 Yaş:</span> <span id="elderlyAge">75</span></p>
-                <p><span id="phonePrefix">📞 Tel:</span> <span id="elderlyPhone">+90 555 123 4567</span></p>
+                <h2 id="elderlyName">—</h2>
+                <p><span id="agePrefix">👤 Yaş:</span> <span id="elderlyAge">—</span></p>
+                <p><span id="phonePrefix">📞 Tel:</span> <span id="elderlyPhone">—</span></p>
             </div>
             <div style="text-align: right;">
                 <div id="elderlyStatus" class="status-badge">İyi ✓</div>
@@ -438,7 +454,10 @@
 
         <!-- İLAÇ TAKIP -->
         <div class="card">
-            <h3 id="medicationsTitle">💊 Bugünün İlaçları</h3>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                <h3 id="medicationsTitle" style="margin:0;">💊 Bugünün İlaçları</h3>
+                <button type="button" class="back-btn" id="refreshDashboardBtn" onclick="loadDashboard()">↻ Yenile</button>
+            </div>
             <div id="medicationsContainer" class="empty-state">
                 İlaç yükleniyor...
             </div>
@@ -501,6 +520,7 @@
         </div>
     </div>
 
+    <script src="/js/production.js?v=20260704"></script>
     <script src="/js/signalr.min.js"></script>
     <script src="/js/admob.js?v=20260506"></script>
     <script>
@@ -563,7 +583,9 @@
                 familyAlert: 'Aile Uyarısı',
                 emergency: 'Acil Durum',
                 liveLocation: 'Canlı konum',
-                emergencyBroadcast: 'Acil durum yayını alındı.'
+                emergencyBroadcast: 'Acil durum yayını alındı.',
+                elderlyNotLinked: 'Bu e-posta henüz bir yaşlı hesabına bağlı değil. Önce yaşlı uygulamasından Aile bölümüne bu e-postayı ekleyin.',
+                elderlyNameMissing: 'Bağlı yaşlı'
             },
             en: {
                 loginTitle: '👨‍👩‍👧 Family Control Panel',
@@ -623,7 +645,9 @@
                 familyAlert: 'Family Alert',
                 emergency: 'Emergency',
                 liveLocation: 'Live location',
-                emergencyBroadcast: 'Emergency broadcast received.'
+                emergencyBroadcast: 'Emergency broadcast received.',
+                elderlyNotLinked: 'This email is not linked to an elderly account yet. Add it from the elderly app under Family first.',
+                elderlyNameMissing: 'Linked elderly'
             }
         };
 
@@ -712,6 +736,20 @@
         }
 
         const DEFAULT_API_BASE = 'https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app/api';
+        const API_TIMEOUT_MS = 12000;
+
+        async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
+            const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            const timeoutId = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
+            try {
+                return await fetch(url, {
+                    ...options,
+                    signal: controller?.signal
+                });
+            } finally {
+                if (timeoutId) clearTimeout(timeoutId);
+            }
+        }
         const IOS_SIMULATOR_API_BASE = 'https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app/api';
 
         function normalizeApiBase(value) {
@@ -775,6 +813,21 @@
         }
 
         let ACTIVE_API_BASE = getApiBase();
+        const FAMILY_LOGIN_TIMEOUT_MS = 12000;
+
+        async function fetchWithTimeout(url, options = {}, timeoutMs = FAMILY_LOGIN_TIMEOUT_MS) {
+            const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    signal: controller?.signal
+                });
+                return response;
+            } finally {
+                if (timeoutId) clearTimeout(timeoutId);
+            }
+        }
         function getHubUrl(apiBase) {
             return `${apiBase.replace(/\/api$/, '')}/health-hub`;
         }
@@ -819,18 +872,33 @@
             e.preventDefault();
             const email = document.getElementById('familyEmail').value;
             const password = document.getElementById('familyPassword').value;
+            const loginBtn = document.getElementById('loginSubmitBtn');
+            const originalBtnText = loginBtn?.textContent || t('loginSubmitBtn');
+
+            if (loginBtn) {
+                loginBtn.disabled = true;
+                loginBtn.textContent = '⏳ ' + t('loginSubmitBtn');
+                loginBtn.style.opacity = '0.6';
+            }
+
+            const reEnableLoginBtn = () => {
+                if (!loginBtn) return;
+                loginBtn.disabled = false;
+                loginBtn.textContent = originalBtnText;
+                loginBtn.style.opacity = '1';
+            };
 
             try {
                 let response;
                 try {
-                    response = await fetch(`${ACTIVE_API_BASE}/family/login`, {
+                    response = await fetchWithTimeout(`${ACTIVE_API_BASE}/family/login`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ email, password })
                     });
                 } catch (primaryError) {
-                    if (ACTIVE_API_BASE !== DEFAULT_API_BASE) {
-                        response = await fetch(`${DEFAULT_API_BASE}/family/login`, {
+                    if (ACTIVE_API_BASE !== DEFAULT_API_BASE && primaryError?.name !== 'AbortError') {
+                        response = await fetchWithTimeout(`${DEFAULT_API_BASE}/family/login`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email, password })
@@ -847,6 +915,11 @@
 
                 if (response.ok) {
                     const data = await response.json();
+                    if (!data.caringFor) {
+                        showError(t('elderlyNotLinked'));
+                        reEnableLoginBtn();
+                        return;
+                    }
                     const remember = document.getElementById('rememberMe')?.checked;
                     familyToken = data.token;
                     elderlyId = data.caringFor;
@@ -858,9 +931,11 @@
                     storage.setItem('apiBaseUrl', ACTIVE_API_BASE.replace(/\/api\/?$/i, ''));
                     
                     showDashboard();
-                } else {
-                    showError(t('loginFailed'));
+                    return;
                 }
+
+                showError(t('loginFailed'));
+                reEnableLoginBtn();
             } catch (error) {
                 const message = error?.message || String(error);
                 console.error('Giriş hatası:', {
@@ -868,7 +943,8 @@
                     apiBase: ACTIVE_API_BASE,
                     email
                 });
-                showError(t('connectionError'));
+                showError(error?.name === 'AbortError' ? t('connectionError') : t('connectionError'));
+                reEnableLoginBtn();
             }
         });
 
@@ -1003,10 +1079,12 @@
         }
 
         function renderDashboard(data) {
-            // Yaşlı bilgileri
-            document.getElementById('elderlyName').textContent = data.elderly.name;
-            document.getElementById('elderlyAge').textContent = data.elderly.age;
-            document.getElementById('elderlyPhone').textContent = data.elderly.phone;
+            document.getElementById('elderlyName').textContent =
+                (data.elderly?.name || '').trim() || t('elderlyNameMissing');
+            document.getElementById('elderlyAge').textContent =
+                data.elderly?.age != null && data.elderly?.age !== '' ? data.elderly.age : '—';
+            document.getElementById('elderlyPhone').textContent =
+                (data.elderly?.phone || '').trim() || '—';
 
             // İlaçlar
             const medsContainer = document.getElementById('medicationsContainer');
@@ -1015,11 +1093,13 @@
             } else {
                 medsContainer.innerHTML = data.todayMedications.map(med => {
                     const isTaken = med.takenToday.length > 0;
+                    const safeName = (window.SafeGuardianProd?.escapeHtml || (v => v))(med.medicationName || '');
+                    const safeNotes = med.notes ? (window.SafeGuardianProd?.escapeHtml || (v => v))(med.notes) : '';
                     return `
                         <div class="medication-item">
-                            <div class="medication-name">💊 ${med.medicationName}</div>
-                            <div class="medication-time">${t('medsTimes')}: ${med.scheduleTimes.join(', ')}</div>
-                            ${med.notes ? `<div class="medication-time">${t('notes')} ${med.notes}</div>` : ''}
+                            <div class="medication-name">💊 ${safeName}</div>
+                            <div class="medication-time">${t('medsTimes')}: ${(med.scheduleTimes || []).join(', ')}</div>
+                            ${safeNotes ? `<div class="medication-time">${t('notes')} ${safeNotes}</div>` : ''}
                             <span class="medication-status ${isTaken ? 'taken' : 'pending'}">
                                 ${isTaken ? t('medTaken') : t('medPending')}
                             </span>
@@ -1207,6 +1287,17 @@
 
         async function cancelFamilySubscription() {
             if (!familyToken) return;
+
+            const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+                || (navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1);
+            if (isIos) {
+                const confirmed = confirm(t('subscriptionCancelAppleConfirm') || 'Open Apple subscription settings to cancel?');
+                if (!confirmed) return;
+                window.location.href = 'https://apps.apple.com/account/subscriptions';
+                showAccountMessage(t('subscriptionCancelAppleOpened') || t('subscriptionCanceled'));
+                return;
+            }
+
             try {
                 let response = await fetch(`${ACTIVE_API_BASE}/subscription/cancel?token=${familyToken}`, {
                     method: 'POST',
@@ -1315,6 +1406,7 @@
         // Sayfa açılırken kontrol et
         window.addEventListener('load', () => {
             applyTranslations();
+            window.SafeGuardianProd?.hideDevOnlyUi?.();
             if (!history.state) {
                 history.replaceState({ view: 'login' }, '', window.location.href);
             }

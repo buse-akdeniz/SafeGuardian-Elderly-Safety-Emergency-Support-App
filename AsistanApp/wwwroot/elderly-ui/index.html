@@ -23,16 +23,16 @@
                 <input type="text" id="regFullName" placeholder="Örn: Ayşe Yılmaz" required>
             </div>
             <div class="input-group">
-                <label for="regPhone" data-i18n="phoneLabel">TELEFON</label>
-                <input type="tel" id="regPhone" placeholder="05xx xxx xx xx" required>
+                <label for="regPhone" data-i18n="phoneLabel">TELEFON <span style="font-size:0.75em;font-weight:400;">(İsteğe bağlı)</span></label>
+                <input type="tel" id="regPhone" placeholder="05xx xxx xx xx">
             </div>
             <div class="input-group">
                 <label for="regEmail" data-i18n="emailLabel">E-POSTA</label>
                 <input type="email" id="regEmail" placeholder="ayse@mail.com" required>
             </div>
             <div class="input-group">
-                <label for="regBirthDate" data-i18n="birthDateLabel">DOĞUM TARİHİ</label>
-                <input type="date" id="regBirthDate" required>
+                <label for="regBirthDate" data-i18n="birthDateLabel">DOĞUM TARİHİ <span style="font-size:0.75em;font-weight:400;">(İsteğe bağlı)</span></label>
+                <input type="date" id="regBirthDate">
             </div>
 
             <button type="submit" class="btn-giant btn-green" data-i18n="completeRegBtn">KAYDI TAMAMLA</button>
@@ -117,7 +117,7 @@
                 </button>
             </div>
 
-            <button class="btn-giant btn-blue" onclick="shareDoctorReport()" aria-label="Doktora rapor göster">
+            <button class="btn-giant btn-blue" id="shareDoctorReportBtn" onclick="shareDoctorReport()" aria-label="Doktora rapor göster">
                 <span data-i18n="doctorBtn">🩺 DOKTORA GÖSTER</span>
             </button>
 
@@ -239,7 +239,10 @@
     <!-- =================== GİRİŞ EKRANI =================== -->
     <div id="loginScreen" class="screen active">
         <div class="logo-area">
-            <h1>SAFEGUARDIAN AI</h1>
+            <h1 class="brand-title">
+                <span class="brand-title-line">SAFEGUARDIAN</span>
+                <span class="brand-title-line brand-ai">AI</span>
+            </h1>
         </div>
 
         <div class="lang-selector">
@@ -273,11 +276,6 @@
 
             <button type="button" class="btn-small btn-gray" onclick="handleForgotPassword()" style="margin-top: 12px; width: 100%;" data-i18n="forgotBtn">
                 ŞİFREMİ UNUTTUM
-            </button>
-
-            <button type="button" class="btn-giant btn-apple" onclick="handleAppleSignIn()" style="margin-top: 12px;">
-                <span class="apple-logo" aria-hidden="true"></span>
-                <span data-i18n="appleSignIn">Sign in with Apple</span>
             </button>
 
             <button type="button" class="btn-small btn-gray" onclick="handleBiometricLogin()" style="margin-top: 12px; width: 100%;" data-i18n="biometricLoginBtn">
@@ -401,8 +399,8 @@
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 12px;">
-                <button class="btn-giant btn-blue" onclick="goToPremium()" style="font-size: 24px;" data-i18n="upgradePremium">⭐ PREMIUM KAPAT</button>
-                <button class="btn-giant btn-green" onclick="goToSubscription()" style="font-size: 24px;" data-i18n="subscriptionButton">💳 ABONELİK KALAN</button>
+                <button class="btn-giant btn-blue" onclick="goToPremium()" style="font-size: 24px;" data-i18n="upgradePremium">⭐ AİLE PAKETİNE GEÇ</button>
+                <button class="btn-giant btn-green" onclick="goToSubscription()" style="font-size: 24px;" data-i18n="subscriptionButton">💳 ABONELİK (IN-APP PURCHASE)</button>
                 <button class="btn-giant btn-yellow" onclick="editProfile()" style="font-size: 24px; color: #000;" data-i18n="editProfileBtn">✏️ BİLGİ GÜNCELLE</button>
                 <button class="btn-giant btn-gray" style="font-size: 22px;" onclick="openPrivacyPolicy()" data-i18n="privacyPolicyBtn">
                     📄 GİZLİLİK SÖZLEŞMESİ
@@ -419,7 +417,7 @@
     <div id="subscriptionScreen" class="screen">
         <div class="top-bar">
             <button class="btn-small btn-back" onclick="showScreen('profileScreen')" data-i18n="backBtn">← GERİ</button>
-            <h1 data-i18n="subscriptionTitle">💳 ABONELİK</h1>
+            <h1 data-i18n="subscriptionTitle">💳 ABONELİK (IN-APP PURCHASE)</h1>
         </div>
 
         <div class="main-area">
@@ -450,26 +448,54 @@
                     Otomatik yenilemeli aboneliklerde iOS Ayarlar &gt; Apple Kimliği &gt; Abonelikler ekranından yönetim yapılabilir.
                 </p>
 
+                <div style="background:#1a1a1a; border:1px solid #2e2e2e; border-radius:8px; padding:14px; margin-bottom:14px;">
+                    <div style="font-size:18px; color:#fff; font-weight:700; margin-bottom:10px;" data-i18n="subscriptionDisclosureTitle">ABONELİK DETAYLARI</div>
+                    <div style="font-size:16px; color:#e0e0e0; line-height:1.5; margin-bottom:6px;">
+                        <span data-i18n="subscriptionMonthlyLine">Safeguardian Premium Monthly — 1 month —</span>
+                        <span id="subscriptionMonthlyPrice" style="color:#fff; font-weight:700;">[fiyat]</span>
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:10px;">
+                        <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" style="color:#00ffff; font-weight:700; text-decoration:underline;" data-i18n="privacyPolicyLinkLabel">Privacy Policy</a>
+                        <a href="/terms-of-use.html" target="_blank" rel="noopener noreferrer" style="color:#00ffff; font-weight:700; text-decoration:underline;" data-i18n="termsOfUseLinkLabel">Terms of Use (EULA)</a>
+                    </div>
+                </div>
+
                 <div id="entitlementInfo" style="font-size:16px; color:#e0e0e0; margin-bottom:14px;"></div>
 
                 <div style="display: flex; flex-direction: column; gap: 12px;">
+
+                    <!-- Satın Al Butonu -->
+                    <button id="buyFamilyPackageButton" type="button" class="btn-giant btn-green" style="font-size: 22px; touch-action: manipulation; position: relative; z-index: 2;">
+                        <span data-i18n="buyFamilyPackageBtn">💳 AİLE PAKETİNE GEÇ</span>
+                    </button>
+
+                    <!-- Apple Zorunlu: Otomatik Yenilenme Beyanı -->
+                    <p id="autoRenewDisclosure" style="font-size:14px; color:#fff; text-align:center; margin:8px 0; line-height:1.7; padding:10px; background:#1a1a1a; border:1px solid #333; border-radius:6px;">Satın alma işlemini onayladığınızda ödeme Apple hesabınızdan tahsil edilir. Abonelik, mevcut dönem bitmeden en az 24 saat önce iptal edilmediği sürece seçilen paket yenileme dönemine göre (Aylık) otomatik olarak yenilenir. Aboneliğinizi Ayarlar &gt; Apple Kimliği &gt; Abonelikler bölümünden yönetebilir veya iptal edebilirsiniz.</p>
+
+                    <!-- Reklam ile Geçici Erişim -->
                     <button id="watchAdUnlockButton" class="btn-giant btn-blue" onclick="watchAdFor12HourAccess()" style="font-size: 20px;">
                         🎬 REKLAM İZLE - 12 SAAT TÜM ÖZELLİKLERİ AÇ
                     </button>
-                    <button id="buyFamilyPackageButton" class="btn-giant btn-green" onclick="startFamilyPackagePurchase()" style="font-size: 22px;">
-                        <span data-i18n="buyFamilyPackageBtn">💳 AİLE PAKETİNE GEÇ - ₺149,99/AY</span>
-                    </button>
+
+                    <!-- Geri Yükleme -->
                     <button class="btn-giant btn-yellow" onclick="restorePurchases()" style="font-size: 22px; color: #000;" data-i18n="restorePurchasesBtn">
                         🔄 SATIN ALMALARI GERİ YÜKLE
                     </button>
-                    <button class="btn-giant btn-gray" onclick="openLegalDocs()" style="font-size: 20px;" data-i18n="termsPrivacyBtn">
-                        📄 ŞARTLAR VE GİZLİLİK
+
+                    <!-- Apple Zorunlu: İki Ayrı Yasal Link -->
+                    <button class="btn-giant btn-gray" onclick="openPrivacyPolicy()" style="font-size: 20px;" data-i18n="subscriptionPrivacyBtn">
+                        📄 GİZLİLİK POLİTİKASI
                     </button>
+                    <button class="btn-giant btn-gray" onclick="openTermsOfUse()" style="font-size: 20px;" data-i18n="subscriptionTermsBtn">
+                        ⚖️ KULLANIM KOŞULLARI (EULA)
+                    </button>
+
+                    <!-- İptal ve Yönet -->
                     <button class="btn-giant btn-red" onclick="cancelSubscriptionFlow()" style="font-size: 20px;" data-i18n="cancelSubscriptionBtn">
-                        ⛔ ABONELİĞİ İPTAL ET
+                        ⚙️ ABONELİĞİ APPLE AYARLARINDA İPTAL ET
                     </button>
                     <button class="btn-giant btn-gray" onclick="openSubscriptionManagement()" style="font-size: 20px;" data-i18n="manageSubscriptionsBtn">
-                        ⚙️ ABONELİKLERİ YÖNET
+                        ⚙️ ABONELİKLERİ APPLE AYARLARINDA YÖNET
                     </button>
                     <button class="btn-giant btn-blue" onclick="showScreen('profileScreen')" style="font-size: 22px;" data-i18n="closeBtn">← KAPAT</button>
                 </div>
@@ -507,8 +533,7 @@
             <span data-i18n="settingsBtn">⚙️ AYARLAR</span>
         </button>
         <div id="a11yMenu" class="a11y-menu" hidden>
-            <div class="a11y-group">
-                <label for="apiBaseInput" class="a11y-label" data-i18n="apiLabel">API ADRESİ</label>
+            <div class="a11y-group dev-only">
                 <input id="apiBaseInput" class="a11y-input" type="url" placeholder="http://192.168.1.10:5007" />
                 <button id="apiBaseSave" class="btn-small btn-yellow a11y-btn" data-i18n="apiSaveBtn">KAYDET</button>
                 <button id="apiBaseClear" class="btn-small btn-gray a11y-btn" data-i18n="apiClearBtn">SIFIRLA</button>
@@ -552,8 +577,9 @@
         })();
     </script>
     <script src="config.js?v=20260505"></script>
+    <script src="../js/production.js?v=20260704"></script>
     <script src="../js/admob.js?v=20260506"></script>
-    <script src="elderly.js?v=20260505"></script>
+    <script src="elderly.js?v=20260704"></script>
     <script src="voice-assistant.js?v=20260505"></script>
 </body>
 </html>

@@ -1,10 +1,17 @@
 {
   "appId": "com.buse.safeguardian",
-  "appName": "SafeGuardianAI",
+  "appName": "SafeGuardian",
   "webDir": "wwwroot",
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 0
     }
-  }
+  },
+  "packageClassList": [
+    "StoreKit2Plugin",
+    "AdMob",
+    "CAPCameraPlugin",
+    "GeolocationPlugin",
+    "PreferencesPlugin"
+  ]
 }

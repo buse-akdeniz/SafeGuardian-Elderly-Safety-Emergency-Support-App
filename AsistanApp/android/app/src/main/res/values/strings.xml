@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SafeGuardian</string>
+    <string name="title_activity_main">SafeGuardian</string>
+    <string name="package_name">com.buse.safeguardian</string>
+    <string name="custom_url_scheme">com.buse.safeguardian</string>
+    <!-- AdMob: Play yayını öncesi AdMob'da Android uygulaması oluşturup gerçek App ID ile değiştir -->
+    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
+</resources>

@@ -2,7 +2,7 @@
 <html lang="tr">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>SafeGuardian AI</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -14,11 +14,14 @@
       .lang-btn.active { background: #2563eb; color: white; }
       h1 { color: #2563eb; margin-bottom: 20px; font-size: 28px; }
       p { color: #666; margin-bottom: 20px; line-height: 1.6; }
-      .status { background: #e0f2fe; color: #0369a1; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; }
+      .status { background: #e0f2fe; color: #0369a1; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; transition: background 0.2s, color 0.2s; }
+      .status.ready { background: #dcfce7; color: #166534; }
+      .status.error { background: #fee2e2; color: #991b1b; }
       button { background: #2563eb; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; cursor: pointer; width: 100%; margin-bottom: 10px; }
-      button:hover { background: #1d4ed8; }
+      button:hover:not(:disabled) { background: #1d4ed8; }
+      button:disabled { opacity: 0.6; cursor: wait; }
       .secondary { background: #e5e7eb; color: #374151; }
-      .secondary:hover { background: #d1d5db; }
+      .secondary:hover:not(:disabled) { background: #d1d5db; }
     </style>
   </head>
   <body>
@@ -32,9 +35,9 @@
 
         <h1 data-i18n="title">🏥 SafeGuardian AI</h1>
         <p data-i18n="subtitle">Yaşlı Bakım ve Sağlık Yönetim Sistemi</p>
-        <div class="status" data-i18n="status">✓ Uygulama başlatılıyor...</div>
-        <button onclick="loginElderly()" data-i18n="elderlyLogin">Yaşlı Girişi</button>
-        <button class="secondary" onclick="loginFamily()" data-i18n="familyLogin">Aile Girişi</button>
+        <div class="status" id="appStatus" data-i18n="status">✓ Uygulama başlatılıyor...</div>
+        <button id="elderlyLoginBtn" onclick="loginElderly()" data-i18n="elderlyLogin">Yaşlı Girişi</button>
+        <button id="familyLoginBtn" class="secondary" onclick="loginFamily()" data-i18n="familyLogin">Aile Girişi</button>
       </div>
     </div>
     <script>
@@ -43,6 +46,8 @@
           title: '🏥 SafeGuardian AI',
           subtitle: 'Yaşlı Bakım ve Sağlık Yönetim Sistemi',
           status: '✓ Uygulama başlatılıyor...',
+          statusReady: '✓ Uygulama hazır — giriş seçin',
+          statusNavigating: '⏳ Yönlendiriliyor...',
           elderlyLogin: 'Yaşlı Girişi',
           familyLogin: 'Aile Girişi'
         },
@@ -50,6 +55,8 @@
           title: '🏥 SafeGuardian AI',
           subtitle: 'Elderly Care & Health Management System',
           status: '✓ App is starting...',
+          statusReady: '✓ App ready — choose login',
+          statusNavigating: '⏳ Redirecting...',
           elderlyLogin: 'Elderly Login',
           familyLogin: 'Family Login'
         },
@@ -57,6 +64,8 @@
           title: '🏥 SafeGuardian AI',
           subtitle: 'Pflege- und Gesundheitsmanagementsystem',
           status: '✓ Anwendung wird gestartet...',
+          statusReady: '✓ App bereit — Anmeldung wählen',
+          statusNavigating: '⏳ Weiterleitung...',
           elderlyLogin: 'Senioren-Login',
           familyLogin: 'Familien-Login'
         }
@@ -84,18 +93,54 @@
 
       function changeLanguage(lang) {
         if (!TRANSLATIONS[lang]) return;
+        currentLang = lang;
         localStorage.setItem('appLang', lang);
         applyTranslations(lang);
+        markAppReady();
+      }
+
+      let currentLang = 'tr';
+
+      function setStatus(key, isReady) {
+        const statusEl = document.getElementById('appStatus');
+        const tr = TRANSLATIONS[currentLang] || TRANSLATIONS.tr;
+        if (statusEl && tr[key]) {
+          statusEl.textContent = tr[key];
+          statusEl.classList.toggle('ready', isReady === true);
+          statusEl.classList.toggle('error', isReady === false);
+        }
+      }
+
+      function setNavigating(targetPath) {
+        const elderlyBtn = document.getElementById('elderlyLoginBtn');
+        const familyBtn = document.getElementById('familyLoginBtn');
+        [elderlyBtn, familyBtn].forEach((btn) => {
+          if (btn) btn.disabled = true;
+        });
+        setStatus('statusNavigating', false);
+        window.setTimeout(() => {
+          window.location.href = targetPath;
+        }, 50);
       }
 
       function loginElderly() {
-        window.location.href = '/elderly-ui/index.html';
+        setNavigating('elderly-ui/index.html');
       }
       function loginFamily() {
-        window.location.href = '/family-dashboard.html';
+        setNavigating('family-dashboard.html');
       }
 
-      applyTranslations(detectPreferredLanguage());
+      function markAppReady() {
+        setStatus('statusReady', true);
+      }
+
+      currentLang = detectPreferredLanguage();
+      applyTranslations(currentLang);
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', markAppReady, { once: true });
+      } else {
+        markAppReady();
+      }
     </script>
   </body>
 </html>

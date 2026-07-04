@@ -998,34 +998,18 @@
         }
 
         function analyzeMedicationImage(canvas) {
-            // Production'da: canvas base64 verisini .NET backend'e gönderip
-            // Azure Computer Vision / Google Vision gibi servislere bağlayabilirsiniz.
-            // Örn: POST ${API_BASE}/api/medication-vision/analyze
-            // Şimdilik simülasyon
-
-            detectedMedications = [
-                {
-                    name: "Aspirin 500mg",
-                    stock: Math.random() * 100 | 0, // 0-100
-                    doses: Math.random() * 30 | 0   // 0-30 doz
-                },
-                {
-                    name: "Metformin 1000mg",
-                    stock: Math.random() * 100 | 0,
-                    doses: Math.random() * 30 | 0
-                }
-            ];
-
-            // 50% şansla ek ilaç
-            if (Math.random() > 0.5) {
-                detectedMedications.push({
-                    name: "Lisinopril 10mg",
-                    stock: Math.random() * 100 | 0,
-                    doses: Math.random() * 30 | 0
-                });
+            detectedMedications = [];
+            const resultSection = document.getElementById('resultSection');
+            const medicationResults = document.getElementById('medicationResults');
+            if (resultSection) resultSection.style.display = 'block';
+            if (medicationResults) {
+                medicationResults.innerHTML = `
+                    <div class="alert" style="margin-top:16px;">
+                        <strong>ℹ️ Bu özellik henüz aktif değil</strong>
+                        <p style="margin-top:8px;">İlaç tanıma yakında eklenecek. Şimdilik ilaçlarınızı manuel olarak "İlaçlarım" bölümünden ekleyebilirsiniz.</p>
+                    </div>
+                `;
             }
-
-            displayResults();
         }
 
         function displayResults() {

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using ilk_projem.Services;
+using AsistanApp.Services;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
@@ -35,11 +36,18 @@ public class CompatibilityController : ControllerBase
         Environment.GetEnvironmentVariable("SUBSCRIPTION_STORE_PATH")
             ?? Path.Combine(Environment.GetEnvironmentVariable("HOME") ?? "/tmp", ".safeguardian"),
         "subscriptions.json");
+    private static readonly string MedicationsStorePath = Path.Combine(
+        Environment.GetEnvironmentVariable("DATA_DIR")
+            ?? Path.Combine(Environment.GetEnvironmentVariable("HOME") ?? "/tmp", ".safeguardian"),
+        "medications.json");
+    private static readonly object MedicationStoreLock = new();
     private static bool _subscriptionsLoaded;
+    private static bool _medicationsLoaded;
 
     static CompatibilityController()
     {
         LoadSubscriptionsFromDisk();
+        LoadMedicationsFromDisk();
     }
 
     private int ResolveUserId()
@@ -48,7 +56,26 @@ public class CompatibilityController : ControllerBase
         if (string.IsNullOrWhiteSpace(token)) return 1;
         // Special handling for demo account
         if (string.Equals(token, DemoToken, StringComparison.Ordinal)) return DemoUserId;
+        if (token.StartsWith("elder-", StringComparison.Ordinal) &&
+            int.TryParse(token.AsSpan(6), out var elderId))
+        {
+            return elderId;
+        }
+        if (token.StartsWith("family-", StringComparison.Ordinal) &&
+            int.TryParse(token.AsSpan(7), out var familyId))
+        {
+            return familyId;
+        }
         return Math.Abs(StringComparer.Ordinal.GetHashCode(token));
+    }
+
+    private static int ResolveElderlyUserId(string elderlyId)
+    {
+        if (int.TryParse(elderlyId, out var parsed) && parsed > 0)
+        {
+            return parsed;
+        }
+        return 0;
     }
 
     private static void LoadSubscriptionsFromDisk()
@@ -111,6 +138,63 @@ public class CompatibilityController : ControllerBase
         PersistSubscriptionsToDisk();
     }
 
+    private static void LoadMedicationsFromDisk()
+    {
+        lock (MedicationStoreLock)
+        {
+            if (_medicationsLoaded) return;
+            _medicationsLoaded = true;
+            try
+            {
+                if (!System.IO.File.Exists(MedicationsStorePath)) return;
+                var json = System.IO.File.ReadAllText(MedicationsStorePath);
+                var items = JsonSerializer.Deserialize<Dictionary<string, List<MedicationItem>>>(json);
+                if (items == null) return;
+                foreach (var pair in items)
+                {
+                    if (!int.TryParse(pair.Key, out var userId)) continue;
+                    MedicationsByUser[userId] = pair.Value;
+                }
+            }
+            catch
+            {
+                // Keep in-memory defaults if persistence cannot be read.
+            }
+        }
+    }
+
+    private static void PersistMedicationsToDisk()
+    {
+        lock (MedicationStoreLock)
+        {
+            try
+            {
+                var directory = Path.GetDirectoryName(MedicationsStorePath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                var payload = MedicationsByUser.ToDictionary(
+                    pair => pair.Key.ToString(),
+                    pair => pair.Value);
+
+                var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+                System.IO.File.WriteAllText(MedicationsStorePath, json);
+            }
+            catch
+            {
+                // Medication changes should still succeed in memory.
+            }
+        }
+    }
+
+    private static void SaveMedications(int userId, List<MedicationItem> meds)
+    {
+        MedicationsByUser[userId] = meds;
+        PersistMedicationsToDisk();
+    }
+
     private IConfiguration Config => HttpContext.RequestServices.GetRequiredService<IConfiguration>();
 
     private string GetSetting(string key, string? fallbackEnv = null)
@@ -151,7 +235,62 @@ public class CompatibilityController : ControllerBase
     public IResult Health() => Results.Json(new { success = true, ok = true, serverTime = DateTime.UtcNow });
 
     [HttpPost("elderly-self-enroll")]
-    public IResult ElderlySelfEnroll() => Results.Json(new { success = true, tempPassword = "Review123!", message = "Kayıt tamamlandı" });
+    public async Task<IResult> ElderlySelfEnroll()
+    {
+        using var reader = new StreamReader(Request.Body);
+        var raw = await reader.ReadToEndAsync();
+
+        var fullName = "";
+        var phone = "";
+        var email = "";
+        var birthDate = "";
+
+        try
+        {
+            var json = JsonDocument.Parse(raw).RootElement;
+            fullName = json.TryGetProperty("fullName", out var n) ? n.GetString() ?? "" : "";
+            phone = json.TryGetProperty("phone", out var p) ? p.GetString() ?? "" : "";
+            email = json.TryGetProperty("email", out var e) ? e.GetString() ?? "" : "";
+            birthDate = json.TryGetProperty("birthDate", out var b) ? b.GetString() ?? "" : "";
+        }
+        catch
+        {
+            return Results.Json(new { success = false, message = "Geçersiz kayıt bilgisi" }, statusCode: 400);
+        }
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(fullName))
+        {
+            return Results.Json(new { success = false, message = "Ad ve e-posta zorunludur" }, statusCode: 400);
+        }
+
+        var userId = HealthDataService.StableUserId(email);
+        int? age = null;
+        if (DateTime.TryParse(birthDate, out var parsedBirth))
+        {
+            age = Math.Max(0, DateTime.UtcNow.Year - parsedBirth.Year);
+        }
+
+        var profile = new ElderlyProfile
+        {
+            Id = userId,
+            Name = fullName.Trim(),
+            Email = email.Trim(),
+            Phone = phone.Trim(),
+            Age = age
+        };
+        HealthDataService.UpsertElderlyProfile(profile);
+
+        var tempPassword = $"Sg{userId % 10000:D4}!";
+        return Results.Json(new
+        {
+            success = true,
+            tempPassword,
+            token = $"elder-{userId}",
+            userId,
+            name = profile.Name,
+            message = "Kayıt tamamlandı"
+        });
+    }
 
     [HttpPost("elderly/reset-password")]
     public IResult ElderlyResetPassword() => Results.Json(new { success = true, tempPassword = "Review123!", message = "Geçici şifre oluşturuldu" });
@@ -340,7 +479,12 @@ public class CompatibilityController : ControllerBase
 
         if (string.IsNullOrWhiteSpace(transactionId))
         {
-            transactionId = $"fallback-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+            return Results.BadRequest(new { success = false, message = "transactionId zorunludur." });
+        }
+
+        if (transactionId.StartsWith("fallback-", StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.BadRequest(new { success = false, message = "Geçersiz transactionId." });
         }
 
         if (!AppleFamilyPlanProductIds.Contains(productId))
@@ -476,31 +620,21 @@ public class CompatibilityController : ControllerBase
     [HttpGet("family/dashboard/{elderlyId}")]
     public IResult FamilyDashboard([FromRoute] string elderlyId)
     {
-        var userId = ResolveUserId();
-        var meds = MedicationsByUser.GetOrAdd(userId, _ => new List<MedicationItem>
+        var elderlyUserId = ResolveElderlyUserId(elderlyId);
+        if (elderlyUserId <= 0)
         {
-            new MedicationItem
+            return Results.Json(new
             {
-                Id = 1,
-                Name = "Aspirin",
-                Notes = "Yemek sonrası",
-                ScheduleTimes = new List<string> { "09:00" },
-                LastTakenAt = null,
-                StockCount = 14
-            }
-        });
+                elderly = new { id = elderlyId, name = "", age = (int?)null, phone = "" },
+                todayMedications = Array.Empty<object>(),
+                recentNotifications = Array.Empty<object>(),
+                linked = false
+            });
+        }
 
-        var notifications = NotificationsByUser.GetOrAdd(userId, _ => new List<NotificationItem>
-        {
-            new NotificationItem
-            {
-                Id = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                Type = "info",
-                Message = "Sistem normal çalışıyor",
-                Severity = "normal",
-                Timestamp = DateTime.UtcNow
-            }
-        });
+        var meds = MedicationsByUser.GetOrAdd(elderlyUserId, _ => new List<MedicationItem>());
+        var notifications = NotificationsByUser.GetOrAdd(elderlyUserId, _ => new List<NotificationItem>());
+        var profile = HealthDataService.GetElderlyProfile(elderlyUserId);
 
         var todayMeds = meds.Select(m => new
         {
@@ -527,12 +661,13 @@ public class CompatibilityController : ControllerBase
             elderly = new
             {
                 id = elderlyId,
-                name = "Review Elderly",
-                age = 75,
-                phone = "+90 555 123 4567"
+                name = profile?.Name ?? "",
+                age = profile?.Age,
+                phone = profile?.Phone ?? ""
             },
             todayMedications = todayMeds,
-            recentNotifications = recent
+            recentNotifications = recent,
+            linked = true
         });
     }
 
@@ -662,6 +797,8 @@ public class CompatibilityController : ControllerBase
             LastTakenAt = null
         });
 
+        SaveMedications(userId, meds);
+
         return Results.Json(new { success = true });
     }
 
@@ -678,6 +815,8 @@ public class CompatibilityController : ControllerBase
 
         med.LastTakenAt = DateTime.UtcNow;
         med.StockCount = Math.Max(0, med.StockCount - 1);
+
+        SaveMedications(userId, meds);
 
         return Results.Json(new { success = true, medication = med, stockCount = med.StockCount });
     }
@@ -722,6 +861,8 @@ public class CompatibilityController : ControllerBase
             Relationship = relationship,
             PhoneNumber = phoneNumber
         });
+
+        HealthDataService.LinkFamilyEmailToElderly(email, userId);
 
         return Results.Json(new { success = true });
     }

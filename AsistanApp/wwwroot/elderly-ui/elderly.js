@@ -13,6 +13,11 @@ const DEFAULT_API_BASE = (
 const FALLBACK_API_BASE = (window.API_FALLBACK_BASE?.trim?.() || RAILWAY_API_BASE);
 const IOS_SIMULATOR_API_BASE = FALLBACK_API_BASE;
 const DEMO_OFFLINE_TOKEN = 'demo-offline-token';
+const DEMO_REVIEW_TOKEN = 'demo-review-elderly-expired-token';
+const PRODUCT_LOAD_TIMEOUT_MS = 12000;
+const PURCHASE_TIMEOUT_MS = 90000;
+let isFamilyPurchaseInProgress = false;
+let storeKitPluginCache = null;
 const IS_CAPACITOR_IOS = (() => {
     const cap = window.Capacitor;
     if (!cap) return false;
@@ -44,13 +49,55 @@ window.addEventListener('error', (event) => {
 
 // --- Backend reachability tracking ---
 let _backendUnreachableCount = 0;
-const BACKEND_FAIL_THRESHOLD = 2; // trigger offline mode after this many consecutive fails
+const BACKEND_FAIL_THRESHOLD = 2;
+
+function isProductionApp() {
+    return window.SafeGuardianProd?.isProductionApp?.() === true;
+}
+
+function escapeHtml(value) {
+    if (window.SafeGuardianProd?.escapeHtml) {
+        return window.SafeGuardianProd.escapeHtml(value);
+    }
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function clearLocalTestData() {
+    [
+        'localMedications',
+        'localMoodRecords',
+        'localHealthRecords',
+        'localFamilyMembers',
+    ].forEach((key) => localStorage.removeItem(key));
+}
+
+function applyProductionUi() {
+    window.SafeGuardianProd?.hideDevOnlyUi?.();
+    const testHint = document.getElementById('testHint');
+    if (testHint && isProductionApp()) {
+        testHint.style.display = 'none';
+    }
+}
+
 function _onBackendFail() {
     _backendUnreachableCount++;
+    const banner = document.getElementById('offlineBanner');
+    if (_backendUnreachableCount >= BACKEND_FAIL_THRESHOLD && banner) {
+        banner.style.display = 'block';
+        banner.textContent = isProductionApp()
+            ? (t('connErrorBanner') || '📡 İnternet bağlantınızı kontrol edin.')
+            : '📡 Sunucuya bağlanılamıyor — Çevrimdışı modda çalışılıyor.';
+    }
+    if (isProductionApp()) {
+        return;
+    }
     if (_backendUnreachableCount >= BACKEND_FAIL_THRESHOLD && !isOfflineDemoModeEnabled()) {
         sessionStorage.setItem('offlineDemoMode', 'true');
-        const banner = document.getElementById('offlineBanner');
-        if (banner) { banner.style.display = 'block'; banner.textContent = '📡 Sunucuya bağlanılamıyor — Çevrimdışı modda çalışılıyor.'; }
         console.warn('[SafeGuardian] Backend unreachable threshold reached → offline demo mode activated');
     }
 }
@@ -92,6 +139,7 @@ const TRANSLATIONS = {
         resetViewBtnLabel: 'GÖRÜNÜMÜ SIFIRLA', langLabel: 'DİL',
         sessionExpired: 'Oturum Süresi Doldu', sessionExpiredMsg: 'Lütfen tekrar giriş yapın.',
         connError: 'Bağlantı hatası. API adresini kontrol edin.',
+        connErrorBanner: '📡 İnternet bağlantınızı kontrol edin.',
         loginFailed: 'Giriş başarısız. E-posta veya şifre hatalı.',
         errorTitle: 'Hata', successTitle: 'Başarılı',
         welcomeMsg: 'Hoş geldiniz',
@@ -110,7 +158,7 @@ const TRANSLATIONS = {
         relationSibling: 'Kardeş', relationOther: 'Diğer',
         accountBtn: '👤 HESAP',
         profileTitle: '👤 HESAP',
-        subscriptionTitle: '💳 ABONELİK (IN-APP PURCHASE)',
+        subscriptionTitle: '💳 ABONELİK',
         profileCardTitle: '👤 HESAP BİLGİLERİ',
         userFullName: 'AD SOYAD', userEmail: 'E-POSTA',
         subscriptionStatus: 'ABONE DURUMU', daysRemaining: 'KALAN GÜN',
@@ -124,8 +172,8 @@ const TRANSLATIONS = {
         buyFamilyPackageBtn: '💳 AİLE PAKETİNE GEÇ - ₺149,99/AY',
         restorePurchasesBtn: '🔄 SATIN ALMALARI GERİ YÜKLE',
         termsPrivacyBtn: '📄 ŞARTLAR VE GİZLİLİK',
-        cancelSubscriptionBtn: '⛔ ABONELİĞİ İPTAL ET',
-        manageSubscriptionsBtn: '⚙️ ABONELİKLERİ YÖNET',
+        cancelSubscriptionBtn: '⚙️ ABONELİĞİ APPLE AYARLARINDA İPTAL ET',
+        manageSubscriptionsBtn: '⚙️ ABONELİKLERİ APPLE AYARLARINDA YÖNET',
         subscriptionLegalNote: 'Otomatik yenilemeli aboneliklerde iOS Ayarlar > Apple Kimliği > Abonelikler ekranından yönetim yapılabilir.',
         autoRenewDisclosure: 'Satın alma işlemini onayladığınızda ödeme Apple hesabınızdan tahsil edilir. Abonelik, mevcut dönem bitmeden en az 24 saat önce iptal edilmediği sürece seçilen paket yenileme dönemine göre (Aylık) otomatik olarak yenilenir. Aboneliğinizi Ayarlar > Apple Kimliği > Abonelikler bölümünden yönetebilir veya iptal edebilirsiniz.',
         subscriptionPrivacyBtn: '📄 GİZLİLİK POLİTİKASI',
@@ -152,8 +200,8 @@ const TRANSLATIONS = {
         biometricUnavailable: 'Face ID / biyometrik doğrulama desteklenmiyor.',
         biometricNoSession: 'Önce normal giriş yapın. Sonra Face ID ile hızlı giriş kullanabilirsiniz.',
         biometricFailed: 'Biyometrik doğrulama başarısız.',
-        subscriptionCancelSuccess: 'Abonelik iptal edildi. Dönem sonuna kadar aktif kalır.',
-        subscriptionCancelFailed: 'Abonelik iptal edilemedi.',
+        subscriptionCancelSuccess: 'Apple abonelik ayarları açıldı. İptal işlemini Ayarlar > Apple Hesabı > Abonelikler bölümünden yapın.',
+        subscriptionCancelFailed: 'Abonelik ayarları açılamadı. Ayarlar > Apple Hesabı > Abonelikler yolunu kullanın.',
         packageInfo: 'PAKET BİLGİLERİ', currentPackage: '📦 MEVCUT PAKET',
         endDate: '📅 BİTİŞ TARİHİ', features: '✨ ÖZELLİKLER',
         basicFeature1: '✓ Temel İlaç Yönetimi',
@@ -245,6 +293,7 @@ const TRANSLATIONS = {
         resetViewBtnLabel: 'RESET DISPLAY', langLabel: 'LANGUAGE',
         sessionExpired: 'Session Expired', sessionExpiredMsg: 'Please login again.',
         connError: 'Connection error. Please check API address.',
+        connErrorBanner: '📡 Check your internet connection.',
         loginFailed: 'Login failed. Please check your email and password.',
         errorTitle: 'Error', successTitle: 'Success',
         welcomeMsg: 'Welcome',
@@ -263,7 +312,7 @@ const TRANSLATIONS = {
         relationSibling: 'Sibling', relationOther: 'Other',
         accountBtn: '👤 ACCOUNT',
         profileTitle: '👤 ACCOUNT',
-        subscriptionTitle: '💳 SUBSCRIPTION (IN-APP PURCHASE)',
+        subscriptionTitle: '💳 SUBSCRIPTION',
         profileCardTitle: '👤 ACCOUNT DETAILS',
         userFullName: 'FULL NAME', userEmail: 'EMAIL',
         subscriptionStatus: 'SUBSCRIPTION STATUS', daysRemaining: 'DAYS LEFT',
@@ -277,8 +326,8 @@ const TRANSLATIONS = {
         buyFamilyPackageBtn: '💳 UPGRADE TO FAMILY PLAN - $3.99/MONTH',
         restorePurchasesBtn: '🔄 RESTORE PURCHASES',
         termsPrivacyBtn: '📄 TERMS & PRIVACY',
-        cancelSubscriptionBtn: '⛔ CANCEL SUBSCRIPTION',
-        manageSubscriptionsBtn: '⚙️ MANAGE SUBSCRIPTIONS',
+        cancelSubscriptionBtn: '⚙️ CANCEL IN APPLE SETTINGS',
+        manageSubscriptionsBtn: '⚙️ MANAGE IN APPLE SETTINGS',
         subscriptionLegalNote: 'For auto-renewable subscriptions, you can manage billing in iOS Settings > Apple ID > Subscriptions.',
         autoRenewDisclosure: 'Payment will be charged to your Apple account at confirmation of purchase. The subscription automatically renews unless cancelled at least 24 hours before the end of the current period. Manage or cancel your subscription in Settings > Apple ID > Subscriptions.',
         subscriptionPrivacyBtn: '📄 PRIVACY POLICY',
@@ -305,8 +354,8 @@ const TRANSLATIONS = {
         biometricUnavailable: 'Face ID / biometric authentication is unavailable.',
         biometricNoSession: 'Please sign in once with email/password first, then use Face ID quick sign-in.',
         biometricFailed: 'Biometric authentication failed.',
-        subscriptionCancelSuccess: 'Subscription cancelled. It stays active until period end.',
-        subscriptionCancelFailed: 'Subscription cancel failed.',
+        subscriptionCancelSuccess: 'Apple subscription settings opened. Cancel under Settings > Apple Account > Subscriptions.',
+        subscriptionCancelFailed: 'Could not open subscription settings. Use Settings > Apple Account > Subscriptions.',
         packageInfo: 'PACKAGE INFO', currentPackage: '📦 CURRENT PLAN',
         endDate: '📅 END DATE', features: '✨ FEATURES',
         basicFeature1: '✓ Basic Medication Management',
@@ -466,6 +515,7 @@ function getApiBase() {
 const API_BASE = getApiBase();
 const PreferencesPlugin = window.Capacitor?.Plugins?.Preferences;
 const GeolocationPlugin = window.Capacitor?.Plugins?.Geolocation;
+// Must match App Store Connect product ID exactly (SG Premium Family Access V2).
 const FAMILY_PLAN_PRODUCT_ID = 'com.buseakdeniz.safeguardian.sub_family_monthly_v2';
 const FAMILY_PLAN_PRODUCT_ID_CANDIDATES = [
     FAMILY_PLAN_PRODUCT_ID,
@@ -475,7 +525,13 @@ const FAMILY_PLAN_PRODUCT_ID_CANDIDATES = [
 ];
 const ALL_FAMILY_PLAN_PRODUCT_IDS = Array.from(new Set(FAMILY_PLAN_PRODUCT_ID_CANDIDATES));
 // App Review requires the full purchase/renewal flow to be accessible (Guideline 2.1).
-const STOREKIT_PURCHASES_ENABLED = true; // Build 26: keep purchase flow enabled for App Review
+const STOREKIT_PURCHASES_ENABLED = (() => {
+    try {
+        return window.Capacitor?.getPlatform?.() === 'ios';
+    } catch {
+        return false;
+    }
+})();
 
 let lastGuidanceText = '';
 let emergencyTimer = null;
@@ -504,6 +560,19 @@ const PUBLIC_SCREENS = new Set(['loginScreen', 'registerScreen', 'helpScreen', '
 
 function isDemoOfflineToken(value) {
     return String(value || '').trim() === DEMO_OFFLINE_TOKEN;
+}
+
+function isDemoReviewToken(value) {
+    return String(value || '').trim() === DEMO_REVIEW_TOKEN;
+}
+
+function withTimeout(promise, ms, label = 'operation') {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            setTimeout(() => reject(new Error(`${label}_TIMEOUT`)), ms);
+        })
+    ]);
 }
 
 function isOfflineDemoModeEnabled() {
@@ -576,7 +645,9 @@ async function removeStoredToken() {
 
 async function validateStoredSessionToken(token) {
     const value = String(token || '').trim();
-    if (!value || isDemoOfflineToken(value) || isOfflineDemoModeEnabled()) return false;
+    if (!value || isDemoOfflineToken(value) || isDemoReviewToken(value) || isOfflineDemoModeEnabled()) {
+        return Boolean(value) && !isDemoOfflineToken(value);
+    }
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timeoutId = controller ? setTimeout(() => controller.abort(), 2200) : null;
@@ -1089,6 +1160,7 @@ window.setLanguage = setLanguage;
 window.applyTranslations = applyTranslations;
 window.handleAppleSignIn = handleAppleSignIn;
 window.shareDoctorReport = shareDoctorReport;
+window.startFamilyPackagePurchase = startFamilyPackagePurchase;
 
 // iPad event handling: Add touchend fallback for Doktora Göster button
 document.addEventListener('DOMContentLoaded', () => {
@@ -1102,6 +1174,8 @@ document.addEventListener('DOMContentLoaded', () => {
             shareDoctorReport();
         }, { passive: false });
     }
+
+    bindPurchaseButton();
 });
 
 function getPublicWebBaseUrl() {
@@ -1172,28 +1246,58 @@ function openLegalDocs() {
 }
 
 function getStoreKitPlugin() {
+    if (storeKitPluginCache) return storeKitPluginCache;
+
     const capacitor = window.Capacitor;
-    const plugins = capacitor?.Plugins;
+    if (!capacitor) return null;
+
+    const plugins = capacitor.Plugins;
     if (plugins) {
         const detected = plugins.StoreKit2
-            || plugins.StoreKit2Plugin
-            || plugins.InAppPurchase2
-            || plugins.InAppPurchase
-            || plugins.Purchases;
-        if (detected) return detected;
+            || plugins.StoreKit2Plugin;
+        if (detected) {
+            storeKitPluginCache = detected;
+            return detected;
+        }
     }
 
-    if (typeof capacitor?.registerPlugin === 'function') {
+    // Only register on native iOS — avoid phantom web stubs that silently no-op.
+    if (IS_CAPACITOR_IOS && typeof capacitor.registerPlugin === 'function') {
         try {
-            return capacitor.registerPlugin('StoreKit2');
-        } catch { }
-
-        try {
-            return capacitor.registerPlugin('StoreKit2Plugin');
+            storeKitPluginCache = capacitor.registerPlugin('StoreKit2');
+            return storeKitPluginCache;
         } catch { }
     }
 
     return null;
+}
+
+function bindPurchaseButton() {
+    const buyBtn = document.getElementById('buyFamilyPackageButton');
+    if (!buyBtn || buyBtn.dataset.storeKitBound === 'true') return;
+
+    buyBtn.dataset.storeKitBound = 'true';
+    buyBtn.type = 'button';
+    buyBtn.style.touchAction = 'manipulation';
+    buyBtn.style.cursor = 'pointer';
+    buyBtn.style.position = 'relative';
+    buyBtn.style.zIndex = '2';
+
+    const triggerPurchase = (event) => {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        startFamilyPackagePurchase(event);
+    };
+
+    buyBtn.addEventListener('click', triggerPurchase, { passive: false });
+    buyBtn.addEventListener('touchend', (event) => {
+        // iPad Safari/WKWebView: ensure tap registers even when scroll momentum is active.
+        if (isFamilyPurchaseInProgress) return;
+        event.preventDefault();
+        triggerPurchase(event);
+    }, { passive: false });
 }
 
 async function loadStoreProduct() {
@@ -1208,7 +1312,11 @@ async function loadStoreProduct() {
 
     try {
         console.log('[StoreKit] Fetching products:', ALL_FAMILY_PLAN_PRODUCT_IDS);
-        const result = await store.getProducts({ productIds: ALL_FAMILY_PLAN_PRODUCT_IDS });
+        const result = await withTimeout(
+            store.getProducts({ productIds: ALL_FAMILY_PLAN_PRODUCT_IDS }),
+            PRODUCT_LOAD_TIMEOUT_MS,
+            'product_load'
+        );
         console.log('[StoreKit] Got result:', result);
         const products = Array.isArray(result?.products) ? result.products : [];
         console.log('[StoreKit] Products array count:', products.length);
@@ -1235,6 +1343,9 @@ async function loadStoreProduct() {
         return subscriptionProductCache;
     } catch (error) {
         console.error('[StoreKit] Product fetch error:', error);
+        if (String(error?.message || '').includes('product_load_TIMEOUT')) {
+            console.warn('[StoreKit] Product load timed out after', PRODUCT_LOAD_TIMEOUT_MS, 'ms');
+        }
         console.error('[StoreKit] Error details:', {
             message: error?.message,
             name: error?.name,
@@ -1248,6 +1359,91 @@ async function loadStoreProduct() {
         console.log('[StoreKit] loadStoreProduct finished, attempted=true');
         updateSubscriptionDisclosurePrices();
     }
+}
+
+async function syncStoreCatalog() {
+    const store = getStoreKitPlugin();
+    if (!store) return false;
+
+    try {
+        if (typeof store.syncStore === 'function') {
+            await withTimeout(store.syncStore(), 15000, 'store_sync');
+            return true;
+        }
+        if (typeof store.restorePurchases === 'function') {
+            await withTimeout(store.restorePurchases(), 15000, 'store_sync');
+            return true;
+        }
+    } catch (error) {
+        console.warn('[StoreKit] Store sync failed:', error);
+    }
+    return false;
+}
+
+async function ensureSubscriptionProductReady() {
+    if (subscriptionProductCache?.id) {
+        return subscriptionProductCache;
+    }
+
+    let product = await loadStoreProduct();
+    if (product?.id) {
+        return product;
+    }
+
+    await syncStoreCatalog();
+    product = await loadStoreProduct();
+    if (product?.id) {
+        return product;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    return loadStoreProduct();
+}
+
+function isStoreKitRetryablePurchaseError(errorOrMessage) {
+    const msg = String(
+        typeof errorOrMessage === 'string'
+            ? errorOrMessage
+            : (errorOrMessage?.message || errorOrMessage?.code || errorOrMessage || '')
+    );
+    return /unable to complete|complete request|PRODUCT_NOT_FOUND|product.*not found|identifier|404|sandbox|storekit|network|timed out|timeout/i.test(msg);
+}
+
+async function purchaseFamilyPlanProduct(store, productId) {
+    return withTimeout(
+        store.purchaseProduct({ productId }),
+        PURCHASE_TIMEOUT_MS,
+        'purchase'
+    );
+}
+
+async function purchaseFamilyPlanWithRecovery(store, initialProductId) {
+    const candidateIds = Array.from(new Set([
+        initialProductId,
+        subscriptionProductCache?.id,
+        selectedFamilyPlanProductId,
+        ...FAMILY_PLAN_PRODUCT_ID_CANDIDATES
+    ].filter(Boolean)));
+
+    let lastError = null;
+    for (let attempt = 0; attempt < candidateIds.length; attempt += 1) {
+        const productId = candidateIds[attempt];
+        try {
+            if (attempt > 0) {
+                await syncStoreCatalog();
+                await loadStoreProduct();
+            }
+            return await purchaseFamilyPlanProduct(store, productId);
+        } catch (error) {
+            lastError = error;
+            console.warn('[StoreKit] Purchase attempt failed for', productId, error);
+            if (!isStoreKitRetryablePurchaseError(error) || attempt === candidateIds.length - 1) {
+                throw error;
+            }
+        }
+    }
+
+    throw lastError || new Error('PURCHASE_FAILED');
 }
 
 function updateSubscriptionDisclosurePrices() {
@@ -1387,18 +1583,30 @@ async function confirmApplePurchaseWithServer(token, purchase) {
     return true;
 }
 
-async function startFamilyPackagePurchase() {
+async function startFamilyPackagePurchase(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
     if (!STOREKIT_PURCHASES_ENABLED) {
         showNotification(t('subscriptionComingSoonTitle'), t('subscriptionComingSoonMsg'));
         return;
     }
 
+    if (isFamilyPurchaseInProgress) {
+        showNotification(
+            t('purchaseStarted'),
+            currentLang === 'en' ? 'Purchase is already in progress.' : 'Satın alma işlemi zaten devam ediyor.'
+        );
+        return;
+    }
+
     const store = getStoreKitPlugin();
     const fallbackProductId = selectedFamilyPlanProductId || FAMILY_PLAN_PRODUCT_ID;
-    const token = await requireAuthTokenAsync();
-    if (!token) return;
+    let attemptedProductId = fallbackProductId;
+    const buyBtn = document.getElementById('buyFamilyPackageButton');
 
-    // Guard: on iOS Capacitor, StoreKit plugin must be available
     if (!store && IS_CAPACITOR_IOS) {
         const noPluginMsg = currentLang === 'en'
             ? 'StoreKit plugin not found. Rebuild the app with the StoreKit2Plugin registered in capacitor.config.json.'
@@ -1407,77 +1615,117 @@ async function startFamilyPackagePurchase() {
         return;
     }
 
+    isFamilyPurchaseInProgress = true;
+    if (buyBtn) {
+        buyBtn.disabled = true;
+        buyBtn.setAttribute('aria-busy', 'true');
+    }
+
     try {
         if (store?.isAvailable) {
-            const availability = await store.isAvailable();
+            const availability = await withTimeout(
+                store.isAvailable(),
+                5000,
+                'availability'
+            ).catch(() => ({ available: true }));
             if (availability?.available === false) {
                 showNotification(t('purchaseNotAvailable'), t('purchaseNotAvailableMsg'), 'error');
                 return;
             }
         }
 
-        const product = await loadStoreProduct();
-        const productId = product?.id || fallbackProductId;
-        if (!product?.id) {
-            console.warn('StoreKit product metadata unavailable; attempting purchase with configured product id:', productId);
+        // Apple requires the payment sheet on button tap — but product must be loaded first.
+        showNotification(
+            t('purchaseStarted'),
+            currentLang === 'en' ? 'Loading subscription product…' : 'Abonelik ürünü yükleniyor…'
+        );
+
+        const readyProduct = await ensureSubscriptionProductReady();
+        if (!readyProduct?.id) {
+            const unavailableMsg = currentLang === 'en'
+                ? `Subscription product not found in App Store Sandbox. Verify product ID "${FAMILY_PLAN_PRODUCT_ID}" is Active in App Store Connect and Paid Apps Agreement is accepted.`
+                : `Abonelik ürünü App Store Sandbox'ta bulunamadı. "${FAMILY_PLAN_PRODUCT_ID}" ürün kimliğinin App Store Connect'te Aktif olduğunu ve Ücretli Uygulamalar Sözleşmesinin kabul edildiğini kontrol edin.`;
+            showNotification(t('purchaseNotAvailable'), unavailableMsg, 'error');
+            return;
         }
 
-        if (store?.purchaseProduct) {
-            showNotification(t('purchaseStarted'), t('purchaseStartedMsg'));
-            const result = await store.purchaseProduct({ productId });
-            if (result?.success) {
-                const purchasePayload = {
-                    productId: result.productId || productId,
-                    transactionId: result.transactionId || '',
-                    expirationDate: result.expirationDate || ''
-                };
-                applyPremiumFromApplePurchase(purchasePayload);
+        const productId = readyProduct.id;
+        attemptedProductId = productId;
+
+        if (!store?.purchaseProduct) {
+            const pluginMissingMsg = currentLang === 'en'
+                ? 'In-App Purchase is not available on this device.'
+                : 'Bu cihazda uygulama içi satın alma kullanılamıyor.';
+            showNotification(t('purchaseNotAvailable'), pluginMissingMsg, 'error');
+            return;
+        }
+
+        console.log('[StoreKit] Starting purchase for product:', productId);
+        showNotification(t('purchaseStarted'), t('purchaseStartedMsg'));
+
+        const result = await purchaseFamilyPlanWithRecovery(store, productId);
+
+        if (result?.success) {
+            const purchasePayload = {
+                productId: result.productId || productId,
+                transactionId: result.transactionId || '',
+                expirationDate: result.expirationDate || ''
+            };
+            applyPremiumFromApplePurchase(purchasePayload);
+
+            const token = await getStoredToken();
+            if (token && !isDemoOfflineToken(token)) {
                 await confirmApplePurchaseWithServer(token, purchasePayload).catch((error) => {
                     console.warn('Apple purchase confirmed locally; server sync deferred:', error);
                 });
-                await fetchEntitlementState(true).catch(() => { });
-                updateProfileScreen();
-                updateSubscriptionScreen();
-                showNotification(t('purchaseSuccess'), t('purchaseSuccessMsg'));
-                return;
             }
-            if (result?.cancelled) return;
-            if (result?.pending) {
-                showNotification(t('purchaseStarted'), currentLang === 'en' ? 'Purchase is pending approval.' : 'Satın alma onay bekliyor.');
-                return;
-            }
-            // Handle resolved error result (productNotFound or other non-fatal error)
-            if (result?.productNotFound || result?.error) {
-                const errMsg = currentLang === 'en'
-                    ? `Product "${productId}" not found in App Store Sandbox. Ensure: 1) Product is Active in App Store Connect, 2) Paid Apps Agreement is accepted under Business > Agreements.`
-                    : `"${productId}" ürünü App Store Sandbox'ta bulunamadı. Kontrol: 1) Ürün App Store Connect'te Aktif, 2) İşletme > Sözleşmeler bölümünde Ücretli Uygulamalar Sözleşmesi kabul edildi.`;
-                showNotification(t('purchaseNotAvailable'), errMsg, 'error');
-                return;
-            }
+
+            await fetchEntitlementState(true).catch(() => { });
+            updateProfileScreen();
+            updateSubscriptionScreen();
+            showNotification(t('purchaseSuccess'), t('purchaseSuccessMsg'));
+            return;
+        }
+        if (result?.cancelled) return;
+        if (result?.pending) {
+            showNotification(t('purchaseStarted'), currentLang === 'en' ? 'Purchase is pending approval.' : 'Satın alma onay bekliyor.');
+            return;
+        }
+        if (result?.productNotFound || result?.error) {
+            const errMsg = currentLang === 'en'
+                ? `Product "${productId}" not found in App Store Sandbox. Ensure: 1) Product is Active in App Store Connect, 2) Paid Apps Agreement is accepted under Business > Agreements.`
+                : `"${productId}" ürünü App Store Sandbox'ta bulunamadı. Kontrol: 1) Ürün App Store Connect'te Aktif, 2) İşletme > Sözleşmeler bölümünde Ücretli Uygulamalar Sözleşmesi kabul edildi.`;
+            showNotification(t('purchaseNotAvailable'), errMsg, 'error');
+            return;
         }
 
         if (store?.purchase) {
-            showNotification(t('purchaseStarted'), t('purchaseStartedMsg'));
-            const result = await store.purchase({ productId });
-            if (result?.success || result?.purchased || result?.productId) {
+            const legacyResult = await withTimeout(
+                store.purchase({ productId }),
+                PURCHASE_TIMEOUT_MS,
+                'purchase'
+            );
+            if (legacyResult?.success || legacyResult?.purchased || legacyResult?.productId) {
                 const purchasePayload = {
-                    productId: result.productId || productId,
-                    transactionId: result.transactionId || result.originalTransactionId || '',
-                    expirationDate: result.expirationDate || ''
+                    productId: legacyResult.productId || productId,
+                    transactionId: legacyResult.transactionId || legacyResult.originalTransactionId || '',
+                    expirationDate: legacyResult.expirationDate || ''
                 };
                 applyPremiumFromApplePurchase(purchasePayload);
-                await confirmApplePurchaseWithServer(token, purchasePayload).catch((error) => {
-                    console.warn('Apple purchase confirmed locally; server sync deferred:', error);
-                });
+                const token = await getStoredToken();
+                if (token && !isDemoOfflineToken(token)) {
+                    await confirmApplePurchaseWithServer(token, purchasePayload).catch((error) => {
+                        console.warn('Apple purchase confirmed locally; server sync deferred:', error);
+                    });
+                }
                 await fetchEntitlementState(true).catch(() => { });
                 updateProfileScreen();
                 updateSubscriptionScreen();
                 showNotification(t('purchaseSuccess'), t('purchaseSuccessMsg'));
-                return;
             }
+            return;
         }
 
-        // StoreKit plugin found but purchase method unavailable
         const pluginMissingMsg = currentLang === 'en'
             ? 'In-App Purchase is not available on this device.'
             : 'Bu cihazda uygulama içi satın alma kullanılamıyor.';
@@ -1487,16 +1735,26 @@ async function startFamilyPackagePurchase() {
         const msg = String(error?.message || error?.code || error || '');
         const isProductNotFound = /PRODUCT_NOT_FOUND|product|not found|identifier|404|sandbox/i.test(msg);
         const isPaymentNotAllowed = /paymentNotAllowed|not authorized|cannot make|parental/i.test(msg);
+        const isPurchaseTimeout = /purchase_TIMEOUT/i.test(msg);
+        const isUnableToComplete = /unable to complete|complete request/i.test(msg);
 
         let errorDetail;
-        if (isProductNotFound) {
+        if (isPurchaseTimeout) {
             errorDetail = currentLang === 'en'
-                ? `Product "${productId}" not found in App Store Sandbox. Check: 1) Product ID is Active in App Store Connect, 2) Paid Apps Agreement accepted (Business > Agreements), 3) Bundle ID is com.buse.safeguardian.`
-                : `"${productId}" App Store Sandbox'ta bulunamadı. Kontrol: 1) Ürün kimliği App Store Connect'te Aktif, 2) Ücretli Uygulamalar Sözleşmesi kabul edildi (İşletme > Sözleşmeler), 3) Bundle ID: com.buse.safeguardian.`;
+                ? 'Purchase timed out. If Apple payment sheet is open, complete it or try again.'
+                : 'Satın alma zaman aşımına uğradı. Apple ödeme penceresi açıksa işlemi tamamlayın veya tekrar deneyin.';
+        } else if (isProductNotFound) {
+            errorDetail = currentLang === 'en'
+                ? `Product "${attemptedProductId}" not found in App Store Sandbox. Check: 1) Product ID is Active in App Store Connect, 2) Paid Apps Agreement accepted (Business > Agreements), 3) Bundle ID is com.buse.safeguardian.`
+                : `"${attemptedProductId}" App Store Sandbox'ta bulunamadı. Kontrol: 1) Ürün kimliği App Store Connect'te Aktif, 2) Ücretli Uygulamalar Sözleşmesi kabul edildi (İşletme > Sözleşmeler), 3) Bundle ID: com.buse.safeguardian.`;
         } else if (isPaymentNotAllowed) {
             errorDetail = currentLang === 'en'
                 ? 'Purchases are not allowed on this device. Check Screen Time / parental controls.'
                 : 'Bu cihazda satın alma yapılamıyor. Ekran Süresi / ebeveyn denetimlerini kontrol edin.';
+        } else if (isUnableToComplete) {
+            errorDetail = currentLang === 'en'
+                ? 'Apple could not complete the purchase request. Please check your Sandbox Apple ID, internet connection, and try again in a few seconds.'
+                : 'Apple satın alma isteğini tamamlayamadı. Sandbox Apple ID’nizi ve internet bağlantınızı kontrol edip birkaç saniye sonra tekrar deneyin.';
         } else {
             errorDetail = msg || (currentLang === 'en'
                 ? 'An unexpected error occurred. Please try again.'
@@ -1504,21 +1762,78 @@ async function startFamilyPackagePurchase() {
         }
 
         showNotification(t('purchaseNotAvailable'), errorDetail, 'error');
+    } finally {
+        isFamilyPurchaseInProgress = false;
+        if (buyBtn) {
+            buyBtn.disabled = false;
+            buyBtn.removeAttribute('aria-busy');
+        }
     }
 }
 
-function openSubscriptionManagement() {
-    if (IS_CAPACITOR_IOS) {
-        showNotification(
-            currentLang === 'en' ? 'Subscription Management' : 'Abonelik Yönetimi',
-            currentLang === 'en'
-                ? 'Open Settings > Apple Account > Subscriptions.'
-                : 'Ayarlar > Apple Hesabı > Abonelikler yolunu açın.',
-            'success'
-        );
-        return;
+async function openAppleSubscriptionSettings() {
+    const settingsUrl = 'https://apps.apple.com/account/subscriptions';
+    const store = getStoreKitPlugin();
+
+    if (IS_CAPACITOR_IOS && store?.openSubscriptionManagement) {
+        try {
+            const result = await store.openSubscriptionManagement();
+            if (result?.opened !== false) {
+                return true;
+            }
+        } catch (error) {
+            console.warn('Native subscription settings open failed:', error);
+        }
     }
-    openExternalUrl('https://apps.apple.com/account/subscriptions');
+
+    openExternalUrl(settingsUrl);
+    return true;
+}
+
+function openSubscriptionManagement() {
+    openAppleSubscriptionSettings()
+        .then((opened) => {
+            if (!opened) {
+                showNotification(
+                    t('errorTitle'),
+                    t('subscriptionCancelFailed'),
+                    'error'
+                );
+                return;
+            }
+            showNotification(
+                currentLang === 'en' ? 'Subscription Management' : 'Abonelik Yönetimi',
+                currentLang === 'en'
+                    ? 'Opening Apple subscription settings.'
+                    : 'Apple abonelik ayarları açılıyor.',
+                'success'
+            );
+        })
+        .catch(() => {
+            showNotification(t('errorTitle'), t('subscriptionCancelFailed'), 'error');
+        });
+}
+
+async function cancelSubscriptionFlow() {
+    const token = await requireAuthTokenAsync();
+    if (!token) return;
+
+    const confirmed = confirm(currentLang === 'en'
+        ? 'Apple manages subscription cancellation. Open Apple subscription settings now?'
+        : 'Abonelik iptali Apple tarafından yönetilir. Apple abonelik ayarlarını açmak ister misiniz?');
+    if (!confirmed) return;
+
+    try {
+        const opened = await openAppleSubscriptionSettings();
+        if (opened) {
+            showNotification(t('successTitle'), t('subscriptionCancelSuccess'), 'success');
+            return;
+        }
+        showNotification(t('errorTitle'), t('subscriptionCancelFailed'), 'error');
+    } catch (error) {
+        console.warn('Subscription settings open failed:', error);
+        showNotification(t('errorTitle'), t('subscriptionCancelFailed'), 'error');
+    }
 }
 
 async function handleAppleSignIn() {
@@ -1531,47 +1846,6 @@ async function handleAppleSignIn() {
             : 'Sign in with Apple bu sürümde geçici olarak kapalı. Lütfen e-posta ve şifre ile giriş yapın.',
         'error'
     );
-}
-
-async function cancelSubscriptionFlow() {
-    const token = await requireAuthTokenAsync();
-    if (!token) return;
-
-    const confirmed = confirm(currentLang === 'en'
-        ? 'Do you want to cancel your subscription?'
-        : 'Aboneliğinizi iptal etmek istiyor musunuz?');
-    if (!confirmed) return;
-
-    const response = await safeFetch(`${API_BASE}/api/subscription/cancel?token=${token}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-    });
-    if (!response) {
-        localStorage.setItem('userPlan', 'Standart');
-        updateProfileScreen();
-        updateSubscriptionScreen();
-        showNotification(t('successTitle'), t('subscriptionCancelSuccess'));
-        return;
-    }
-
-    const payload = await safeReadJson(response, {});
-    if (!response.ok || !payload?.success) {
-        if (response.status === 404) {
-            localStorage.setItem('userPlan', 'Standart');
-            updateProfileScreen();
-            updateSubscriptionScreen();
-            showNotification(t('successTitle'), t('subscriptionCancelSuccess'));
-            return;
-        }
-        showNotification(t('errorTitle'), payload?.message || t('subscriptionCancelFailed'), 'error');
-        return;
-    }
-
-    localStorage.setItem('userPlan', 'Standart');
-    subscriptionCache = payload.subscription || null;
-    updateProfileScreen();
-    updateSubscriptionScreen();
-    showNotification(t('successTitle'), payload?.message || t('subscriptionCancelSuccess'));
 }
 
 function forceOpenA11yMenu() {
@@ -1955,14 +2229,16 @@ function showHelp() {
 
 function logout() {
     removeStoredToken();
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('rememberMe');
+    clearOfflineDemoMode();
+    const localDataKeys = [
+        'userId', 'userName', 'rememberMe', 'userPlan', 'trialEndsAt',
+        'adUnlockUntil', 'subscriptionEnd', 'localMedications', 'localMoodRecords',
+        'localHealthRecords', 'localFamilyMembers'
+    ];
+    for (const key of localDataKeys) {
+        localStorage.removeItem(key);
+    }
     subscriptionCache = null;
-    localStorage.removeItem('userPlan');
-    localStorage.removeItem('trialEndsAt');
-    localStorage.removeItem('adUnlockUntil');
-    localStorage.removeItem('subscriptionEnd');
     showScreen('loginScreen');
 }
 
@@ -2175,6 +2451,7 @@ function goToSubscription() {
     updateSubscriptionScreen();
     showScreen('subscriptionScreen');
     applyStoreKitPurchaseUiVisibility();
+    bindPurchaseButton();
     if (STOREKIT_PURCHASES_ENABLED) {
         syncAppleEntitlementsFromStore()
             .then(() => fetchEntitlementState(true))
@@ -2522,6 +2799,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (testHint && !shouldShowDemoHint()) {
         testHint.style.display = 'none';
     }
+    applyProductionUi();
 
     const a11yMenuBtn = document.getElementById('a11yMenuBtn');
     const a11yMenu = document.getElementById('a11yMenu');
@@ -2633,6 +2911,8 @@ document.addEventListener('DOMContentLoaded', async function () {
         loginForm.addEventListener('submit', handleLogin);
     }
 
+    bindPurchaseButton();
+
     // İlaç Ekleme Formu
     const addMedForm = document.getElementById('addMedicationForm');
     if (addMedForm) {
@@ -2658,7 +2938,10 @@ document.addEventListener('DOMContentLoaded', async function () {
     // Otomatik giriş (Beni Hatırla)
     const remember = localStorage.getItem('rememberMe') !== 'false';
     const rememberCheckbox = document.getElementById('rememberMe');
-    const tokenPromise = getStoredToken();
+    const tokenPromise = Promise.race([
+        getStoredToken(),
+        new Promise((resolve) => setTimeout(() => resolve(''), 3000))
+    ]);
     const localTokenSnapshot = authTokenCache || localStorage.getItem('token');
 
     if (rememberCheckbox && localStorage.getItem('rememberMe') === null) {
@@ -2955,14 +3238,34 @@ async function handleLogin(e) {
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value.trim();
     const remember = document.getElementById('rememberMe')?.checked ?? true;
+    
+    // Get login button and show loading state
+    const loginBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = loginBtn?.textContent;
+    
+    // Disable button and show loading indicator
+    if (loginBtn) {
+        loginBtn.disabled = true;
+        loginBtn.textContent = '⏳ ' + (t('loginBtn') || 'GİRİŞ YAP');
+        loginBtn.style.opacity = '0.6';
+    }
+    
+    // Helper function to re-enable button
+    const reEnableButton = () => {
+        if (loginBtn) {
+            loginBtn.disabled = false;
+            loginBtn.textContent = originalText;
+            loginBtn.style.opacity = '1';
+        }
+    };
 
-    // Sunucuya bağlanmayı dene (sessiz hata modunda)
     try {
+        // Sunucuya bağlanmayı dene (sessiz hata modunda)
         const response = await safeFetch(`${API_BASE}/api/elderly/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
-        }, { silent: true });
+        }, { silent: true, timeoutMs: API_TIMEOUT_MS, disableFallbackRetry: true });
 
         if (response) {
             const rawText = await response.text();
@@ -2970,6 +3273,11 @@ async function handleLogin(e) {
             try { data = rawText ? JSON.parse(rawText) : null; } catch { }
 
             if (response.ok && data?.token) {
+                clearLocalTestData();
+                clearOfflineDemoMode();
+                _backendUnreachableCount = 0;
+                const offlineBanner = document.getElementById('offlineBanner');
+                if (offlineBanner) offlineBanner.style.display = 'none';
                 await setStoredToken(data.token);
                 localStorage.setItem('userId', data.userId || '');
                 localStorage.setItem('userName', data.name || email);
@@ -2985,7 +3293,7 @@ async function handleLogin(e) {
                     .then(sub => {
                         if (!sub) return;
                         subscriptionCache = sub;
-                        applyEntitlementFromSubscription(sub, { preserveLocalPremium: true });
+                        applyEntitlementFromSubscription(sub, { preserveLocalPremium: false });
                         updateProfileScreen();
                         updateSubscriptionScreen();
                     })
@@ -3001,8 +3309,13 @@ async function handleLogin(e) {
             showNotification(t('errorTitle'), message, 'error');
             return;
         }
+        // Response is null (timeout or connection error)
+        showNotification(t('errorTitle'), t('connError'), 'error');
+        return;
     } catch (error) {
         console.error('Login error:', { error, apiBase: API_BASE, email });
+    } finally {
+        reEnableButton();
     }
 
     // Controlled Offline Mode (only if explicitly enabled for local QA)
@@ -3021,8 +3334,6 @@ async function handleLogin(e) {
         runPendingAssistantIntentIfAny();
         return;
     }
-
-    showNotification(t('errorTitle'), t('connError'), 'error');
 }
 
 async function handleForgotPassword() {
@@ -3109,6 +3420,11 @@ async function handleAddMedication(e) {
             return;
         }
 
+        if (isProductionApp()) {
+            showNotification(t('errorTitle'), t('connError'), 'error');
+            return;
+        }
+
         const localMeds = readLocalList('localMedications');
         localMeds.push({ id: Date.now(), name, notes, scheduleTimes: times, createdAt: new Date().toISOString() });
         writeLocalList('localMedications', localMeds);
@@ -3117,6 +3433,10 @@ async function handleAddMedication(e) {
         setTimeout(() => goToMedications(), 600);
     } catch (error) {
         console.error('İlaç ekleme hatası:', error);
+        if (isProductionApp()) {
+            showNotification(t('errorTitle'), t('connError'), 'error');
+            return;
+        }
         const localMeds = readLocalList('localMedications');
         localMeds.push({ id: Date.now(), name, notes, scheduleTimes: times, createdAt: new Date().toISOString() });
         writeLocalList('localMedications', localMeds);
@@ -3156,11 +3476,32 @@ async function handleRegister(e) {
 
         if (response.ok) {
             let tempPassword = null;
+            let token = null;
+            let userId = null;
+            let name = fullName;
             try {
                 const data = await response.json();
                 tempPassword = data?.tempPassword || null;
+                token = data?.token || null;
+                userId = data?.userId || null;
+                name = data?.name || fullName;
             } catch {
                 // JSON değilse geç
+            }
+            clearLocalTestData();
+            if (token) {
+                await setStoredToken(token);
+                localStorage.setItem('userId', String(userId || ''));
+                localStorage.setItem('userName', name);
+                localStorage.setItem('userEmail', email);
+                if (phone) localStorage.setItem('userPhone', phone);
+                showScreen('homeScreen');
+                updateGreeting();
+                showNotification(t('successTitle'), t('welcomeMsg'), 'success');
+                if (tempPassword) {
+                    showNotification('Geçici Şifre', `Şifreniz: ${tempPassword}`, 'success');
+                }
+                return;
             }
             showNotification('Başarılı', 'Kayıt tamamlandı', 'success');
             if (tempPassword) {
@@ -3195,6 +3536,12 @@ async function loadMedications() {
     try {
         const response = await safeFetch(`${API_BASE}/api/medications?token=${token}`, {}, { silent: true });
         if (!response) {
+            if (isProductionApp()) {
+                if (container) {
+                    container.innerHTML = `<div style="font-size:22px;color:#ffaa00;text-align:center;padding:24px;">${escapeHtml(t('connErrorBanner'))}</div>`;
+                }
+                return;
+            }
             const medications = readLocalList('localMedications');
             currentMedicationsCache = medications;
             if (container && medications.length === 0) {
@@ -3203,9 +3550,9 @@ async function loadMedications() {
             if (container && medications.length > 0) {
                 container.innerHTML = medications.map(med => `
                     <div style="background: rgba(255,255,0,0.1); border-left: 5px solid #ffff00; padding: 20px; margin-bottom: 20px; border-radius: 10px;">
-                        <div style="font-size: 32px; color: #ffff00; font-weight: bold; margin-bottom: 10px;">${med.name}</div>
-                        <div style="font-size: 24px; color: #ffffff; margin-bottom: 10px;">${t('medsTimeLabel')}: ${(med.scheduleTimes || []).join(', ') || t('medsUnspecified')}</div>
-                        <div style="font-size: 20px; color: #00ff00; margin-bottom: 15px;">${med.notes || ''}</div>
+                        <div style="font-size: 32px; color: #ffff00; font-weight: bold; margin-bottom: 10px;">${escapeHtml(med.name)}</div>
+                        <div style="font-size: 24px; color: #ffffff; margin-bottom: 10px;">${t('medsTimeLabel')}: ${escapeHtml((med.scheduleTimes || []).join(', ') || t('medsUnspecified'))}</div>
+                        <div style="font-size: 20px; color: #00ff00; margin-bottom: 15px;">${escapeHtml(med.notes || '')}</div>
                     </div>
                 `).join('');
             }
@@ -3225,11 +3572,11 @@ async function loadMedications() {
             }
             container.innerHTML = medications.map(med => `
                 <div style="background: rgba(255,255,0,0.1); border-left: 5px solid #ffff00; padding: 20px; margin-bottom: 20px; border-radius: 10px;">
-                    <div style="font-size: 32px; color: #ffff00; font-weight: bold; margin-bottom: 10px;">${med.name}</div>
-                    <div style="font-size: 24px; color: #ffffff; margin-bottom: 10px;">${t('medsTimeLabel')}: ${med.scheduleTimes?.join(', ') || t('medsUnspecified')}</div>
-                    <div style="font-size: 20px; color: #00ff00; margin-bottom: 15px;">${med.notes || ''}</div>
+                    <div style="font-size: 32px; color: #ffff00; font-weight: bold; margin-bottom: 10px;">${escapeHtml(med.name)}</div>
+                    <div style="font-size: 24px; color: #ffffff; margin-bottom: 10px;">${t('medsTimeLabel')}: ${escapeHtml((med.scheduleTimes || []).join(', ') || t('medsUnspecified'))}</div>
+                    <div style="font-size: 20px; color: #00ff00; margin-bottom: 15px;">${escapeHtml(med.notes || '')}</div>
                     ${typeof med.stockCount === 'number' ? `<div style="font-size: 20px; color: ${med.stockCount <= 3 ? '#ff6666' : '#00ccff'}; margin-bottom: 10px;">${t('medsRemaining')}: ${med.stockCount}</div>` : ''}
-                    <button class="btn-giant btn-green" onclick="takeMedication(${med.id})" style="margin-top: 10px;">${t('medsTakenBtn')}</button>
+                    <button class="btn-giant btn-green" onclick="takeMedication(${Number(med.id) || 0})" style="margin-top: 10px;">${t('medsTakenBtn')}</button>
                 </div>
             `).join('');
             refreshMedicationConfirmTimers(medications);
