@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>İlaç Tanıma ve Stok Takibi</title>
     <style>
         * {
@@ -18,11 +18,59 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-            background: #1a1a1a;
-            color: #ffff00;
-            padding: 15px;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px calc(env(safe-area-inset-bottom, 0px) + 20px);
             min-height: 100vh;
             -webkit-overflow-scrolling: touch;
+        }
+
+        .mv-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+            position: relative;
+            z-index: 20;
+        }
+
+        .mv-header h1 {
+            flex: 1;
+            text-align: center;
+            font-size: 22px;
+            font-weight: 800;
+            color: #f8fafc;
+            margin: 0;
+            line-height: 1.2;
+            padding: 0 8px;
+        }
+
+        .mv-back-btn {
+            background: #ef4444;
+            color: #fff;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            touch-action: manipulation;
+            min-height: 44px;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 10001;
+        }
+
+        .mv-header-spacer {
+            width: 72px;
+            flex-shrink: 0;
+        }
+
+        .info-box {
+            position: relative;
+            z-index: 1;
+            margin-bottom: 12px;
         }
 
         .container {
@@ -51,8 +99,19 @@
             width: 100%;
             max-width: 500px;
             border-radius: 15px;
-            border: 3px solid #ffff00;
+            border: 2px solid #334155;
             margin-bottom: 15px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+            background: #020617;
+        }
+
+        #qualityWarning {
+            color: #fbbf24;
+            font-size: 16px;
+            margin-bottom: 12px;
+            line-height: 1.4;
         }
 
         .btn-giant {
@@ -275,10 +334,10 @@
 </head>
 <body>
     <div class="container">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <button id="backBtn" type="button" class="btn-small" style="background: #ff6666; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold; position: relative; z-index: 9999; touch-action: manipulation;" onclick="goBack(event)">← GERİ</button>
-            <h1 id="pageTitle" style="margin: 0; flex: 1; text-align: center;">💊 İlaç Tanıma</h1>
-            <div style="width: 60px;"></div>
+        <div class="mv-header">
+            <button id="backBtn" type="button" class="mv-back-btn" onclick="goBack(event)">← BACK</button>
+            <h1 id="pageTitle">Medication Recognition</h1>
+            <div class="mv-header-spacer" aria-hidden="true"></div>
         </div>
 
         <div class="info-box" id="usageHint">
@@ -338,60 +397,174 @@
 
     <script>
         const DEFAULT_API_BASE = 'https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app';
-        const PAGE_LANG = (localStorage.getItem('appLang') || localStorage.getItem('familyPanelLang') || 'tr').toLowerCase().startsWith('en') ? 'en' : 'tr';
+
+        function getPageLang() {
+            const lang = String(localStorage.getItem('appLang') || 'tr').toLowerCase();
+            return lang.startsWith('en') ? 'en' : 'tr';
+        }
+
         const MV_TEXT = {
             tr: {
                 back: '← GERİ',
-                title: '💊 İlaç Tanıma',
-                usageDefault: '<strong>📸 Nasıl Kullanılır:</strong><br>Tek tuşla başlayın. Sistem kamerayı açar veya gerekirse fotoğraf seçmenizi ister.',
-                envDefault: '<strong>💡 İpucu:</strong><br>Canlı kamera açılmazsa uygulama sizi otomatik olarak fotoğraf seçimine yönlendirir.',
-                permissionTitle: '📌 Kamera izni nasıl verilir?',
-                permissionStep1: 'Adres çubuğundaki 🔒 kilit simgesine tıklayın.',
-                permissionStep2: '“Kamera” iznini “İzin ver” yapın.',
-                permissionStep3: 'Sayfayı yenileyin ve tekrar deneyin.',
-                startSelect: '📷 FOTOĞRAF SEÇ',
-                startTake: '📷 FOTOĞRAF ÇEK',
-                startWeb: '📷 KAMERAYI BAŞLAT',
-                usageSim: '<strong>📸 Nasıl Kullanılır:</strong><br>Butona basın ve ilaç kutusunun fotoğrafını seçin.',
-                envSim: '<strong>💡 İpucu:</strong><br>Simülatörde canlı kamera yerine fotoğraf seçimi kullanılacaktır.',
-                usageIos: '<strong>📸 Nasıl Kullanılır:</strong><br>Butona basın, fotoğrafı çekin, analiz otomatik başlasın.',
-                envIos: '<strong>💡 İpucu:</strong><br>iPhone üzerinde uygulama doğrudan yerleşik kamerayı açar.',
-                usageWeb: '<strong>📸 Nasıl Kullanılır:</strong><br>Butona basın, ilaç kutusunu kameraya tutun, çekim otomatik başlasın.',
-                envWeb: '<strong>💡 İpucu:</strong><br>Canlı kamera açılmazsa fotoğraf seçimine geçebilirsiniz.',
-                captureNow: '📸 ŞİMDİ ÇEK',
-                stopCamera: '⏹️ KAMERAYI KAPAT',
-                resultTitle: '🔍 Analiz Sonucu',
-                notify: '🏥 ECZANEYİ BİLGİLENDİR',
-                close: '❌ KAPAT'
+                title: 'İlaç Tanıma',
+                usageDefault: '<strong>Nasıl Kullanılır:</strong><br>Tek tuşla başlayın. Sistem kamerayı açar veya gerekirse fotoğraf seçmenizi ister.',
+                envDefault: '<strong>İpucu:</strong><br>Canlı kamera açılmazsa uygulama sizi otomatik olarak fotoğraf seçimine yönlendirir.',
+                permissionTitle: 'Kamera izni nasıl verilir?',
+                permissionStep1: 'Ayarlar uygulamasından SafeGuardian için Kamera iznini açın.',
+                permissionStep2: 'Kamera iznini "İzin ver" yapın.',
+                permissionStep3: 'Uygulamaya dönün ve tekrar deneyin.',
+                startSelect: 'FOTOĞRAF SEÇ',
+                startTake: 'FOTOĞRAF ÇEK',
+                startWeb: 'KAMERAYI BAŞLAT',
+                usageSim: '<strong>Nasıl Kullanılır:</strong><br>Butona basın ve ilaç kutusunun fotoğrafını seçin.',
+                envSim: '<strong>İpucu:</strong><br>Simülatörde canlı kamera yerine fotoğraf seçimi kullanılacaktır.',
+                usageIos: '<strong>Nasıl Kullanılır:</strong><br>Butona basın, fotoğrafı çekin, analiz otomatik başlasın.',
+                envIos: '<strong>İpucu:</strong><br>iPhone üzerinde uygulama doğrudan yerleşik kamerayı açar.',
+                usageWeb: '<strong>Nasıl Kullanılır:</strong><br>Butona basın, ilaç kutusunu kameraya tutun, çekim otomatik başlasın.',
+                envWeb: '<strong>İpucu:</strong><br>Canlı kamera açılmazsa fotoğraf seçimine geçebilirsiniz.',
+                captureNow: 'ŞİMDİ ÇEK',
+                stopCamera: 'KAMERAYI KAPAT',
+                resultTitle: 'Analiz Sonucu',
+                notify: 'ECZANEYİ BİLGİLENDİR',
+                close: 'KAPAT',
+                notifySuccess: 'Eczaneye haber verildi. Aile üyeleri bilgilendirildi.',
+                featureNotActiveTitle: 'İlaç tanıma yakında',
+                featureNotActiveDesc: 'Fotoğrafınız alındı. Otomatik tanıma bir sonraki güncellemede aktif olacak. Şimdilik ilaçlarınızı "İlaçlarım" bölümünden ekleyebilirsiniz.',
+                photoReceived: 'Fotoğraf başarıyla yüklendi.',
+                qualityDark: 'Görüntü karanlık. Lütfen ışığı açın.',
+                qualityBright: 'Görüntü çok parlak. Işığı azaltmayı deneyin.',
+                qualityBlurry: 'Görüntü bulanık. Biraz daha yaklaşın veya sabit tutun.',
+                fallbackHeader: 'Fotoğraf ile devam edin:',
+                fallbackDefault: 'Canlı kamera açılamadı.',
+                pickPhoto: 'FOTOĞRAF SEÇ',
+                simOpening: 'Simülatörde fotoğraf seçimi açılıyor.',
+                noLiveCamera: 'Canlı kamera yok. Fotoğraf seçimi açılıyor.',
+                simNoCamera: 'Simülatörde kamera desteklenmiyor.',
+                permNeeded: 'Kameranıza erişim için izin verin.',
+                errorLoad: 'Resim yükleme hatası',
+                errorRead: 'Resim okuma hatası',
+                errorFile: 'Dosya okuma hatası',
+                errorProcess: 'İşlem hatası',
+                errorGeneric: 'Görsel işlenemedi.',
+                errorFileReadFail: 'Dosya okunamadı.',
+                errorImageReadFail: 'Seçilen görsel işlenemedi.',
+                errorNoAltInput: 'Alternatif kamera girişi bu cihazda bulunamadı.',
+                errorCameraNotReady: 'Kamera görüntüsü henüz hazır değil. Bir saniye sonra tekrar deneyin.',
+                errorImageProcess: 'Görüntü işlenemedi. Kamerayı tekrar başlatın.',
+                errorImageAnalyze: 'Görüntü analiz edilemedi. Lütfen tekrar deneyin.',
+                uploadingPhoto: 'Fotoğraf yükleniyor...',
+                stockOk: 'Yeterli',
+                stockEmpty: 'TÜKENDİ',
+                stockLow: 'AZ KALDI',
+                stockMedium: 'ORTA DÜZEY',
+                stockLabel: 'Stok',
+                doseLabel: 'Yaklaşık Doz',
+                doseDays: 'gün',
+                emptyMedsWarning: 'UYARI',
+                emptyMedsText: 'tükendi! Lütfen eczaneye haber verin.',
+                notifyTitle: 'İlaç Stoku Uyarısı',
+                notifyChecked: 'İlaç stoğu kontrol edildi',
+                notifyEmpty: 'Tükenmiş ilaçlar',
+                notifyLow: 'Az kalan ilaçlar',
+                uploadFailed: 'Fotoğraf kaydedilemedi. İnternet bağlantınızı kontrol edin.'
             },
             en: {
                 back: '← BACK',
-                title: '💊 Medication Recognition',
-                usageDefault: '<strong>📸 How to Use:</strong><br>Start with one tap. The system opens the camera or asks you to pick a photo if needed.',
-                envDefault: '<strong>💡 Tip:</strong><br>If live camera cannot open, the app will automatically switch to photo selection.',
-                permissionTitle: '📌 How to grant camera permission?',
-                permissionStep1: 'Tap the 🔒 lock icon in the address bar.',
-                permissionStep2: 'Set “Camera” permission to “Allow”.',
-                permissionStep3: 'Refresh the page and try again.',
-                startSelect: '📷 PICK PHOTO',
-                startTake: '📷 TAKE PHOTO',
-                startWeb: '📷 START CAMERA',
-                usageSim: '<strong>📸 How to Use:</strong><br>Tap the button and pick a photo of the medication box.',
-                envSim: '<strong>💡 Tip:</strong><br>In simulator, photo selection is used instead of live camera.',
-                usageIos: '<strong>📸 How to Use:</strong><br>Tap the button, take a photo, and analysis starts automatically.',
-                envIos: '<strong>💡 Tip:</strong><br>On iPhone, the app opens the native camera directly.',
-                usageWeb: '<strong>📸 How to Use:</strong><br>Tap the button, point camera to medication box, and capture starts automatically.',
-                envWeb: '<strong>💡 Tip:</strong><br>If live camera fails, you can switch to photo selection.',
-                captureNow: '📸 CAPTURE NOW',
-                stopCamera: '⏹️ CLOSE CAMERA',
-                resultTitle: '🔍 Analysis Result',
-                notify: '🏥 NOTIFY PHARMACY',
-                close: '❌ CLOSE'
+                title: 'Medication Recognition',
+                usageDefault: '<strong>How to Use:</strong><br>Start with one tap. The system opens the camera or asks you to pick a photo if needed.',
+                envDefault: '<strong>Tip:</strong><br>If live camera cannot open, the app will automatically switch to photo selection.',
+                permissionTitle: 'How to grant camera permission?',
+                permissionStep1: 'Open Settings and enable Camera for SafeGuardian.',
+                permissionStep2: 'Set Camera permission to Allow.',
+                permissionStep3: 'Return to the app and try again.',
+                startSelect: 'PICK PHOTO',
+                startTake: 'TAKE PHOTO',
+                startWeb: 'START CAMERA',
+                usageSim: '<strong>How to Use:</strong><br>Tap the button and pick a photo of the medication box.',
+                envSim: '<strong>Tip:</strong><br>In simulator, photo selection is used instead of live camera.',
+                usageIos: '<strong>How to Use:</strong><br>Tap the button, take a photo, and analysis starts automatically.',
+                envIos: '<strong>Tip:</strong><br>On iPhone, the app opens the native camera directly.',
+                usageWeb: '<strong>How to Use:</strong><br>Tap the button, point camera to medication box, and capture starts automatically.',
+                envWeb: '<strong>Tip:</strong><br>If live camera fails, you can switch to photo selection.',
+                captureNow: 'CAPTURE NOW',
+                stopCamera: 'CLOSE CAMERA',
+                resultTitle: 'Analysis Result',
+                notify: 'NOTIFY PHARMACY',
+                close: 'CLOSE',
+                notifySuccess: 'Pharmacy notified. Family members were informed.',
+                featureNotActiveTitle: 'Medication recognition coming soon',
+                featureNotActiveDesc: 'Your photo was received. Automatic recognition will be enabled in the next update. For now, add medicines manually from My Medications.',
+                photoReceived: 'Photo uploaded successfully.',
+                qualityDark: 'Image is too dark. Please turn on more light.',
+                qualityBright: 'Image is too bright. Try reducing the light.',
+                qualityBlurry: 'Image is blurry. Move closer or hold the phone steady.',
+                fallbackHeader: 'Continue with a photo:',
+                fallbackDefault: 'Live camera could not open.',
+                pickPhoto: 'PICK PHOTO',
+                simOpening: 'Opening photo picker in simulator.',
+                noLiveCamera: 'No live camera. Opening photo picker.',
+                simNoCamera: 'Camera is not supported in simulator.',
+                permNeeded: 'Please grant camera permission.',
+                errorLoad: 'Image upload error',
+                errorRead: 'Image read error',
+                errorFile: 'File read error',
+                errorProcess: 'Processing error',
+                errorGeneric: 'Image could not be processed.',
+                errorFileReadFail: 'File could not be read.',
+                errorImageReadFail: 'Selected image could not be processed.',
+                errorNoAltInput: 'Alternative camera input is not available on this device.',
+                errorCameraNotReady: 'Camera preview is not ready yet. Please try again in a second.',
+                errorImageProcess: 'Image could not be processed. Restart the camera.',
+                errorImageAnalyze: 'Image could not be analyzed. Please try again.',
+                uploadingPhoto: 'Uploading photo...',
+                stockOk: 'Sufficient',
+                stockEmpty: 'OUT OF STOCK',
+                stockLow: 'LOW STOCK',
+                stockMedium: 'MEDIUM',
+                stockLabel: 'Stock',
+                doseLabel: 'Approx. dose',
+                doseDays: 'days',
+                emptyMedsWarning: 'WARNING',
+                emptyMedsText: 'is out of stock! Please notify the pharmacy.',
+                notifyTitle: 'Medication Stock Alert',
+                notifyChecked: 'Medication stock was checked',
+                notifyEmpty: 'Out of stock',
+                notifyLow: 'Low stock',
+                uploadFailed: 'Photo could not be saved. Check your internet connection.'
             }
         };
 
+        function stripEmoji(value) {
+            return String(value || '')
+                .replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/gu, '')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
+        }
+
+        function showMvToast(message) {
+            let toast = document.getElementById('mvToast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'mvToast';
+                toast.style.cssText = 'position:fixed;top:20px;left:16px;right:16px;z-index:20000;padding:14px 16px;border-radius:12px;background:#166534;color:#fff;font-size:16px;font-weight:600;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.35);';
+                document.body.appendChild(toast);
+            }
+            toast.textContent = message;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3500);
+        }
+
         function mvText(key) {
-            return (MV_TEXT[PAGE_LANG] && MV_TEXT[PAGE_LANG][key]) || (MV_TEXT.tr && MV_TEXT.tr[key]) || key;
+            const lang = getPageLang();
+            const raw = (MV_TEXT[lang] && MV_TEXT[lang][key]) || (MV_TEXT.tr && MV_TEXT.tr[key]) || key;
+            return stripEmoji(raw);
+        }
+
+        function applyPageLanguage() {
+            document.documentElement.lang = getPageLang();
+            document.title = mvText('title');
+            applyStaticTranslations();
+            refreshCameraEntryTexts();
         }
 
         function applyStaticTranslations() {
@@ -606,7 +779,7 @@
             } catch (error) {
                 if (cameraError) {
                     cameraError.style.display = 'block';
-                    cameraError.innerHTML = `<strong>❌ Resim Yükleme Hatası:</strong><br>${error?.message || loadErrorMessage || 'Görsel işlenemedi.'}`;
+                    cameraError.innerHTML = `<strong>${mvText('errorLoad')}:</strong><br>${error?.message || loadErrorMessage || mvText('errorGeneric')}`;
                 }
                 return false;
             }
@@ -618,15 +791,15 @@
                 throw new Error('Camera plugin unavailable');
             }
 
-            const cancelLabel = PAGE_LANG === 'en' ? 'Cancel' : 'İptal';
+            const cancelLabel = getPageLang() === 'en' ? 'Cancel' : 'İptal';
             const photo = await Camera.getPhoto({
                 quality: 90,
                 allowEditing: false,
                 resultType: 'dataUrl',
                 source,
-                promptLabelHeader: PAGE_LANG === 'en' ? 'Select Photo' : 'Fotoğraf Seç',
-                promptLabelPhoto: PAGE_LANG === 'en' ? 'From Gallery' : 'Galeriden Seç',
-                promptLabelPicture: PAGE_LANG === 'en' ? 'Take Photo' : 'Kamera Aç',
+                promptLabelHeader: getPageLang() === 'en' ? 'Select Photo' : 'Fotoğraf Seç',
+                promptLabelPhoto: getPageLang() === 'en' ? 'From Gallery' : 'Galeriden Seç',
+                promptLabelPicture: getPageLang() === 'en' ? 'Take Photo' : 'Kamera Aç',
                 promptLabelCancel: cancelLabel
             });
 
@@ -670,7 +843,7 @@
                 }
                 if (elapsed >= 1000) {
                     stopCamera();
-                    showCameraFallback('Simülatörde kamera desteklenmiyor.');
+                    showCameraFallback(mvText('simNoCamera'));
                     return;
                 }
                 _cameraWatchRaf = requestAnimationFrame(tick);
@@ -693,10 +866,10 @@
             const permissionGuide = document.getElementById('permissionGuide');
             if (cameraError) {
                 cameraError.style.display = 'block';
-                const pickLabel = PAGE_LANG === 'en' ? '📷 PICK PHOTO' : '📷 FOTOĞRAF SEÇ';
-                const fallbackHeader = PAGE_LANG === 'en' ? 'Continue with a photo:' : 'Fotoğraf ile devam edin:';
-                const defaultMsg = PAGE_LANG === 'en' ? 'Live camera could not open.' : 'Canlı kamera açılamadı.';
-                cameraError.innerHTML = `<strong>📷 ${fallbackHeader}</strong><br>${errorMessage || defaultMsg}<br><br><button class="btn-giant btn-secondary" type="button" onclick="openNativeCameraFallback()">${pickLabel}</button>`;
+                const pickLabel = mvText('pickPhoto');
+                const fallbackHeader = mvText('fallbackHeader');
+                const defaultMsg = mvText('fallbackDefault');
+                cameraError.innerHTML = `<strong>${fallbackHeader}</strong><br>${errorMessage || defaultMsg}<br><br><button class="btn-giant btn-secondary" type="button" onclick="openNativeCameraFallback()">${pickLabel}</button>`;
             }
             if (permissionGuide && showPermissionGuide) permissionGuide.classList.add('active');
         }
@@ -708,7 +881,7 @@
                 } catch (error) {
                     if (isUserCancelledCameraError(error)) return;
                     showCameraFallback(
-                        PAGE_LANG === 'en'
+                        getPageLang() === 'en'
                             ? `Photo picker failed. ${error?.message || ''}`
                             : `Fotoğraf seçimi başarısız. ${error?.message || ''}`
                     );
@@ -718,7 +891,7 @@
 
             const cameraFileInput = document.getElementById('cameraFileInput');
             if (!cameraFileInput) {
-                showQualityWarning('⚠️ Alternatif kamera girişi bu cihazda bulunamadı.');
+                showQualityWarning(mvText('errorNoAltInput'));
                 return;
             }
             cameraFileInput.removeAttribute('capture');
@@ -769,7 +942,7 @@
                         const cameraError = document.getElementById('cameraError');
                         if (cameraError) {
                             cameraError.style.display = 'block';
-                            cameraError.innerHTML = `<strong>❌ İşlem hatası:</strong><br>${error.message || 'Resim işlenemedi.'}`;
+                            cameraError.innerHTML = `<strong>${mvText('errorProcess')}:</strong><br>${error.message || mvText('errorGeneric')}`;
                         }
                     }
                 };
@@ -779,7 +952,7 @@
                     const cameraError = document.getElementById('cameraError');
                     if (cameraError) {
                         cameraError.style.display = 'block';
-                        cameraError.innerHTML = '<strong>❌ Resim okuma hatası:</strong><br>Seçilen görsel işlenemedi.';
+                        cameraError.innerHTML = `<strong>${mvText('errorRead')}:</strong><br>${mvText('errorImageReadFail')}`;
                     }
                 };
                 
@@ -796,7 +969,7 @@
                 const cameraError = document.getElementById('cameraError');
                 if (cameraError) {
                     cameraError.style.display = 'block';
-                    cameraError.innerHTML = '<strong>❌ Dosya okuma hatası:</strong><br>Dosya okunamadı.';
+                    cameraError.innerHTML = `<strong>${mvText('errorFile')}:</strong><br>${mvText('errorFileReadFail')}`;
                 }
             };
             
@@ -824,7 +997,7 @@
                         }
                         console.error('[iPad Fix] Capacitor camera error:', capacitorErr.message);
                         showCameraFallback(
-                            PAGE_LANG === 'en'
+                            getPageLang() === 'en'
                                 ? `Native camera unavailable. ${capacitorErr?.message || 'Try photo selection.'}`
                                 : `Yerleşik kamera açılamadı. ${capacitorErr?.message || 'Fotoğraf seçimini deneyin.'}`
                         );
@@ -833,14 +1006,14 @@
                 }
 
                 if (isProbablyIosSimulator()) {
-                    showQualityWarning('📷 Simülatörde fotoğraf seçimi açılıyor.');
+                    showQualityWarning(mvText('simOpening'));
                     await openNativeCameraFallback();
                     return;
                 }
 
                 if (!hasWebCameraSupport()) {
                     stopCameraLoops();
-                    showQualityWarning('📷 Canlı kamera yok. Fotoğraf seçimi açılıyor.');
+                    showQualityWarning(mvText('noLiveCamera'));
                     openNativeCameraFallback();
                     return;
                 }
@@ -871,9 +1044,7 @@
                 }, 3000);
 
             } catch (error) {
-                const permMsg = PAGE_LANG === 'en'
-                    ? `Please grant camera permission. ${error?.message || ''}`
-                    : `Kameranıza erişim için izin verin. ${error?.message || ''}`;
+                const permMsg = `${mvText('permNeeded')} ${error?.message || ''}`;
                 showCameraFallback(permMsg, true); // show permission guide for real browser permission errors
                 console.error('Kamera hatası:', error);
             }
@@ -904,7 +1075,7 @@
             const ctx = canvas.getContext('2d');
 
             if (!video || !video.videoWidth || !video.videoHeight) {
-                showQualityWarning('⚠️ Kamera görüntüsü henüz hazır değil. Lütfen bir saniye sonra tekrar deneyin.');
+                showQualityWarning(mvText('errorCameraNotReady'));
                 return;
             }
 
@@ -930,7 +1101,7 @@
             const sampleWidth = Math.min(320, width);
             const sampleHeight = Math.min(240, height);
             if (!ctx || sampleWidth < 2 || sampleHeight < 2) {
-                return { isOk: false, message: '⚠️ Görüntü işlenemedi. Kamerayı tekrar başlatın.' };
+                return { isOk: false, message: mvText('errorImageProcess') };
             }
             const imageData = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
             const data = imageData.data;
@@ -960,7 +1131,7 @@
             }
 
             if (!count) {
-                return { isOk: false, message: '⚠️ Görüntü analiz edilemedi. Lütfen tekrar deneyin.' };
+                return { isOk: false, message: mvText('errorImageAnalyze') };
             }
 
             const mean = sumLuma / count;
@@ -971,9 +1142,9 @@
             const tooBright = mean > 235;
             const blurry = laplacianMean < 8 || variance < 120;
 
-            if (tooDark) return { isOk: false, message: '⚠️ Görüntü karanlık. Lütfen ışığı açın.' };
-            if (tooBright) return { isOk: false, message: '⚠️ Görüntü çok parlak. Işığı azaltmayı deneyin.' };
-            if (blurry) return { isOk: false, message: '⚠️ Görüntü bulanık. Lütfen biraz daha yaklaştırın veya sabit tutun.' };
+            if (tooDark) return { isOk: false, message: mvText('qualityDark') };
+            if (tooBright) return { isOk: false, message: mvText('qualityBright') };
+            if (blurry) return { isOk: false, message: mvText('qualityBlurry') };
 
             return { isOk: true, message: '' };
         }
@@ -997,16 +1168,73 @@
             return thumbCanvas.toDataURL('image/jpeg', 0.6);
         }
 
-        function analyzeMedicationImage(canvas) {
+        function showCapturedPreview(canvasEl) {
+            const videoEl = document.getElementById('video');
+            if (videoEl) videoEl.style.display = 'none';
+            if (canvasEl) {
+                canvasEl.style.display = 'block';
+            }
+            const captureBtn = document.getElementById('captureBtn');
+            const stopBtn = document.getElementById('stopCameraBtn');
+            const startBtn = document.getElementById('startCameraBtn');
+            if (captureBtn) captureBtn.style.display = 'none';
+            if (stopBtn) stopBtn.style.display = 'none';
+            if (startBtn) startBtn.style.display = 'none';
+        }
+
+        async function uploadCapturedPhoto() {
+            const token = localStorage.getItem('token');
+            if (!token || !lastCapturedImage) return false;
+            try {
+                const response = await fetchWithTimeout(
+                    `${API_BASE}/api/send-notification?token=${encodeURIComponent(token)}`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'medication_photo',
+                            message: getPageLang() === 'en' ? 'Medication photo captured' : 'İlaç fotoğrafı çekildi',
+                            thumbnailBase64: lastThumbnail || null,
+                            capturedImageBase64: lastCapturedImage
+                        })
+                    },
+                    API_TIMEOUT_MS
+                );
+                return response.ok;
+            } catch (error) {
+                console.warn('Photo upload failed:', error);
+                return false;
+            }
+        }
+
+        async function analyzeMedicationImage(canvasEl) {
             detectedMedications = [];
+            showCapturedPreview(canvasEl);
             const resultSection = document.getElementById('resultSection');
             const medicationResults = document.getElementById('medicationResults');
-            if (resultSection) resultSection.style.display = 'block';
+            if (resultSection) {
+                resultSection.classList.add('active');
+                resultSection.style.display = 'block';
+            }
             if (medicationResults) {
                 medicationResults.innerHTML = `
-                    <div class="alert" style="margin-top:16px;">
-                        <strong>ℹ️ Bu özellik henüz aktif değil</strong>
-                        <p style="margin-top:8px;">İlaç tanıma yakında eklenecek. Şimdilik ilaçlarınızı manuel olarak "İlaçlarım" bölümünden ekleyebilirsiniz.</p>
+                    <div class="alert" style="margin-top:16px;padding:16px;background:rgba(59,130,246,0.15);border:1px solid #3b82f6;border-radius:12px;">
+                        <strong>${mvText('uploadingPhoto')}</strong>
+                    </div>
+                `;
+            }
+            resultSection?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+            const uploaded = await uploadCapturedPhoto();
+            const hasToken = Boolean(localStorage.getItem('token'));
+            const statusLine = mvText('photoReceived');
+            const uploadNote = (!uploaded && hasToken) ? `<p style="margin-top:8px;color:#fbbf24;line-height:1.4;">${mvText('uploadFailed')}</p>` : '';
+            if (medicationResults) {
+                medicationResults.innerHTML = `
+                    <div class="alert" style="margin-top:16px;padding:16px;background:rgba(34,197,94,0.15);border:1px solid #22c55e;border-radius:12px;">
+                        <strong>${statusLine}</strong>
+                        ${uploadNote}
+                        <p style="margin-top:10px;line-height:1.5;">${mvText('featureNotActiveDesc')}</p>
                     </div>
                 `;
             }
@@ -1021,24 +1249,24 @@
             detectedMedications.forEach(med => {
                 const stockPercent = med.stock;
                 let stockClass = 'stock-full';
-                let stockText = '✓ Yeterli';
+                let stockText = mvText('stockOk');
 
                 if (stockPercent === 0) {
                     stockClass = 'stock-empty';
-                    stockText = '❌ TÜKENDİ';
+                    stockText = mvText('stockEmpty');
                 } else if (stockPercent < 30) {
                     stockClass = 'stock-low';
-                    stockText = '⚠️ AZ KALDI';
+                    stockText = mvText('stockLow');
                 } else if (stockPercent < 60) {
                     stockClass = 'stock-medium';
-                    stockText = '⚠️ ORTA DÜZEY';
+                    stockText = mvText('stockMedium');
                 }
 
                 html += `
                     <div class="medication-card">
-                        <div class="med-name">💊 ${med.name}</div>
-                        <div class="med-detail">📊 Stok: %${stockPercent}</div>
-                        <div class="med-detail">💉 Yaklaşık Doz: ${med.doses} gün</div>
+                        <div class="med-name">${med.name}</div>
+                        <div class="med-detail">${mvText('stockLabel')}: %${stockPercent}</div>
+                        <div class="med-detail">${mvText('doseLabel')}: ${med.doses} ${mvText('doseDays')}</div>
                         <div class="stock-level ${stockClass}">
                             ${stockText}
                         </div>
@@ -1046,13 +1274,11 @@
                 `;
             });
 
-            // Tükenmiş ilaçlar varsa uyarı
             const emptyMeds = detectedMedications.filter(m => m.stock === 0);
             if (emptyMeds.length > 0) {
                 html = `
                     <div class="alert">
-                        <strong>🚨 UYARI:</strong> ${emptyMeds.map(m => m.name).join(', ')} tükendi! 
-                        Lütfen eczaneye haber verin.
+                        <strong>${mvText('emptyMedsWarning')}:</strong> ${emptyMeds.map(m => m.name).join(', ')} ${mvText('emptyMedsText')}
                     </div>
                 ` + html;
             }
@@ -1068,19 +1294,18 @@
 
             let message = '';
             if (emptyMeds.length > 0) {
-                message += `Tükenmiş ilaçlar: ${emptyMeds.map(m => m.name).join(', ')}\n`;
+                message += `${mvText('notifyEmpty')}: ${emptyMeds.map(m => m.name).join(', ')}\n`;
             }
             if (lowMeds.length > 0) {
-                message += `Az kalan ilaçlar: ${lowMeds.map(m => m.name).join(', ')}\n`;
+                message += `${mvText('notifyLow')}: ${lowMeds.map(m => m.name).join(', ')}\n`;
             }
 
-            // Aile üyelerine bildirim gönder
             fetchWithTimeout(`${API_BASE}/api/notifications`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    title: '💊 İlaç Stoku Uyarısı',
-                    message: message || 'İlaç stoğu kontrol edildi',
+                    title: mvText('notifyTitle'),
+                    message: message || mvText('notifyChecked'),
                     thumbnailBase64: lastThumbnail || null,
                     capturedImageBase64: lastCapturedImage || null
                 })
@@ -1092,13 +1317,20 @@
                 }
             });
 
-            alert('✓ Eczaneye haber verildi! Aile üyeleri de bilgilendirildi.');
+            showMvToast(mvText('notifySuccess'));
         }
 
         function closeResult() {
-            document.getElementById('resultSection').classList.remove('active');
-            document.getElementById('startCameraBtn').style.display = 'block';
+            const resultSection = document.getElementById('resultSection');
+            const startBtn = document.getElementById('startCameraBtn');
+            const canvasEl = document.getElementById('canvas');
+            if (resultSection) resultSection.classList.remove('active');
+            if (startBtn) startBtn.style.display = 'block';
+            if (canvasEl) canvasEl.style.display = 'none';
             detectedMedications = [];
+            lastCapturedImage = null;
+            lastThumbnail = null;
+            stopCamera();
         }
 
         // Sayfa kapandığında veya arkaya alındığında kamerayı kapat
@@ -1111,38 +1343,40 @@
         });
 
         function goBack(event) {
-            if (event && event.preventDefault) event.preventDefault();
-            if (event && event.stopPropagation) event.stopPropagation();
-            // Stop camera and cancel all timers first to prevent resource leaks
-            stopCamera();
-            const backTarget = '/elderly-ui/index.html?returnTo=homeScreen';
-            const doNavigate = () => {
-                try {
-                    window.location.replace(backTarget);
-                } catch (_) {
-                    window.location.href = backTarget;
-                }
-                setTimeout(() => {
-                    if (!window.location.href.includes('returnTo=homeScreen')) {
-                        window.location.href = backTarget;
-                    }
-                }, 180);
-            };
-            setTimeout(doNavigate, 40);
+            if (event) {
+                if (event.preventDefault) event.preventDefault();
+                if (event.stopPropagation) event.stopPropagation();
+            }
+            try {
+                stopCamera();
+            } catch (_) {}
+            const target = new URL('index.html?returnTo=homeScreen', window.location.href).href;
+            try {
+                window.location.assign(target);
+            } catch (_) {
+                window.location.href = target;
+            }
         }
+        window.goBack = goBack;
+        window.startCamera = startCamera;
+        window.captureImage = captureImage;
+        window.stopCamera = stopCamera;
+        window.closeResult = closeResult;
+        window.notifyPharmacy = notifyPharmacy;
+        window.openNativeCameraFallback = openNativeCameraFallback;
 
         document.addEventListener('DOMContentLoaded', () => {
-            applyStaticTranslations();
-            refreshCameraEntryTexts();
+            applyPageLanguage();
             const cameraFileInput = document.getElementById('cameraFileInput');
             if (cameraFileInput) {
                 cameraFileInput.addEventListener('change', handleFallbackFileSelected);
             }
-            // Back button: add pointer/touch fallback for iOS WebView reliability
             const backBtn = document.getElementById('backBtn');
-            if (backBtn) {
-                backBtn.addEventListener('pointerup', goBack, { passive: false });
+            if (backBtn && !backBtn.__mvBound) {
+                backBtn.__mvBound = true;
+                backBtn.addEventListener('click', goBack);
                 backBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
                     goBack(e);
                 }, { passive: false });
             }

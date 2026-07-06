@@ -6,10 +6,18 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>SafeGuardian AI</title>
-    <link rel="stylesheet" href="elderly.css">
+    <link rel="stylesheet" href="elderly.css?v=20260706v8">
     <link rel="stylesheet" href="mood-theme.css">
+    <link rel="stylesheet" href="sg-app.css?v=20260706v8">
 </head>
 <body>
+    <header class="sg-app-header is-hidden" id="sgAppHeader">
+        <div class="sg-brand">SafeGuardian<small>AI</small></div>
+        <div class="sg-header-actions">
+            <button type="button" class="sg-icon-btn" id="sgAccountBtn" onclick="showScreen('profileScreen')" data-i18n="accountBtn">HESAP</button>
+            <button type="button" class="sg-icon-btn sg-icon-btn--accent" id="sgSettingsBtn" onclick="if(window.SGShell){SGShell.openSettings();}else if(typeof toggleA11yMenu==='function'){toggleA11yMenu(event);}" data-i18n="settingsBtn">AYARLAR</button>
+        </div>
+    </header>
     <!-- =================== KAYIT OL =================== -->
     <div id="registerScreen" class="screen">
         <div class="top-bar">
@@ -17,18 +25,18 @@
             <h1 data-i18n="registerTitle">KAYIT OL</h1>
         </div>
 
-        <form id="registerForm" class="form-container" style="margin-top: 20px;">
+        <form id="registerForm" class="form-container">
             <div class="input-group">
                 <label for="regFullName" data-i18n="fullNameLabel">AD SOYAD</label>
-                <input type="text" id="regFullName" placeholder="Örn: Ayşe Yılmaz" required>
+                <input type="text" id="regFullName" data-i18n-placeholder="fullNamePlaceholder" placeholder="" required>
             </div>
             <div class="input-group">
                 <label for="regPhone" data-i18n="phoneLabel">TELEFON <span style="font-size:0.75em;font-weight:400;">(İsteğe bağlı)</span></label>
-                <input type="tel" id="regPhone" placeholder="05xx xxx xx xx">
+                <input type="tel" id="regPhone" data-i18n-placeholder="phonePlaceholder" placeholder="">
             </div>
             <div class="input-group">
                 <label for="regEmail" data-i18n="emailLabel">E-POSTA</label>
-                <input type="email" id="regEmail" placeholder="ayse@mail.com" required>
+                <input type="email" id="regEmail" data-i18n-placeholder="emailPlaceholder" placeholder="" required>
             </div>
             <div class="input-group">
                 <label for="regBirthDate" data-i18n="birthDateLabel">DOĞUM TARİHİ <span style="font-size:0.75em;font-weight:400;">(İsteğe bağlı)</span></label>
@@ -41,91 +49,55 @@
 
     <!-- =================== ANA SAYFA - 3 BUTON =================== -->
     <div id="homeScreen" class="screen">
-        <div class="top-bar home-top-bar">
-            <h1 id="greeting" style="display: none;"></h1>
-            <div class="home-actions" style="display: flex; gap: 8px;">
-                <button class="btn-small btn-blue" onclick="showScreen('profileScreen')" style="font-size: 16px;" data-i18n="accountBtn">HESAP</button>
-                <button class="btn-small btn-red" onclick="logout()" data-i18n="logoutBtn">ÇIKIŞ</button>
-            </div>
-        </div>
-
         <div class="main-area">
-            <!-- SESLİ REHBERLİK -->
-            <div id="voiceGuidance" class="voice-guidance" role="status" aria-live="polite"></div>
-
-            <!-- 3 ANA BUTON -->
-            <div class="three-button-layout">
-                <!-- BUTON 1: İLAÇLAR -->
+            <div class="home-grid">
                 <button class="btn-mega btn-medicine" onclick="goToMedications()" aria-label="İlaçlarım">
-                    <span class="btn-icon">💊</span>
+                    <span class="btn-icon btn-icon--med" aria-hidden="true"></span>
                     <span class="btn-text" data-i18n="medicationsLabel">İLAÇLARIM</span>
                 </button>
-
-                <!-- BUTON 2: AİLE -->
-                <button class="btn-mega btn-family" onclick="goToFamily()" aria-label="Aile üyeleri">
-                    <span class="btn-icon">👨‍👩‍👧</span>
+                <button class="btn-mega btn-family" onclick="goToFamily()" aria-label="Aile">
+                    <span class="btn-icon btn-icon--family" aria-hidden="true"></span>
                     <span class="btn-text" data-i18n="familyLabel">AİLE</span>
                 </button>
-
-                <!-- BUTON 3: YARDIM -->
                 <button class="btn-mega btn-help" onclick="showHelp()" aria-label="Yardım">
-                    <span class="btn-icon">🆘</span>
+                    <span class="btn-icon btn-icon--help" aria-hidden="true"></span>
                     <span class="btn-text" data-i18n="helpLabel">YARDIM</span>
                 </button>
-            </div>
-
-            <button class="btn-giant btn-red emergency-main" onclick="showEmergencyConfirm()" aria-label="Acil yardım çağır">
-                <span data-i18n="emergencyBtn">🚨 ACİL YARDIM</span>
-            </button>
-
-            <!-- EKLENTI BUTONLARI -->
-            <div id="simpleModeBanner" class="simple-banner" aria-live="polite">
-                Basit mod açık: Ek özellikler gizlendi.
-            </div>
-
-            <div class="mood-quick" aria-live="polite">
-                <div class="mood-quick-title" data-i18n="howAreYou">NASILSIN?</div>
-                <div class="mood-quick-buttons">
-                    <button class="btn-giant btn-green mood-quick-btn" onclick="submitMood(8)" aria-label="İyiyim">
-                        <span data-i18n="moodGood">😊 İYİYİM</span>
-                    </button>
-                    <button class="btn-giant btn-yellow mood-quick-btn" onclick="submitMood(5)" aria-label="İdare eder">
-                        <span data-i18n="moodOk">😐 İDARE EDER</span>
-                    </button>
-                    <button class="btn-giant btn-red mood-quick-btn" onclick="submitMood(2)" aria-label="Kötüyüm">
-                        <span data-i18n="moodBad">😟 İYİ DEĞİLİM</span>
-                    </button>
-                </div>
-            </div>
-
-            <div class="three-button-layout extra" style="margin-top: 20px;">
-                <!-- Ruh Hali Dashboard -->
-                <button class="btn-mega btn-mood" onclick="goToMoodDashboard()" aria-label="Ruh Hali Takibi">
-                    <span class="btn-icon">😊</span>
+                <button class="btn-mega btn-mood" onclick="goToMoodDashboard()" aria-label="Ruh hali">
+                    <span class="btn-icon btn-icon--mood" aria-hidden="true"></span>
                     <span class="btn-text" data-i18n="moodLabel">RUH HALİ</span>
                 </button>
-
-                <!-- Kamera (İlaç Tanıma) -->
-                <button class="btn-mega btn-camera" onclick="goToMedicationVision()" aria-label="Kamera ile İlaç Tanıma">
-                    <span class="btn-icon">📷</span>
+                <button class="btn-mega btn-camera" onclick="goToMedicationVision()" aria-label="Kamera">
+                    <span class="btn-icon btn-icon--camera" aria-hidden="true"></span>
                     <span class="btn-text" data-i18n="cameraLabel">KAMERA</span>
                 </button>
-
-                <button class="btn-mega" style="background: linear-gradient(135deg, #f093fb, #f5576c);" onclick="goToHealthRecords()" aria-label="Sağlık Kayıtları">
-                    <span class="btn-icon">📊</span>
+                <button class="btn-mega" style="background: linear-gradient(145deg, #6366f1, #4f46e5);" onclick="goToHealthRecords()" aria-label="Sağlık">
+                    <span class="btn-icon btn-icon--health" aria-hidden="true"></span>
                     <span class="btn-text" data-i18n="healthLabel">SAĞLIK</span>
                 </button>
             </div>
 
-            <button class="btn-giant btn-blue" id="shareDoctorReportBtn" onclick="shareDoctorReport()" aria-label="Doktora rapor göster">
-                <span data-i18n="doctorBtn">🩺 DOKTORA GÖSTER</span>
+            <button class="btn-giant btn-red emergency-main btn-mega--wide home-grid" style="grid-column:1/-1;width:100%;margin-top:4px;" onclick="showEmergencyConfirm()" aria-label="Acil">
+                <span data-i18n="emergencyBtn">ACİL YARDIM</span>
             </button>
+            <div class="mood-quick" aria-live="polite">
+                <div class="mood-quick-title" data-i18n="howAreYou">NASILSIN?</div>
+                <div class="mood-quick-buttons">
+                    <button class="btn-giant btn-green mood-quick-btn" onclick="submitMood(8)" aria-label="İyiyim">
+                        <span data-i18n="moodGood">İYİYİM</span>
+                    </button>
+                    <button class="btn-giant btn-yellow mood-quick-btn" onclick="submitMood(5)" aria-label="İdare eder">
+                        <span data-i18n="moodOk">İDARE EDER</span>
+                    </button>
+                    <button class="btn-giant btn-red mood-quick-btn" onclick="submitMood(2)" aria-label="Kötüyüm">
+                        <span data-i18n="moodBad">İYİ DEĞİLİM</span>
+                    </button>
+                </div>
+            </div>
 
-            <button id="repeatGuidanceBtn" class="btn-giant btn-blue" onclick="toggleListening()">
-                <span data-i18n="voiceBtn">🎙️ DİNLE / SESİ TEKRARLA</span>
+            <button class="btn-giant btn-gray" id="shareDoctorReportBtn" onclick="shareDoctorReport()" aria-label="Doktor raporu">
+                <span data-i18n="doctorBtn">DOKTORA GÖSTER</span>
             </button>
-
-            <!-- SES DURUMU -->
             <div id="voiceStatus" class="voice-indicator" role="status" aria-live="polite"></div>
         </div>
     </div>
@@ -138,10 +110,9 @@
         </div>
 
         <div class="main-area">
-            <div id="moodDashboard" style="padding: 20px; color: #ffff00;">
+            <div id="moodDashboard" class="sg-mood-dashboard">
                 <div style="text-align: center; padding: 30px;">
-                    <div style="font-size: 64px; margin-bottom: 20px;">📊</div>
-                    <div style="font-size: 24px; font-weight: bold;">Yükleniyor...</div>
+                    <div style="font-size: 24px; font-weight: bold;" data-i18n="loadingText">Yükleniyor...</div>
                 </div>
             </div>
         </div>
@@ -155,10 +126,9 @@
         </div>
 
         <div class="main-area">
-            <div id="healthRecordsContent" style="padding: 20px; color: #ffff00;">
+            <div id="healthRecordsContent">
                 <div style="text-align: center; padding: 30px;">
-                    <div style="font-size: 64px; margin-bottom: 20px;">📊</div>
-                    <div style="font-size: 24px; font-weight: bold;">Yükleniyor...</div>
+                    <div style="font-size: 24px; font-weight: bold;" data-i18n="loadingText">Yükleniyor...</div>
                 </div>
             </div>
         </div>
@@ -238,19 +208,19 @@
 
     <!-- =================== GİRİŞ EKRANI =================== -->
     <div id="loginScreen" class="screen active">
-        <div class="logo-area">
-            <h1 class="brand-title">
-                <span class="brand-title-line">SAFEGUARDIAN</span>
-                <span class="brand-title-line brand-ai">AI</span>
-            </h1>
-        </div>
+        <div class="sg-login-wrap">
+            <div class="sg-login-hero">
+                <h1>SafeGuardian AI</h1>
+                <p data-i18n="loginSub">Güvenli giriş yapın</p>
+            </div>
 
-        <div class="lang-selector">
-            <button onclick="setLanguage('tr')" id="langBtnTr" data-lang-btn="tr" class="btn-lang active" aria-label="Türkçe">🇹🇷 TR</button>
-            <button onclick="setLanguage('en')" id="langBtnEn" data-lang-btn="en" class="btn-lang" aria-label="English">🇬🇧 EN</button>
-        </div>
+            <div class="lang-selector">
+                <button type="button" onclick="setLanguage('tr')" id="langBtnTr" data-lang-btn="tr" class="btn-lang active" aria-label="Türkçe">TR</button>
+                <button type="button" onclick="setLanguage('en')" id="langBtnEn" data-lang-btn="en" class="btn-lang" aria-label="English">EN</button>
+            </div>
 
-        <form id="loginForm" class="form-container">
+            <div class="sg-card">
+        <form id="loginForm" class="form-container" style="margin:0;">
             <div class="input-group">
                 <label for="email" data-i18n="emailLabel">E-POSTA</label>
                 <input type="email" id="email" data-i18n-placeholder="emailPlaceholder" placeholder="ornek@mail.com" required>
@@ -278,17 +248,20 @@
                 ŞİFREMİ UNUTTUM
             </button>
 
-            <button type="button" class="btn-small btn-gray" onclick="handleBiometricLogin()" style="margin-top: 12px; width: 100%;" data-i18n="biometricLoginBtn">
-                🔓 Face ID ile Giriş
+            <button type="button" id="biometricLoginBtn" class="btn-small btn-gray" onclick="handleBiometricLogin()" style="margin-top: 12px; width: 100%;" data-i18n="biometricLoginBtn">
+                Face ID ile Giriş
             </button>
 
-            <p class="hint-text" id="testHint" data-i18n="demoHint" style="display:block;">Destek için: support@vitaguard.app</p>
+            <p class="hint-text" id="testHint" data-i18n="demoHint" style="display:block;">Destek: support@vitaguard.app</p>
 
-            <div style="display:flex; gap:10px; margin-top:14px; justify-content:center; flex-wrap:wrap;">
-                <button type="button" class="btn-small btn-gray" onclick="openPrivacyPolicy()" data-i18n="privacyPolicyBtn">📄 GİZLİLİK SÖZLEŞMESİ</button>
-                <button type="button" class="btn-small btn-gray" onclick="openTermsOfUse()" data-i18n="termsOfUseBtn">📘 KULLANIM KOŞULLARI</button>
-            </div>
+            <p class="legal-footer">
+                <a href="#" onclick="openPrivacyPolicy(); return false;" data-i18n="legalPrivacyLink">Gizlilik</a>
+                ·
+                <a href="#" onclick="openTermsOfUse(); return false;" data-i18n="legalTermsLink">Kullanım Koşulları</a>
+            </p>
         </form>
+            </div>
+        </div>
     </div>
 
     <!-- =================== AİLE ÜYESİ EKLE =================== -->
@@ -365,50 +338,40 @@
     <div id="profileScreen" class="screen">
         <div class="top-bar">
             <button class="btn-small btn-back" onclick="showScreen('homeScreen')" data-i18n="backBtn">← GERİ</button>
-            <h1 data-i18n="profileTitle">👤 HESAP</h1>
+            <h1 data-i18n="profileTitle">HESAP</h1>
         </div>
 
         <div class="main-area">
-            <div id="profileInfo" style="background: #000; border: 3px solid #ffff00; padding: 20px; border-radius: 12px; color: #ffff00;">
-                <div style="font-size: 28px; font-weight: 700; margin-bottom: 20px; text-align: center;" data-i18n="profileCardTitle">👤 HESAP BİLGİLERİ</div>
-                
-                <div style="font-size: 20px; margin-bottom: 15px;">
-                    <strong data-i18n="userFullName">AD SOYAD</strong><strong>:</strong>
-                    <div id="profileName" style="color: #00ffff; font-size: 24px; margin-top: 5px;">-</div>
+            <div id="profileInfo" class="sg-profile-card">
+                <h2 data-i18n="profileCardTitle">HESAP BİLGİLERİ</h2>
+                <div class="sg-field">
+                    <div class="sg-field-label" data-i18n="userFullName">AD SOYAD</div>
+                    <div id="profileName" class="sg-field-value">-</div>
                 </div>
-
-                <div style="font-size: 20px; margin-bottom: 15px;">
-                    <strong data-i18n="userEmail">E-POSTA</strong><strong>:</strong>
-                    <div id="profileEmail" style="color: #00ffff; font-size: 20px; margin-top: 5px;">-</div>
+                <div class="sg-field">
+                    <div class="sg-field-label" data-i18n="userEmail">E-POSTA</div>
+                    <div id="profileEmail" class="sg-field-value">-</div>
                 </div>
-
-                <div style="font-size: 20px; margin-bottom: 15px;">
-                    <strong data-i18n="phoneLabel">TELEFON</strong><strong>:</strong>
-                    <div id="profilePhone" style="color: #00ffff; font-size: 20px; margin-top: 5px;">-</div>
+                <div class="sg-field">
+                    <div class="sg-field-label" data-i18n="phoneLabel">TELEFON</div>
+                    <div id="profilePhone" class="sg-field-value">-</div>
                 </div>
-
-                <div style="font-size: 20px; margin-bottom: 15px;">
-                    <strong data-i18n="subscriptionStatus">ABONE DURUMU</strong><strong>:</strong>
-                    <div id="profilePlan" style="color: #00ffff; font-size: 24px; margin-top: 5px; font-weight: 700;">-</div>
+                <div class="sg-field">
+                    <div class="sg-field-label" data-i18n="subscriptionStatus">ABONE DURUMU</div>
+                    <div id="profilePlan" class="sg-field-value">-</div>
                 </div>
-
-                <div style="font-size: 20px; margin-bottom: 15px;">
-                    <strong data-i18n="daysRemaining">KALAN GÜN</strong><strong>:</strong>
-                    <div id="profileDaysLeft" style="color: #00ffff; font-size: 24px; margin-top: 5px; font-weight: 700;">-</div>
+                <div class="sg-field">
+                    <div class="sg-field-label" data-i18n="daysRemaining">KALAN GÜN</div>
+                    <div id="profileDaysLeft" class="sg-field-value">-</div>
                 </div>
             </div>
 
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-                <button class="btn-giant btn-blue" onclick="goToPremium()" style="font-size: 24px;" data-i18n="upgradePremium">⭐ AİLE PAKETİNE GEÇ</button>
-                <button class="btn-giant btn-green" onclick="goToSubscription()" style="font-size: 24px;" data-i18n="subscriptionButton">💳 ABONELİK (IN-APP PURCHASE)</button>
-                <button class="btn-giant btn-yellow" onclick="editProfile()" style="font-size: 24px; color: #000;" data-i18n="editProfileBtn">✏️ BİLGİ GÜNCELLE</button>
-                <button class="btn-giant btn-gray" style="font-size: 22px;" onclick="openPrivacyPolicy()" data-i18n="privacyPolicyBtn">
-                    📄 GİZLİLİK SÖZLEŞMESİ
-                </button>
-                <button class="btn-giant btn-red" onclick="deleteAccountFlow()" style="font-size: 22px;" data-i18n="deleteAccountBtn">
-                    🗑️ HESABI KALICI SİL
-                </button>
-                <button class="btn-giant btn-red" onclick="logout()" style="font-size: 24px;" data-i18n="editLogoutBtn">🚪 ÇIKIŞ YAP</button>
+            <div class="btn-stack">
+                <button class="btn-giant btn-blue" onclick="goToPremium()" data-i18n="upgradePremium">AİLE PAKETİNE GEÇ</button>
+                <button class="btn-giant btn-green" onclick="goToSubscription()" data-i18n="subscriptionButton">ABONELİK</button>
+                <button class="btn-giant btn-gray" onclick="editProfile()" data-i18n="editProfileBtn">BİLGİ GÜNCELLE</button>
+                <button class="btn-giant btn-gray" onclick="openPrivacyPolicy()" data-i18n="privacyPolicyBtn">GİZLİLİK</button>
+                <button class="btn-giant btn-red" onclick="logout()" data-i18n="editLogoutBtn">ÇIKIŞ YAP</button>
             </div>
         </div>
     </div>
@@ -417,26 +380,26 @@
     <div id="subscriptionScreen" class="screen">
         <div class="top-bar">
             <button class="btn-small btn-back" onclick="showScreen('profileScreen')" data-i18n="backBtn">← GERİ</button>
-            <h1 data-i18n="subscriptionTitle">💳 ABONELİK (IN-APP PURCHASE)</h1>
+            <h1 data-i18n="subscriptionTitle">ABONELİK</h1>
         </div>
 
         <div class="main-area">
-            <div id="subscriptionContent" style="background: #000; border: 3px solid #00ffff; padding: 20px; border-radius: 12px; color: #00ffff;">
-                <div style="font-size: 26px; font-weight: 700; margin-bottom: 20px;" data-i18n="packageInfo">PAKET BİLGİLERİ</div>
+            <div id="subscriptionContent" class="sg-sub-card">
+                <h2 data-i18n="packageInfo">PAKET BİLGİLERİ</h2>
                 
-                <div style="background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                    <div style="font-size: 24px; color: #ffff00; font-weight: 700; margin-bottom: 10px;" data-i18n="currentPackage">📦 MEVCUT PAKET</div>
-                    <div id="subCurrentPlan" style="font-size: 22px; color: #fff;">Standart</div>
+                <div class="sg-sub-block">
+                    <div class="sg-sub-block-label" data-i18n="currentPackage">MEVCUT PAKET</div>
+                    <div id="subCurrentPlan" class="sg-sub-block-value">Standart</div>
                 </div>
 
-                <div style="background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                    <div style="font-size: 24px; color: #ffff00; font-weight: 700; margin-bottom: 10px;" data-i18n="endDate">📅 BİTİŞ TARİHİ</div>
-                    <div id="subEndDate" style="font-size: 22px; color: #fff;">-</div>
+                <div class="sg-sub-block">
+                    <div class="sg-sub-block-label" data-i18n="endDate">BİTİŞ TARİHİ</div>
+                    <div id="subEndDate" class="sg-sub-block-value">-</div>
                 </div>
 
-                <div style="background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <div style="font-size: 24px; color: #ffff00; font-weight: 700; margin-bottom: 10px;" data-i18n="features">✨ ÖZELLİKLER</div>
-                    <div id="basicFeaturesList" style="font-size: 18px; color: #e0e0e0;">
+                <div class="sg-sub-block">
+                    <div class="sg-sub-block-label" data-i18n="features">ÖZELLİKLER</div>
+                    <div id="basicFeaturesList" class="sg-sub-block-value">
                         <div data-i18n="basicFeature1">✓ Temel İlaç Yönetimi</div>
                         <div data-i18n="basicFeature2">✓ Aile Üyeleri</div>
                         <div data-i18n="basicFeature3">✓ Sesli Asistan</div>
@@ -444,60 +407,54 @@
                     </div>
                 </div>
 
-                <p style="font-size: 16px; color: #e0e0e0; margin-bottom: 14px;" data-i18n="subscriptionLegalNote">
+                <p class="sg-sub-legal" data-i18n="subscriptionLegalNote">
                     Otomatik yenilemeli aboneliklerde iOS Ayarlar &gt; Apple Kimliği &gt; Abonelikler ekranından yönetim yapılabilir.
                 </p>
 
-                <div style="background:#1a1a1a; border:1px solid #2e2e2e; border-radius:8px; padding:14px; margin-bottom:14px;">
-                    <div style="font-size:18px; color:#fff; font-weight:700; margin-bottom:10px;" data-i18n="subscriptionDisclosureTitle">ABONELİK DETAYLARI</div>
-                    <div style="font-size:16px; color:#e0e0e0; line-height:1.5; margin-bottom:6px;">
+                <div class="sg-sub-block">
+                    <div class="sg-sub-block-label" data-i18n="subscriptionDisclosureTitle">ABONELİK DETAYLARI</div>
+                    <div class="sg-sub-legal">
                         <span data-i18n="subscriptionMonthlyLine">Safeguardian Premium Monthly — 1 month —</span>
-                        <span id="subscriptionMonthlyPrice" style="color:#fff; font-weight:700;">[fiyat]</span>
+                        <span id="subscriptionMonthlyPrice" class="sg-field-value">[fiyat]</span>
                     </div>
-                    <div style="display:flex; flex-wrap:wrap; gap:10px;">
-                        <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" style="color:#00ffff; font-weight:700; text-decoration:underline;" data-i18n="privacyPolicyLinkLabel">Privacy Policy</a>
-                        <a href="/terms-of-use.html" target="_blank" rel="noopener noreferrer" style="color:#00ffff; font-weight:700; text-decoration:underline;" data-i18n="termsOfUseLinkLabel">Terms of Use (EULA)</a>
+                    <div class="sg-sub-links">
+                        <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyPolicyLinkLabel">Gizlilik Politikası</a>
+                        <a href="/terms-of-use.html" target="_blank" rel="noopener noreferrer" data-i18n="termsOfUseLinkLabel">Kullanım Koşulları</a>
                     </div>
                 </div>
 
-                <div id="entitlementInfo" style="font-size:16px; color:#e0e0e0; margin-bottom:14px;"></div>
+                <div id="entitlementInfo" class="sg-sub-legal"></div>
 
-                <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="btn-stack">
 
-                    <!-- Satın Al Butonu -->
-                    <button id="buyFamilyPackageButton" type="button" class="btn-giant btn-green" style="font-size: 22px; touch-action: manipulation; position: relative; z-index: 2;">
-                        <span data-i18n="buyFamilyPackageBtn">💳 AİLE PAKETİNE GEÇ</span>
+                    <button id="buyFamilyPackageButton" type="button" class="btn-giant btn-green">
+                        <span data-i18n="buyFamilyPackageBtn">AİLE PAKETİNE GEÇ</span>
                     </button>
 
-                    <!-- Apple Zorunlu: Otomatik Yenilenme Beyanı -->
-                    <p id="autoRenewDisclosure" style="font-size:14px; color:#fff; text-align:center; margin:8px 0; line-height:1.7; padding:10px; background:#1a1a1a; border:1px solid #333; border-radius:6px;">Satın alma işlemini onayladığınızda ödeme Apple hesabınızdan tahsil edilir. Abonelik, mevcut dönem bitmeden en az 24 saat önce iptal edilmediği sürece seçilen paket yenileme dönemine göre (Aylık) otomatik olarak yenilenir. Aboneliğinizi Ayarlar &gt; Apple Kimliği &gt; Abonelikler bölümünden yönetebilir veya iptal edebilirsiniz.</p>
+                    <p id="autoRenewDisclosure" class="sg-sub-legal sg-sub-block" data-i18n="autoRenewDisclosure">Satın alma işlemini onayladığınızda ödeme Apple hesabınızdan tahsil edilir.</p>
 
-                    <!-- Reklam ile Geçici Erişim -->
-                    <button id="watchAdUnlockButton" class="btn-giant btn-blue" onclick="watchAdFor12HourAccess()" style="font-size: 20px;">
-                        🎬 REKLAM İZLE - 12 SAAT TÜM ÖZELLİKLERİ AÇ
+                    <button id="watchAdUnlockButton" class="btn-giant btn-blue" type="button" onclick="watchAdFor12HourAccess()" data-i18n="watchAdUnlockBtn">
+                        REKLAM İZLE — 12 SAAT TÜM ÖZELLİKLER
                     </button>
 
-                    <!-- Geri Yükleme -->
-                    <button class="btn-giant btn-yellow" onclick="restorePurchases()" style="font-size: 22px; color: #000;" data-i18n="restorePurchasesBtn">
-                        🔄 SATIN ALMALARI GERİ YÜKLE
+                    <button class="btn-giant btn-gray" type="button" onclick="restorePurchases()" data-i18n="restorePurchasesBtn">
+                        SATIN ALMALARI GERİ YÜKLE
                     </button>
 
-                    <!-- Apple Zorunlu: İki Ayrı Yasal Link -->
-                    <button class="btn-giant btn-gray" onclick="openPrivacyPolicy()" style="font-size: 20px;" data-i18n="subscriptionPrivacyBtn">
-                        📄 GİZLİLİK POLİTİKASI
+                    <button class="btn-giant btn-gray" type="button" onclick="openPrivacyPolicy()" data-i18n="subscriptionPrivacyBtn">
+                        GİZLİLİK POLİTİKASI
                     </button>
-                    <button class="btn-giant btn-gray" onclick="openTermsOfUse()" style="font-size: 20px;" data-i18n="subscriptionTermsBtn">
-                        ⚖️ KULLANIM KOŞULLARI (EULA)
+                    <button class="btn-giant btn-gray" type="button" onclick="openTermsOfUse()" data-i18n="subscriptionTermsBtn">
+                        KULLANIM KOŞULLARI (EULA)
                     </button>
 
-                    <!-- İptal ve Yönet -->
-                    <button class="btn-giant btn-red" onclick="cancelSubscriptionFlow()" style="font-size: 20px;" data-i18n="cancelSubscriptionBtn">
-                        ⚙️ ABONELİĞİ APPLE AYARLARINDA İPTAL ET
+                    <button class="btn-giant btn-red" type="button" onclick="cancelSubscriptionFlow()" data-i18n="cancelSubscriptionBtn">
+                        ABONELİĞİ APPLE AYARLARINDA İPTAL ET
                     </button>
-                    <button class="btn-giant btn-gray" onclick="openSubscriptionManagement()" style="font-size: 20px;" data-i18n="manageSubscriptionsBtn">
-                        ⚙️ ABONELİKLERİ APPLE AYARLARINDA YÖNET
+                    <button class="btn-giant btn-gray" type="button" onclick="openSubscriptionManagement()" data-i18n="manageSubscriptionsBtn">
+                        ABONELİKLERİ APPLE AYARLARINDA YÖNET
                     </button>
-                    <button class="btn-giant btn-blue" onclick="showScreen('profileScreen')" style="font-size: 22px;" data-i18n="closeBtn">← KAPAT</button>
+                    <button class="btn-giant btn-blue" type="button" onclick="showScreen('profileScreen')" data-i18n="closeBtn">KAPAT</button>
                 </div>
             </div>
         </div>
@@ -528,9 +485,18 @@
         </div>
     </div>
 
+    <div id="sgModal" class="sg-modal" role="dialog" aria-modal="true" hidden>
+        <div class="sg-modal-card">
+            <h3 id="sgModalTitle"></h3>
+            <p id="sgModalMessage"></p>
+            <input id="sgModalInput" class="sg-modal-input" type="text" hidden />
+            <div id="sgModalActions" class="sg-modal-actions"></div>
+        </div>
+    </div>
+
     <div class="a11y-controls" aria-label="Erişilebilirlik ayarları">
-        <button id="a11yMenuBtn" class="btn-small btn-yellow a11y-menu-btn" aria-expanded="false" aria-controls="a11yMenu" onclick="toggleA11yMenu(event)">
-            <span data-i18n="settingsBtn">⚙️ AYARLAR</span>
+        <button id="a11yMenuBtn" class="btn-small btn-gray a11y-menu-btn" aria-expanded="false" aria-controls="a11yMenu" onclick="toggleA11yMenu(event)">
+            <span data-i18n="settingsBtn">AYARLAR</span>
         </button>
         <div id="a11yMenu" class="a11y-menu" hidden>
             <div class="a11y-group dev-only">
@@ -541,8 +507,8 @@
             <div class="a11y-group">
                 <label class="a11y-label" data-i18n="langLabel">DİL</label>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                    <button onclick="setLanguage('tr')" id="langMenuBtnTr" data-lang-btn="tr" class="btn-small btn-lang" style="font-size:18px;">🇹🇷 TR</button>
-                    <button onclick="setLanguage('en')" id="langMenuBtnEn" data-lang-btn="en" class="btn-small btn-lang" style="font-size:18px;">🇬🇧 EN</button>
+                    <button onclick="setLanguage('tr')" id="langMenuBtnTr" data-lang-btn="tr" class="btn-small btn-lang">TR</button>
+                    <button onclick="setLanguage('en')" id="langMenuBtnEn" data-lang-btn="en" class="btn-small btn-lang">EN</button>
                 </div>
             </div>
             <button id="a11yToggle" type="button" class="btn-small btn-yellow a11y-btn" aria-pressed="false" onclick="toggleLargeText(this)">
@@ -578,8 +544,10 @@
     </script>
     <script src="config.js?v=20260505"></script>
     <script src="../js/production.js?v=20260704"></script>
+    <script src="../js/native-fetch.js?v=20260706v8"></script>
     <script src="../js/admob.js?v=20260506"></script>
-    <script src="elderly.js?v=20260704"></script>
+    <script src="elderly.js?v=20260706v8"></script>
+    <script src="sg-shell.js?v=20260706v8"></script>
     <script src="voice-assistant.js?v=20260505"></script>
 </body>
 </html>

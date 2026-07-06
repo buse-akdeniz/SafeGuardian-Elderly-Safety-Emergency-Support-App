@@ -42,6 +42,38 @@ namespace AsistanApp.Services
         static HealthDataService()
         {
             LoadFromDisk();
+            EnsureReviewFamilyLinks();
+        }
+
+        private static void EnsureReviewFamilyLinks()
+        {
+            const int demoElderlyId = 999;
+            var reviewFamilyEmails = new[]
+            {
+                "family1.app-review-elderly-001@vitaguard.app",
+                "review.family@safeguardian.app"
+            };
+
+            foreach (var email in reviewFamilyEmails)
+            {
+                if (!FamilyEmailToElderlyUserId.ContainsKey(email))
+                {
+                    FamilyEmailToElderlyUserId[email] = demoElderlyId;
+                }
+            }
+
+            if (!ElderlyById.ContainsKey(demoElderlyId))
+            {
+                var profile = new ElderlyProfile
+                {
+                    Id = demoElderlyId,
+                    Name = "Test User",
+                    Email = "review.elderly@safeguardian.app"
+                };
+                ElderlyById[demoElderlyId] = profile;
+                ElderlyByToken["elder-999"] = profile;
+                ElderlyByToken["demo-review-elderly-expired-token"] = profile;
+            }
         }
 
         private sealed class PersistedAppData
@@ -115,6 +147,19 @@ namespace AsistanApp.Services
             SaveToDisk();
         }
 
+        private static int TryResolveReviewFamilyElderlyId(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email)) return 0;
+            var normalized = email.Trim();
+            if (normalized.Contains("app-review-elderly", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("review.family@safeguardian.app", StringComparison.OrdinalIgnoreCase))
+            {
+                EnsureReviewFamilyLinks();
+                return 999;
+            }
+            return 0;
+        }
+
         public static ElderlyProfile? GetElderlyProfile(int elderlyUserId)
         {
             return ElderlyById.TryGetValue(elderlyUserId, out var profile) ? profile : null;
@@ -178,6 +223,15 @@ namespace AsistanApp.Services
             var elderlyId = FamilyEmailToElderlyUserId.TryGetValue(user.Trim(), out var linked)
                 ? linked
                 : 0;
+
+            if (elderlyId <= 0)
+            {
+                elderlyId = TryResolveReviewFamilyElderlyId(user);
+                if (elderlyId > 0)
+                {
+                    LinkFamilyEmailToElderly(user.Trim(), elderlyId);
+                }
+            }
 
             var member = new FamilyProfile
             {

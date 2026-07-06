@@ -3,6 +3,9 @@
   "appName": "SafeGuardian",
   "webDir": "wwwroot",
   "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    },
     "SplashScreen": {
       "launchShowDuration": 0
     }

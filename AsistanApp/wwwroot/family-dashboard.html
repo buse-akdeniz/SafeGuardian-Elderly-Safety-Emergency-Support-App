@@ -393,8 +393,8 @@
             <button type="button" class="lang-btn" id="langTrBtn" onclick="setLang('tr')">TR</button>
             <button type="button" class="lang-btn" id="langEnBtn" onclick="setLang('en')">EN</button>
         </div>
-        <h1 id="loginTitle">👨‍👩‍👧 Aile Kontrol Paneli</h1>
-        <p id="loginSubtitle" style="text-align: center; color: #666; margin-bottom: 30px; font-size: 16px;">
+        <h1 id="loginTitle">Aile Kontrol Paneli</h1>
+        <p id="loginSubtitle" style="text-align: center; color: #666; margin-bottom: 24px; font-size: 15px; line-height: 1.5;">
             Yaşlı yakınızın ilaç alımını ve günlük durumunu buradan takip edebilirsiniz.
         </p>
 
@@ -521,12 +521,13 @@
     </div>
 
     <script src="/js/production.js?v=20260704"></script>
+    <script src="/js/native-fetch.js?v=20260706v8"></script>
     <script src="/js/signalr.min.js"></script>
     <script src="/js/admob.js?v=20260506"></script>
     <script>
         const I18N = {
             tr: {
-                loginTitle: '👨‍👩‍👧 Aile Kontrol Paneli',
+                loginTitle: 'Aile Kontrol Paneli',
                 loginSubtitle: 'Yaşlı yakınızın ilaç alımını ve günlük durumunu buradan takip edebilirsiniz.',
                 familyEmailLabel: 'E-Posta (Aile Üyesi)',
                 familyEmailPlaceholder: 'Örn: ali@example.com',
@@ -584,11 +585,11 @@
                 emergency: 'Acil Durum',
                 liveLocation: 'Canlı konum',
                 emergencyBroadcast: 'Acil durum yayını alındı.',
-                elderlyNotLinked: 'Bu e-posta henüz bir yaşlı hesabına bağlı değil. Önce yaşlı uygulamasından Aile bölümüne bu e-postayı ekleyin.',
+                elderlyNotLinked: 'Bu e-posta henüz bir yaşlı hesabına bağlı değil. Yaşlı uygulamasında giriş yapın → Aile Üyeleri → Aile Üyesi Ekle → bu e-postayı kaydedin. Sonra aile panelinden aynı e-posta ile giriş yapın. Demo: family1.app-review-elderly-001@vitaguard.app',
                 elderlyNameMissing: 'Bağlı yaşlı'
             },
             en: {
-                loginTitle: '👨‍👩‍👧 Family Control Panel',
+                loginTitle: 'Family Control Panel',
                 loginSubtitle: 'Track your elderly relative\'s medications and daily status from here.',
                 familyEmailLabel: 'Email (Family Member)',
                 familyEmailPlaceholder: 'e.g. ali@example.com',
@@ -646,7 +647,7 @@
                 emergency: 'Emergency',
                 liveLocation: 'Live location',
                 emergencyBroadcast: 'Emergency broadcast received.',
-                elderlyNotLinked: 'This email is not linked to an elderly account yet. Add it from the elderly app under Family first.',
+                elderlyNotLinked: 'This email is not linked to an elderly account yet. In the elderly app: sign in → Family Members → Add Family Member → save this email. Then sign in here with the same email. Demo: family1.app-review-elderly-001@vitaguard.app',
                 elderlyNameMissing: 'Linked elderly'
             }
         };
@@ -663,6 +664,10 @@
             currentLang = lang;
             localStorage.setItem('familyPanelLang', lang);
             applyTranslations();
+            const alert = document.getElementById('loginAlert');
+            if (alert && alert.style.display !== 'none' && alert.dataset.lastErrorKey) {
+                alert.textContent = t(alert.dataset.lastErrorKey);
+            }
         }
 
         function applyTranslations() {
@@ -738,7 +743,18 @@
         const DEFAULT_API_BASE = 'https://safeguardian-elderly-safety-emergency-support-ap-production.up.railway.app/api';
         const API_TIMEOUT_MS = 12000;
 
+        function normalizeFamilyEmail(email) {
+            let value = String(email || '').trim().toLowerCase();
+            if (value.endsWith('@vitag')) value += 'uard.app';
+            if (value.endsWith('@vitaguard')) value += '.app';
+            return value;
+        }
+
         async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
+            const doRequest = window.SafeGuardianFetch?.request;
+            if (doRequest) {
+                return doRequest(url, options, timeoutMs);
+            }
             const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
             const timeoutId = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
             try {
@@ -870,7 +886,11 @@
         // GİRİŞ YÖNETIMI
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('familyEmail').value;
+            const rawEmail = document.getElementById('familyEmail').value;
+            const email = normalizeFamilyEmail(rawEmail);
+            if (email !== rawEmail) {
+                document.getElementById('familyEmail').value = email;
+            }
             const password = document.getElementById('familyPassword').value;
             const loginBtn = document.getElementById('loginSubmitBtn');
             const originalBtnText = loginBtn?.textContent || t('loginSubmitBtn');
@@ -916,7 +936,7 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (!data.caringFor) {
-                        showError(t('elderlyNotLinked'));
+                        showError(t('elderlyNotLinked'), 'elderlyNotLinked');
                         reEnableLoginBtn();
                         return;
                     }
@@ -934,7 +954,7 @@
                     return;
                 }
 
-                showError(t('loginFailed'));
+                showError(t('loginFailed'), 'loginFailed');
                 reEnableLoginBtn();
             } catch (error) {
                 const message = error?.message || String(error);
@@ -943,7 +963,7 @@
                     apiBase: ACTIVE_API_BASE,
                     email
                 });
-                showError(error?.name === 'AbortError' ? t('connectionError') : t('connectionError'));
+                showError(t('connectionError'), 'connectionError');
                 reEnableLoginBtn();
             }
         });
@@ -1378,10 +1398,13 @@
             resultEl.textContent = t('emergencySmsFailed');
         }
 
-        function showError(message) {
+        function showError(message, key) {
             const alert = document.getElementById('loginAlert');
+            if (key) alert.dataset.lastErrorKey = key;
+            else delete alert.dataset.lastErrorKey;
             alert.textContent = message;
             alert.style.display = 'block';
+        }
         }
 
         function logout() {
