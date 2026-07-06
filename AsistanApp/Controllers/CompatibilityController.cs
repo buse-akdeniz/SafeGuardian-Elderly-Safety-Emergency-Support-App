@@ -40,14 +40,21 @@ public class CompatibilityController : ControllerBase
         Environment.GetEnvironmentVariable("DATA_DIR")
             ?? Path.Combine(Environment.GetEnvironmentVariable("HOME") ?? "/tmp", ".safeguardian"),
         "medications.json");
+    private static readonly string FamilyMembersStorePath = Path.Combine(
+        Environment.GetEnvironmentVariable("DATA_DIR")
+            ?? Path.Combine(Environment.GetEnvironmentVariable("HOME") ?? "/tmp", ".safeguardian"),
+        "family-members.json");
     private static readonly object MedicationStoreLock = new();
+    private static readonly object FamilyStoreLock = new();
     private static bool _subscriptionsLoaded;
     private static bool _medicationsLoaded;
+    private static bool _familyLoaded;
 
     static CompatibilityController()
     {
         LoadSubscriptionsFromDisk();
         LoadMedicationsFromDisk();
+        LoadFamilyMembersFromDisk();
     }
 
     private int ResolveUserId()
@@ -193,6 +200,63 @@ public class CompatibilityController : ControllerBase
     {
         MedicationsByUser[userId] = meds;
         PersistMedicationsToDisk();
+    }
+
+    private static void LoadFamilyMembersFromDisk()
+    {
+        lock (FamilyStoreLock)
+        {
+            if (_familyLoaded) return;
+            _familyLoaded = true;
+            try
+            {
+                if (!System.IO.File.Exists(FamilyMembersStorePath)) return;
+                var json = System.IO.File.ReadAllText(FamilyMembersStorePath);
+                var items = JsonSerializer.Deserialize<Dictionary<string, List<FamilyMemberItem>>>(json);
+                if (items == null) return;
+                foreach (var pair in items)
+                {
+                    if (!int.TryParse(pair.Key, out var userId)) continue;
+                    FamilyByUser[userId] = pair.Value;
+                }
+            }
+            catch
+            {
+                // Keep in-memory defaults if persistence cannot be read.
+            }
+        }
+    }
+
+    private static void PersistFamilyMembersToDisk()
+    {
+        lock (FamilyStoreLock)
+        {
+            try
+            {
+                var directory = Path.GetDirectoryName(FamilyMembersStorePath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                var payload = FamilyByUser.ToDictionary(
+                    pair => pair.Key.ToString(),
+                    pair => pair.Value);
+
+                var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+                System.IO.File.WriteAllText(FamilyMembersStorePath, json);
+            }
+            catch
+            {
+                // Family changes should still succeed in memory.
+            }
+        }
+    }
+
+    private static void SaveFamilyMembers(int userId, List<FamilyMemberItem> members)
+    {
+        FamilyByUser[userId] = members;
+        PersistFamilyMembersToDisk();
     }
 
     private IConfiguration Config => HttpContext.RequestServices.GetRequiredService<IConfiguration>();
@@ -821,6 +885,21 @@ public class CompatibilityController : ControllerBase
         return Results.Json(new { success = true, medication = med, stockCount = med.StockCount });
     }
 
+    [HttpDelete("medications/{id:int}")]
+    public IResult DeleteMedication([FromRoute] int id)
+    {
+        var userId = ResolveUserId();
+        var meds = MedicationsByUser.GetOrAdd(userId, _ => new List<MedicationItem>());
+        var removed = meds.RemoveAll(x => x.Id == id);
+        if (removed == 0)
+        {
+            return Results.Json(new { success = false, message = "İlaç bulunamadı" }, statusCode: 404);
+        }
+
+        SaveMedications(userId, meds);
+        return Results.Json(new { success = true });
+    }
+
     [HttpGet("family-members")]
     public IResult GetFamilyMembers()
     {
@@ -863,7 +942,23 @@ public class CompatibilityController : ControllerBase
         });
 
         HealthDataService.LinkFamilyEmailToElderly(email, userId);
+        SaveFamilyMembers(userId, members);
 
+        return Results.Json(new { success = true, member = members[^1] });
+    }
+
+    [HttpDelete("family-members/{id:int}")]
+    public IResult DeleteFamilyMember([FromRoute] int id)
+    {
+        var userId = ResolveUserId();
+        var members = FamilyByUser.GetOrAdd(userId, _ => new List<FamilyMemberItem>());
+        var removed = members.RemoveAll(x => x.Id == id);
+        if (removed == 0)
+        {
+            return Results.Json(new { success = false, message = "Aile üyesi bulunamadı" }, statusCode: 404);
+        }
+
+        SaveFamilyMembers(userId, members);
         return Results.Json(new { success = true });
     }
 

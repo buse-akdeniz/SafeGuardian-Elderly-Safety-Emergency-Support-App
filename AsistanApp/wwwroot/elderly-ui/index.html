@@ -6,9 +6,10 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>SafeGuardian AI</title>
-    <link rel="stylesheet" href="elderly.css?v=20260706v8">
+    <link rel="stylesheet" href="elderly.css?v=20260706v9">
     <link rel="stylesheet" href="mood-theme.css">
-    <link rel="stylesheet" href="sg-app.css?v=20260706v8">
+    <link rel="stylesheet" href="sg-app.css?v=20260706v9">
+    <link rel="stylesheet" href="sg-icons.css?v=20260706v9">
 </head>
 <body>
     <header class="sg-app-header is-hidden" id="sgAppHeader">
@@ -147,7 +148,7 @@
             </div>
 
             <button class="btn-giant btn-green" onclick="goToAddMedication()" style="margin-top: 20px;">
-                <span data-i18n="addMedBtn">➕ YENİ İLAÇ EKLE</span>
+                <span data-i18n="addMedBtn">YENİ İLAÇ EKLE</span>
             </button>
         </div>
     </div>
@@ -201,7 +202,7 @@
             </div>
 
             <button class="btn-giant btn-green" onclick="goToAddFamily()" style="margin-top: 20px;">
-                <span data-i18n="addFamilyBtn">➕ AİLE ÜYESİ EKLE</span>
+                <span data-i18n="addFamilyBtn">AİLE ÜYESİ EKLE</span>
             </button>
         </div>
     </div>
@@ -310,22 +311,22 @@
         <div class="main-area">
             <div class="help-content">
                 <div class="help-section">
-                    <h2 data-i18n="helpMedTitle">💊 İLAÇLARIM</h2>
+                    <h2 data-i18n="helpMedTitle">İLAÇLARIM</h2>
                     <p data-i18n="helpMedDesc">Günlük ilacınızı alıp almadığınızı takip etmek için bu sayfayı kullanın. İlacınızı aldığınız zaman "ALDI" butonuna basın.</p>
                 </div>
 
                 <div class="help-section">
-                    <h2 data-i18n="helpFamilyTitle">👨‍👩‍👧 AİLE</h2>
+                    <h2 data-i18n="helpFamilyTitle">AİLE</h2>
                     <p data-i18n="helpFamilyDesc">Çocuklarınız ve torununuz uzaktan bilgi almak için bu sayfada sizinle bağlanabilir.</p>
                 </div>
 
                 <div class="help-section">
-                    <h2 data-i18n="helpVoiceTitle">🎤 SES KOMUTU</h2>
+                    <h2 data-i18n="helpVoiceTitle">SES KOMUTU</h2>
                     <p data-i18n="helpVoiceDesc">Mikrofona konuşarak "İlaç ekle" veya "Ana sayfa" diyerek komut verebilirsiniz.</p>
                 </div>
 
                 <div class="help-section">
-                    <h2 data-i18n="helpEmergencyTitle">📞 ACİL DURUMDA</h2>
+                    <h2 data-i18n="helpEmergencyTitle">ACİL DURUMDA</h2>
                     <p data-i18n="helpEmergencyDesc">Yardım almak için YARDIM butonuna basın ve aile üyeleriniz bilgilendirilecektir.</p>
                 </div>
 
@@ -400,9 +401,9 @@
                 <div class="sg-sub-block">
                     <div class="sg-sub-block-label" data-i18n="features">ÖZELLİKLER</div>
                     <div id="basicFeaturesList" class="sg-sub-block-value">
-                        <div data-i18n="basicFeature1">✓ Temel İlaç Yönetimi</div>
-                        <div data-i18n="basicFeature2">✓ Aile Üyeleri</div>
-                        <div data-i18n="basicFeature3">✓ Sesli Asistan</div>
+                        <div data-i18n="basicFeature1">Temel İlaç Yönetimi</div>
+                        <div data-i18n="basicFeature2">Aile Üyeleri</div>
+                        <div data-i18n="basicFeature3">Sesli Asistan</div>
                         <div id="premiumFeatures"></div>
                     </div>
                 </div>
@@ -475,7 +476,7 @@
     <!-- =================== SESLI ASİSTAN ONBOARDING =================== -->
     <div id="voiceOnboarding" class="voice-onboarding" role="dialog" aria-modal="true" aria-labelledby="voiceOnboardingTitle" aria-describedby="voiceOnboardingDesc">
         <div class="voice-onboarding-card">
-            <div class="voice-onboarding-icon" aria-hidden="true">🎙️</div>
+            <div class="voice-onboarding-icon" aria-hidden="true"></div>
             <h2 id="voiceOnboardingTitle" data-i18n="voiceOnboardingTitle">Sesli Asistanı Başlat</h2>
             <p id="voiceOnboardingDesc" data-i18n="voiceOnboardingDesc">Mikrofona dokun ve konuş. İstersen "İlaçlarım", "Aile", "Yardım" diyebilirsin.</p>
             <div class="voice-onboarding-actions">
@@ -524,7 +525,7 @@
                 GÖRÜNÜMÜ SIFIRLA
             </button>
             <button type="button" class="btn-small btn-blue a11y-btn" onclick="openPrivacyPolicy()" data-i18n="privacyPolicyBtn">
-                📄 GİZLİLİK SÖZLEŞMESİ
+                GİZLİLİK SÖZLEŞMESİ
             </button>
         </div>
     </div>
@@ -544,10 +545,10 @@
     </script>
     <script src="config.js?v=20260505"></script>
     <script src="../js/production.js?v=20260704"></script>
-    <script src="../js/native-fetch.js?v=20260706v8"></script>
+    <script src="../js/native-fetch.js?v=20260706v9"></script>
     <script src="../js/admob.js?v=20260506"></script>
-    <script src="elderly.js?v=20260706v8"></script>
-    <script src="sg-shell.js?v=20260706v8"></script>
+    <script src="elderly.js?v=20260706v9"></script>
+    <script src="sg-shell.js?v=20260706v9"></script>
     <script src="voice-assistant.js?v=20260505"></script>
 </body>
 </html>

@@ -90,8 +90,8 @@ function _onBackendFail() {
     if (_backendUnreachableCount >= BACKEND_FAIL_THRESHOLD && banner) {
         banner.style.display = 'block';
         banner.textContent = isProductionApp()
-            ? (t('connErrorBanner') || '📡 İnternet bağlantınızı kontrol edin.')
-            : '📡 Sunucuya bağlanılamıyor — Çevrimdışı modda çalışılıyor.';
+            ? (t('connErrorBanner') || 'İnternet bağlantınızı kontrol edin.')
+            : 'Sunucuya bağlanılamıyor — Çevrimdışı modda çalışılıyor.';
     }
     if (isProductionApp()) {
         return;
@@ -119,10 +119,10 @@ const TRANSLATIONS = {
         moodLabel: 'RUH HALİ', cameraLabel: 'KAMERA', healthLabel: 'SAĞLIK',
         doctorBtn: 'DOKTORA GÖSTER', voiceBtn: 'DİNLE / SESİ TEKRARLA',
         moodScreenTitle: 'RUH HALİ TAKIBI', healthScreenTitle: 'SAĞLIK KAYITLARI',
-        medicationsTitle: 'İLAÇLARIM', addMedBtn: '➕ YENİ İLAÇ EKLE',
+        medicationsTitle: 'İLAÇLARIM', addMedBtn: 'YENİ İLAÇ EKLE',
         addMedTitle: 'YENİ İLAÇ EKLE', medNameLabel: 'İLAÇ ADI', medNotesLabel: 'NOTLAR',
         timesLabel: 'SAATLER', saveBtn: 'KAYDET',
-        familyTitle: 'AİLE ÜYELERİ', addFamilyBtn: '➕ AİLE ÜYESİ EKLE',
+        familyTitle: 'AİLE ÜYELERİ', addFamilyBtn: 'AİLE ÜYESİ EKLE',
         addFamilyTitle: 'AİLE ÜYESİ EKLE', nameLabel: 'AD', relationLabel: 'İLİŞKİ',
         helpTitle: 'YARDIM', understoodBtn: 'ANLADIM',
         emergencyModalTitle: 'Acil yardım çağrılıyor',
@@ -131,7 +131,7 @@ const TRANSLATIONS = {
         voiceOnboardingTitle: 'Sesli Asistanı Başlat',
         voiceOnboardingDesc: 'Mikrofona dokun ve konuş. İstersen "İlaçlarım", "Aile", "Yardım" diyebilirsin.',
         voiceStartBtn: 'DİNLEMEYİ BAŞLAT', voiceSkipBtn: 'ŞİMDİ DEĞİL',
-        settingsBtn: '⚙️ AYARLAR', apiLabel: 'API ADRESİ',
+        settingsBtn: 'AYARLAR', apiLabel: 'API ADRESİ',
         apiSaveBtn: 'KAYDET', apiClearBtn: 'SIFIRLA',
         largeTextOn: 'YAZIYI BÜYÜT', largeTextOff: 'YAZIYI KÜÇÜLT',
         contrastOn: 'KONTRASTI ARTIR', contrastOff: 'KONTRASTI AZALT',
@@ -285,6 +285,12 @@ const TRANSLATIONS = {
         medNotConfirmedMsg: 'İlaç onayı alınmadı',
         medUrgentTitle: 'Acil',
         medUrgentMsg: 'İlaç hala onaylanmadı',
+        medDeleteBtn: 'İLACI SİL',
+        medDeletedTitle: 'Silindi',
+        medDeletedMsg: 'İlaç listeden kaldırıldı',
+        medDeleteFailedTitle: 'Hata',
+        medDeleteFailedMsg: 'İlaç silinemedi',
+        familyEmpty: 'Henüz aile üyesi eklenmedi',
         familyAddedTitle: 'Başarılı',
         familyAddedMsg: 'Aile üyesi eklendi',
         familyAddFailedTitle: 'Hata',
@@ -359,10 +365,10 @@ const TRANSLATIONS = {
         moodLabel: 'MOOD', cameraLabel: 'CAMERA', healthLabel: 'HEALTH',
         doctorBtn: 'SHOW DOCTOR', voiceBtn: 'LISTEN / REPEAT',
         moodScreenTitle: 'MOOD TRACKING', healthScreenTitle: 'HEALTH RECORDS',
-        medicationsTitle: 'MY MEDICATIONS', addMedBtn: '➕ ADD MEDICATION',
+        medicationsTitle: 'MY MEDICATIONS', addMedBtn: 'ADD MEDICATION',
         addMedTitle: 'ADD MEDICATION', medNameLabel: 'MEDICATION NAME', medNotesLabel: 'NOTES',
         timesLabel: 'TIMES', saveBtn: 'SAVE',
-        familyTitle: 'FAMILY MEMBERS', addFamilyBtn: '➕ ADD FAMILY MEMBER',
+        familyTitle: 'FAMILY MEMBERS', addFamilyBtn: 'ADD FAMILY MEMBER',
         addFamilyTitle: 'ADD FAMILY MEMBER', nameLabel: 'NAME', relationLabel: 'RELATION',
         helpTitle: 'HELP', understoodBtn: 'GOT IT',
         emergencyModalTitle: 'Calling emergency help',
@@ -371,7 +377,7 @@ const TRANSLATIONS = {
         voiceOnboardingTitle: 'Start Voice Assistant',
         voiceOnboardingDesc: 'Tap the microphone and speak. You can say "Medications", "Family", "Help".',
         voiceStartBtn: 'START LISTENING', voiceSkipBtn: 'NOT NOW',
-        settingsBtn: '⚙️ SETTINGS', apiLabel: 'API ADDRESS',
+        settingsBtn: 'SETTINGS', apiLabel: 'API ADDRESS',
         apiSaveBtn: 'SAVE', apiClearBtn: 'RESET',
         largeTextOn: 'INCREASE TEXT SIZE', largeTextOff: 'DECREASE TEXT SIZE',
         contrastOn: 'INCREASE CONTRAST', contrastOff: 'DECREASE CONTRAST',
@@ -526,6 +532,12 @@ const TRANSLATIONS = {
         medNotConfirmedMsg: 'Medication was not confirmed',
         medUrgentTitle: 'Urgent',
         medUrgentMsg: 'Medication still not confirmed',
+        medDeleteBtn: 'DELETE MEDICATION',
+        medDeletedTitle: 'Deleted',
+        medDeletedMsg: 'Medication removed from your list',
+        medDeleteFailedTitle: 'Error',
+        medDeleteFailedMsg: 'Could not delete medication',
+        familyEmpty: 'No family members added yet',
         familyAddedTitle: 'Success',
         familyAddedMsg: 'Family member added',
         familyAddFailedTitle: 'Error',
@@ -2492,17 +2504,8 @@ function goToAddMedication() {
 
 function goToFamily() {
     if (!requireAuthToken()) return;
-    // In offline/demo mode skip premium check (backend is unreachable so check always fails)
-    if (isOfflineDemoModeEnabled()) {
-        showScreen('familyScreen');
-        loadFamilyMembers();
-        return;
-    }
-    ensurePremiumAccess(currentLang === 'en' ? 'Family' : 'Aile').then(hasAccess => {
-        if (!hasAccess) return;
-        showScreen('familyScreen');
-        loadFamilyMembers();
-    });
+    showScreen('familyScreen');
+    loadFamilyMembers();
 }
 
 function goToMoodDashboard() {
@@ -3047,17 +3050,17 @@ function initOfflineResilienceBridge() {
         }
         if (data.type === 'OFFLINE_SYNC_COMPLETED') {
             const msg = data.message || 'Çevrimdışı kaydedilen veriler başarıyla sunucuya gönderildi.';
-            showGracefulOfflineState(`✅ ${msg}`, 'success');
+            showGracefulOfflineState(`${msg}`, 'success');
             speak(msg);
         }
     });
 
     window.addEventListener('offline', () => {
-        showGracefulOfflineState('📡 İnternet yok. Merak etme, ölçümlerini cihazda güvenle saklıyorum.', 'offline');
+        showGracefulOfflineState('İnternet yok. Merak etme, ölçümlerini cihazda güvenle saklıyorum.', 'offline');
     });
 
     window.addEventListener('online', () => {
-        showGracefulOfflineState('✅ İnternet geri geldi. Kayıtlı verileri arka planda sunucuya gönderiyorum.', 'success');
+        showGracefulOfflineState('İnternet geri geldi. Kayıtlı verileri arka planda sunucuya gönderiyorum.', 'success');
     });
 }
 
@@ -3302,7 +3305,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (isOfflineDemoModeEnabled()) {
         showScreen('homeScreen');
         updateGreeting();
-        showGracefulOfflineState('📡 Demo çevrimdışı mod açık. Sunucuya bağlanmadan temel ekran gösteriliyor.', 'offline');
+        showGracefulOfflineState('Demo çevrimdışı mod açık. Sunucuya bağlanmadan temel ekran gösteriliyor.', 'offline');
     }
 
     // Capacitor iOS: if the backend is not reachable on startup, don't hang on loading screens.
@@ -3738,7 +3741,7 @@ async function handleLogin(e) {
         subscriptionCache = null;
         showScreen('homeScreen');
         updateGreeting();
-        showGracefulOfflineState('📡 Demo çevrimdışı mod açık. Sunucuya bağlanmadan temel ekran gösteriliyor.', 'offline');
+        showGracefulOfflineState('Demo çevrimdışı mod açık. Sunucuya bağlanmadan temel ekran gösteriliyor.', 'offline');
         runPendingAssistantIntentIfAny();
         return;
     }
@@ -3953,7 +3956,7 @@ async function loadMedications() {
             const medications = readLocalList('localMedications');
             currentMedicationsCache = medications;
             if (container && medications.length === 0) {
-                container.innerHTML = `<div style="font-size:22px;color:#ffaa00;text-align:center;padding:24px;">📡 Sunucu bağlantısı yok. Yerel ilaç kaydı bulunamadı.</div>`;
+                container.innerHTML = `<div style="font-size:22px;color:#ffaa00;text-align:center;padding:24px;">${escapeHtml(t('connErrorBanner'))}</div>`;
             }
             if (container && medications.length > 0) {
                 container.innerHTML = medications.map(med => `
@@ -3980,13 +3983,17 @@ async function loadMedications() {
             }
             container.innerHTML = medications.map(med => {
                 const medName = escapeHtml(med.name || med.medicationName || med.notes || t('medNameLabel'));
+                const medId = Number(med.id) || 0;
                 return `
                 <div class="sg-med-card">
                     <div class="sg-med-card-title">${medName}</div>
                     <div class="sg-med-card-line">${t('medsTimeLabel')}: ${escapeHtml((med.scheduleTimes || []).join(', ') || t('medsUnspecified'))}</div>
                     ${med.notes ? `<div class="sg-med-card-note">${escapeHtml(med.notes)}</div>` : ''}
                     ${typeof med.stockCount === 'number' ? `<div class="sg-med-card-stock">${t('medsRemaining')}: ${med.stockCount}</div>` : ''}
-                    <button class="btn-giant btn-green" type="button" onclick="takeMedication(${Number(med.id) || 0})">${t('medsTakenBtn')}</button>
+                    <div class="sg-med-card-actions">
+                        <button class="btn-giant btn-green" type="button" onclick="takeMedication(${medId})">${t('medsTakenBtn')}</button>
+                        <button class="btn-giant btn-delete" type="button" onclick="deleteMedication(${medId})">${t('medDeleteBtn')}</button>
+                    </div>
                 </div>
             `;
             }).join('');
@@ -3995,7 +4002,7 @@ async function loadMedications() {
         }
     } catch (error) {
         console.warn('İlaç yükleme hatası:', error);
-        if (container) container.innerHTML = `<div style="font-size:22px;color:#ffaa00;text-align:center;padding:24px;">📡 İlaçlar yüklenirken hata oluştu.</div>`;
+        if (container) container.innerHTML = `<div style="font-size:22px;color:#ffaa00;text-align:center;padding:24px;">${escapeHtml(t('connErrorBanner'))}</div>`;
     }
 }
 
@@ -4022,6 +4029,27 @@ async function takeMedication(medicationId) {
     } catch (error) {
         console.error('İlaç alma hatası:', error);
         notifyI18n('genericErrorTitle', 'genericErrorMsg', 'error');
+    }
+}
+
+async function deleteMedication(medicationId) {
+    const token = requireAuthToken();
+    if (!token || !medicationId) return;
+    try {
+        const response = await safeFetch(`${API_BASE}/api/medications/${medicationId}?token=${token}`, {
+            method: 'DELETE'
+        });
+        if (!response) return;
+        if (response.ok) {
+            clearMedicationConfirmTimer(medicationId);
+            notifyI18n('medDeletedTitle', 'medDeletedMsg', 'success');
+            loadMedications();
+            return;
+        }
+        notifyI18n('medDeleteFailedTitle', 'medDeleteFailedMsg', 'error');
+    } catch (error) {
+        console.error('İlaç silme hatası:', error);
+        notifyI18n('medDeleteFailedTitle', 'medDeleteFailedMsg', 'error');
     }
 }
 
@@ -4079,19 +4107,24 @@ function clearMedicationConfirmTimer(medicationId) {
 async function loadFamilyMembers() {
     const token = requireAuthToken();
     if (!token) return;
+    const container = document.getElementById('familyList');
+    if (!container) return;
     try {
         const response = await safeFetch(`${API_BASE}/api/family-members?token=${token}`);
         if (!response) return;
         if (response.ok) {
             const payload = await safeReadJson(response, { members: [] });
             const members = Array.isArray(payload) ? payload : (payload.members || []);
-            const container = document.getElementById('familyList');
+            if (!members.length) {
+                container.innerHTML = `<div class="sg-family-empty">${escapeHtml(t('familyEmpty'))}</div>`;
+                return;
+            }
             container.innerHTML = members.map(member => `
-                <div style="background: rgba(0,255,100,0.1); border-left: 5px solid #00ff00; padding: 20px; margin-bottom: 20px; border-radius: 10px;">
-                    <div style="font-size: 32px; color: #ffff00; font-weight: bold; margin-bottom: 10px;">${member.name}</div>
-                    <div style="font-size: 24px; color: #ffffff;">${member.relationship || t('familyMemberDefault')}</div>
-                    <div style="font-size: 20px; color: #00ff00; margin-top: 10px;">${member.email}</div>
-                    ${member.phoneNumber ? `<div style="font-size: 20px; color: #00ccff; margin-top: 8px;">${member.phoneNumber}</div>` : ''}
+                <div class="sg-family-card">
+                    <div class="sg-family-card-name">${escapeHtml(member.name || t('familyMemberDefault'))}</div>
+                    <div class="sg-family-card-line">${escapeHtml(member.relationship || member.relation || t('familyMemberDefault'))}</div>
+                    <div class="sg-family-card-line">${escapeHtml(member.email || '')}</div>
+                    ${member.phoneNumber ? `<div class="sg-family-card-line">${escapeHtml(member.phoneNumber)}</div>` : ''}
                 </div>
             `).join('');
         }
@@ -4102,14 +4135,17 @@ async function loadFamilyMembers() {
 
 async function handleAddFamily(e) {
     e.preventDefault();
-    const name = document.getElementById('familyName').value;
+    const name = document.getElementById('familyName').value.trim();
     const phoneNumber = document.getElementById('familyPhone')?.value?.trim() || '';
-    const email = document.getElementById('familyEmail').value;
+    const email = document.getElementById('familyEmail').value.trim();
     const relationship = document.getElementById('familyRelation').value;
 
+    if (!name || !email) {
+        notifyI18n('familyAddFailedTitle', 'familyAddFailedMsg', 'error');
+        return;
+    }
+
     try {
-        const hasAccess = await ensurePremiumAccess('Aile üyesi ekleme');
-        if (!hasAccess) return;
         const token = requireAuthToken();
         if (!token) return;
         const response = await safeFetch(`${API_BASE}/api/family-members?token=${token}`, {
@@ -4122,8 +4158,19 @@ async function handleAddFamily(e) {
         if (response.ok) {
             notifyI18n('familyAddedTitle', 'familyAddedMsg', 'success');
             document.getElementById('addFamilyForm').reset();
-            setTimeout(() => goToFamily(), 1000);
+            await loadFamilyMembers();
+            setTimeout(() => goToFamily(), 600);
+            return;
         }
+
+        let errorMessage = t('familyAddFailedMsg');
+        try {
+            const data = await response.json();
+            if (data?.message) errorMessage = data.message;
+        } catch {
+            // keep default
+        }
+        showNotification(t('familyAddFailedTitle'), errorMessage, 'error');
     } catch (error) {
         console.error('Aile ekleme hatası:', error);
         notifyI18n('familyAddFailedTitle', 'familyAddFailedMsg', 'error');
@@ -4715,7 +4762,7 @@ async function addHealthRecord(recordType, value, unit) {
 
             if (result?.queued === true || response.status === 202) {
                 const queuedMessage = 'İnternet yok ama merak etme, verini kaydettim. İnternet gelince doktora ve aileye göndereceğim.';
-                showGracefulOfflineState(`📌 ${queuedMessage}`, 'offline');
+                showGracefulOfflineState(`${queuedMessage}`, 'offline');
                 speak(queuedMessage);
                 return;
             }
@@ -4806,6 +4853,8 @@ function bindGlobals() {
         toggleSimpleHome,
         resetViewSettings,
         setMedicationPreset,
+        takeMedication,
+        deleteMedication,
         updateA11yControlsVisibility,
     };
     Object.entries(exports).forEach(([name, fn]) => {

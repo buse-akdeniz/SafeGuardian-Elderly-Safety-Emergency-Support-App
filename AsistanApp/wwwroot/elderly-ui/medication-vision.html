@@ -341,21 +341,21 @@
         </div>
 
         <div class="info-box" id="usageHint">
-            <strong>📸 Nasıl Kullanılır:</strong><br>
+            <strong>Nasıl Kullanılır:</strong><br>
             Tek tuşla başlayın. Sistem kamerayı açar veya gerekirse fotoğraf seçmenizi ister.
         </div>
 
         <div class="info-box" id="environmentHint">
-            <strong>💡 İpucu:</strong><br>
+            <strong>İpucu:</strong><br>
             Canlı kamera açılmazsa uygulama sizi otomatik olarak fotoğraf seçimine yönlendirir.
         </div>
 
         <div class="permission-guide" id="permissionGuide">
-            <h3 id="permissionTitle">📌 Kamera izni nasıl verilir?</h3>
+            <h3 id="permissionTitle">Kamera izni nasıl verilir?</h3>
             <ol>
-                <li id="permissionStep1">Adres çubuğundaki 🔒 kilit simgesine tıklayın.</li>
-                <li id="permissionStep2">“Kamera” iznini “İzin ver” yapın.</li>
-                <li id="permissionStep3">Sayfayı yenileyin ve tekrar deneyin.</li>
+                <li id="permissionStep1">Ayarlar uygulamasından SafeGuardian için Kamera iznini açın.</li>
+                <li id="permissionStep2">Kamera iznini "İzin ver" yapın.</li>
+                <li id="permissionStep3">Uygulamaya dönün ve tekrar deneyin.</li>
             </ol>
         </div>
 
@@ -367,29 +367,29 @@
             <input id="cameraFileInput" type="file" accept="image/*" style="display:none;" />
 
             <button class="btn-giant" id="startCameraBtn" onclick="startCamera()">
-                <span id="startCameraBtnLabel">📷 FOTOĞRAF ÇEK VEYA SEÇ</span>
+                <span id="startCameraBtnLabel">FOTOĞRAF ÇEK VEYA SEÇ</span>
             </button>
 
             <button class="btn-giant btn-secondary" id="captureBtn" onclick="captureImage()" style="display: none;">
-                <span id="captureBtnLabel">📸 ŞİMDİ ÇEK</span>
+                <span id="captureBtnLabel">ŞİMDİ ÇEK</span>
             </button>
 
             <button class="btn-giant btn-danger" id="stopCameraBtn" onclick="stopCamera()" style="display: none;">
-                <span id="stopCameraBtnLabel">⏹️ KAMERAYI KAPAT</span>
+                <span id="stopCameraBtnLabel">KAMERAYI KAPAT</span>
             </button>
         </div>
 
         <div class="result-section" id="resultSection">
-            <h2 id="resultTitle" style="font-size: 28px; margin-bottom: 20px;">🔍 Analiz Sonucu</h2>
+            <h2 id="resultTitle" style="font-size: 28px; margin-bottom: 20px;">Analiz Sonucu</h2>
 
             <div id="medicationResults"></div>
 
             <div class="action-buttons">
                 <button id="notifyBtn" class="btn-notify" onclick="notifyPharmacy()">
-                    🏥 ECZANEYİ BİLGİLENDİR
+                    ECZANEYİ BİLGİLENDİR
                 </button>
                 <button id="closeBtn" class="btn-close" onclick="closeResult()">
-                    ❌ KAPAT
+                    KAPAT
                 </button>
             </div>
         </div>

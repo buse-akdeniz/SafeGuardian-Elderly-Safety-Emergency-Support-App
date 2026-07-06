@@ -332,12 +332,14 @@ body.sg-on-inner .screen.active {
   font-weight: 800;
 }
 
-.btn-icon--med::before { content: 'Rx' !important; }
-.btn-icon--family::before { content: 'A' !important; }
-.btn-icon--help::before { content: '!' !important; }
-.btn-icon--mood::before { content: ':)' !important; font-size: 16px !important; }
-.btn-icon--camera::before { content: 'O' !important; }
-.btn-icon--health::before { content: '+' !important; }
+.btn-icon--med::before,
+.btn-icon--family::before,
+.btn-icon--help::before,
+.btn-icon--mood::before,
+.btn-icon--camera::before,
+.btn-icon--health::before {
+  content: '' !important;
+}
 
 .btn-text {
   font-size: 15px !important;
