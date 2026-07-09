@@ -4311,6 +4311,7 @@ async function confirmEmergency() {
             notifyI18n('emergencySentTitle', 'emergencySentMsg', 'success');
             await sendEmergencyNotification(location);
             await sendEmergencyBroadcast(buildEmergencyPayload(location));
+            await sendEmergencySmsToFamily(location);
             await triggerEmergencyCall();
         } else {
             notifyI18n('emergencyFailedTitle', 'emergencyFailedMsg', 'error');
@@ -4318,6 +4319,38 @@ async function confirmEmergency() {
     } catch (error) {
         console.error('Acil çağrı hatası:', error);
         notifyI18n('connErrorTitle', 'connError', 'error');
+    }
+}
+
+async function sendEmergencySmsToFamily(location) {
+    const token = requireAuthToken();
+    if (!token) return;
+    try {
+        const response = await safeFetch(`${API_BASE}/api/family-members?token=${token}`, {}, { silent: true });
+        if (!response?.ok) return;
+        const payload = await safeReadJson(response, { members: [] });
+        const members = Array.isArray(payload) ? payload : (payload.members || []);
+        const phones = members
+            .map(m => String(m.phoneNumber || '').trim())
+            .filter(Boolean);
+        if (!phones.length) return;
+
+        const loc = location?.mapsUrl || location?.label || '';
+        const msg = loc
+            ? `ACIL DURUM! Yardım çağrısı yapıldı. Konum: ${loc}`
+            : 'ACIL DURUM! Yardım çağrısı yapıldı. Konum alınamadı.';
+
+        await safeFetch(`${API_BASE}/api/emergency-sms/dispatch?token=${token}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                phoneNumbers: phones,
+                message: msg,
+                location: loc
+            })
+        }, { silent: true });
+    } catch (error) {
+        console.warn('Acil SMS gönderimi başarısız:', error);
     }
 }
 
