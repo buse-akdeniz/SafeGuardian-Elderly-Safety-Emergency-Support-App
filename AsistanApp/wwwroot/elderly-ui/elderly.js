@@ -874,11 +874,14 @@ async function getStoredToken() {
         try {
             const result = await PreferencesPlugin.get({ key: 'token' });
             const token = result?.value || '';
-            if (isDemoOfflineToken(token) || isDemoReviewToken(token)) {
+            // NOTE: Demo REVIEW token must remain usable for App Review flows.
+            // Only the offline demo token should not persist as a real session.
+            if (isDemoOfflineToken(token)) {
                 await PreferencesPlugin.remove({ key: 'token' });
                 authTokenCache = null;
                 return '';
-            } else if (token) {
+            }
+            if (token) {
                 authTokenCache = token;
                 return token;
             }
@@ -888,7 +891,7 @@ async function getStoredToken() {
     }
 
     const webToken = localStorage.getItem('token') || '';
-    if (isDemoOfflineToken(webToken) || isDemoReviewToken(webToken)) {
+    if (isDemoOfflineToken(webToken)) {
         localStorage.removeItem('token');
         authTokenCache = null;
         return '';
@@ -931,8 +934,8 @@ async function removeStoredToken() {
 
 async function validateStoredSessionToken(token) {
     const value = String(token || '').trim();
-    if (!value || isDemoOfflineToken(value) || isDemoReviewToken(value) || isOfflineDemoModeEnabled()) {
-        if (isDemoOfflineToken(value) || isDemoReviewToken(value)) {
+    if (!value || isDemoOfflineToken(value) || isOfflineDemoModeEnabled()) {
+        if (isDemoOfflineToken(value)) {
             await removeStoredToken();
             return false;
         }
