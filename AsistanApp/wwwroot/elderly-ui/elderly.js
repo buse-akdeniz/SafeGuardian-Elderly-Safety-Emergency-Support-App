@@ -2508,8 +2508,11 @@ function goToAddMedication() {
 
 function goToFamily() {
     if (!requireAuthToken()) return;
-    showScreen('familyScreen');
-    loadFamilyMembers();
+    ensurePremiumAccess(currentLang === 'en' ? 'Family' : 'Aile').then(hasAccess => {
+        if (!hasAccess) return;
+        showScreen('familyScreen');
+        loadFamilyMembers();
+    });
 }
 
 function goToMoodDashboard() {
@@ -4151,6 +4154,8 @@ async function handleAddFamily(e) {
     }
 
     try {
+        const hasAccess = await ensurePremiumAccess(currentLang === 'en' ? 'Family' : 'Aile');
+        if (!hasAccess) return;
         const token = requireAuthToken();
         if (!token) return;
         const response = await safeFetch(`${API_BASE}/api/family-members?token=${token}`, {

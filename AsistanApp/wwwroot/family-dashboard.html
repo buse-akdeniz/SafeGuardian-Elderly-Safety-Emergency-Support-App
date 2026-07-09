@@ -3,8 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Yaşlı Yakınız - Aile Kontrol Paneli</title>
+    <title>SafeGuardian AI — Aile Paneli</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="elderly-ui/assets/favicon-32.png">
     <style>
+        :root {
+            --sg-bg: #0c1118;
+            --sg-surface: #151d2b;
+            --sg-surface-2: #1f2a3d;
+            --sg-border: #2d3b52;
+            --sg-text: #f4f7fb;
+            --sg-muted: #9aa8bc;
+            --sg-accent: #3b9eff;
+            --sg-accent-2: #22c55e;
+            --sg-warn: #f59e0b;
+            --sg-danger: #ef4444;
+            --sg-radius: 14px;
+            --sg-safe-top: env(safe-area-inset-top, 0px);
+            --sg-safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
         * {
             margin: 0;
             padding: 0;
@@ -13,9 +29,10 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--sg-bg);
+            color: var(--sg-text);
             min-height: 100vh;
-            padding: max(12px, env(safe-area-inset-top)) 12px max(20px, env(safe-area-inset-bottom));
+            padding: max(12px, var(--sg-safe-top)) 12px max(20px, var(--sg-safe-bottom));
         }
 
         @media (max-width: 640px) {
@@ -37,10 +54,11 @@
         .login-container {
             max-width: 500px;
             margin: 100px auto;
-            background: white;
+            background: var(--sg-surface);
             padding: 40px;
             border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--sg-border);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
             display: none;
         }
 
@@ -60,7 +78,7 @@
 
         h1 {
             text-align: center;
-            color: #333;
+            color: var(--sg-text);
             margin-bottom: 30px;
             font-size: 36px;
         }
@@ -72,7 +90,7 @@
         .form-group label {
             display: block;
             font-size: 18px;
-            color: #333;
+            color: var(--sg-muted);
             font-weight: 600;
             margin-bottom: 10px;
         }
@@ -81,21 +99,23 @@
             width: 100%;
             padding: 15px;
             font-size: 18px;
-            border: 2px solid #667eea;
+            border: 1px solid var(--sg-border);
+            background: var(--sg-surface-2);
+            color: var(--sg-text);
             border-radius: 10px;
             transition: border-color 0.3s;
         }
 
         .form-group input:focus {
             outline: none;
-            border-color: #764ba2;
+            border-color: var(--sg-accent);
         }
 
         button {
             width: 100%;
             padding: 15px;
             font-size: 18px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--sg-accent);
             color: white;
             border: none;
             border-radius: 10px;
@@ -113,9 +133,43 @@
         }
 
         .logout-btn {
-            background: #ff6b6b;
+            background: var(--sg-danger);
             margin-top: 20px;
             margin-bottom: 0;
+        }
+
+        .sg-brand-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .sg-brand-mark {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            box-shadow: 0 12px 28px rgba(0,0,0,0.45);
+        }
+
+        .sg-brand-title {
+            text-align: left;
+            line-height: 1.05;
+        }
+
+        .sg-brand-title strong {
+            display: block;
+            font-size: 22px;
+            letter-spacing: 0.02em;
+        }
+
+        .sg-brand-title small {
+            display: block;
+            font-size: 12px;
+            color: var(--sg-muted);
+            letter-spacing: 0.10em;
+            margin-top: 3px;
         }
 
         .back-btn {
@@ -393,6 +447,13 @@
             <button type="button" class="lang-btn" id="langTrBtn" onclick="setLang('tr')">TR</button>
             <button type="button" class="lang-btn" id="langEnBtn" onclick="setLang('en')">EN</button>
         </div>
+        <div class="sg-brand-row" aria-hidden="true">
+            <img class="sg-brand-mark" src="elderly-ui/assets/logo-192.png" alt="">
+            <div class="sg-brand-title">
+                <strong>SafeGuardian</strong>
+                <small>FAMILY</small>
+            </div>
+        </div>
         <h1 id="loginTitle">Aile Kontrol Paneli</h1>
         <p id="loginSubtitle" style="text-align: center; color: #666; margin-bottom: 24px; font-size: 15px; line-height: 1.5;">
             Yaşlı yakınızın ilaç alımını ve günlük durumunu buradan takip edebilirsiniz.
@@ -539,14 +600,14 @@
                 apiBaseLabel: 'API Adresi',
                 apiBaseSave: 'Kaydet',
                 apiBaseClear: 'Sıfırla',
-                agePrefix: '👤 Yaş:',
-                phonePrefix: '📞 Tel:',
-                elderlyStatus: 'İyi ✓',
+                agePrefix: 'Yaş:',
+                phonePrefix: 'Tel:',
+                elderlyStatus: 'İyi',
                 logoutBtn: 'Çıkış Yap',
                 backHomeBtnDash: '← Ana Ekrana Dön',
-                medicationsTitle: '💊 Bugünün İlaçları',
-                notificationsTitle: '🔔 Son Bildirimler',
-                accountTitle: '👤 Aile Hesabı',
+                medicationsTitle: 'Bugünün İlaçları',
+                notificationsTitle: 'Son Bildirimler',
+                accountTitle: 'Aile Hesabı',
                 accountNameLabel: 'İsim Soyisim',
                 accountEmailLabel: 'E-posta',
                 accountPhoneLabel: 'Telefon',
@@ -554,14 +615,14 @@
                 accountEmailPlaceholder: 'ornek@eposta.com',
                 accountPhonePlaceholder: '+90 5xx xxx xx xx',
                 subscriptionStatusLabel: 'Abonelik Durumu:',
-                saveAccountBtn: '💾 Kaydet',
-                openTermsBtn: '📘 Kullanım Koşulları',
-                openPrivacyBtn: '📄 Gizlilik Sözleşmesi',
-                cancelSubscriptionBtn: '🛑 Abonelik İptal',
-                deleteAccountBtn: '🗑️ Hesabı Sil',
-                emergencyTestTitle: '🚨 Acil Durum SMS Testi',
+                saveAccountBtn: 'Kaydet',
+                openTermsBtn: 'Kullanım Koşulları',
+                openPrivacyBtn: 'Gizlilik Sözleşmesi',
+                cancelSubscriptionBtn: 'Abonelik İptal',
+                deleteAccountBtn: 'Hesabı Sil',
+                emergencyTestTitle: 'Acil Durum SMS Testi',
                 emergencyTestInfo: 'App Review sırasında yapılan test tetiklemelerinde bu sürüm güvenli modda çalışır. Gerçek SMS gönderimi yerine uygulama içi/simüle kayıt üretilir.',
-                emergencyTestBtn: '🧪 SMS Testini Çalıştır',
+                emergencyTestBtn: 'SMS Testini Çalıştır',
                 medsLoading: 'İlaç yükleniyor...',
                 notifsLoading: 'Bildirim yükleniyor...',
                 loginFailed: 'Giriş başarısız. E-posta ve şifrenizi kontrol edin.',
