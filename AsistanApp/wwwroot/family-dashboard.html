@@ -503,11 +503,11 @@
         <div class="dashboard-header">
             <div class="elderly-info">
                 <h2 id="elderlyName">—</h2>
-                <p><span id="agePrefix">👤 Yaş:</span> <span id="elderlyAge">—</span></p>
-                <p><span id="phonePrefix">📞 Tel:</span> <span id="elderlyPhone">—</span></p>
+                <p><span id="agePrefix">Yaş:</span> <span id="elderlyAge">—</span></p>
+                <p><span id="phonePrefix">Tel:</span> <span id="elderlyPhone">—</span></p>
             </div>
             <div style="text-align: right;">
-                <div id="elderlyStatus" class="status-badge">İyi ✓</div>
+                <div id="elderlyStatus" class="status-badge">İyi</div>
                 <button class="logout-btn" id="logoutBtn" onclick="logout()">Çıkış Yap</button>
                 <button class="back-btn" id="backHomeBtnDash" onclick="goHome()">← Ana Ekrana Dön</button>
             </div>
@@ -516,8 +516,8 @@
         <!-- İLAÇ TAKIP -->
         <div class="card">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-                <h3 id="medicationsTitle" style="margin:0;">💊 Bugünün İlaçları</h3>
-                <button type="button" class="back-btn" id="refreshDashboardBtn" onclick="loadDashboard()">↻ Yenile</button>
+                <h3 id="medicationsTitle" style="margin:0;">Bugünün İlaçları</h3>
+                <button type="button" class="back-btn" id="refreshDashboardBtn" onclick="loadDashboard()">Yenile</button>
             </div>
             <div id="medicationsContainer" class="empty-state">
                 İlaç yükleniyor...
@@ -526,7 +526,7 @@
 
         <!-- BİLDİRİMLER -->
         <div class="card">
-            <h3 id="notificationsTitle">🔔 Son Bildirimler</h3>
+            <h3 id="notificationsTitle">Son Bildirimler</h3>
             <div id="notificationsContainer" class="empty-state">
                 Bildirim yükleniyor...
             </div>
@@ -534,7 +534,7 @@
 
         <!-- AİLE HESAP SAYFASI -->
         <div class="card">
-            <h3 id="accountTitle">👤 Aile Hesabı</h3>
+            <h3 id="accountTitle">Aile Hesabı</h3>
             <div id="accountMessage" class="alert success" style="display:none;"></div>
 
             <div class="account-grid">
@@ -559,23 +559,23 @@
             </div>
 
             <div class="inline-actions">
-                <button type="button" id="saveAccountBtn" onclick="saveFamilyAccount()">💾 Kaydet</button>
-                <button type="button" class="secondary-btn" id="openTermsBtn" onclick="openTermsOfUse()">📘 Kullanım Koşulları</button>
-                <button type="button" class="secondary-btn" id="openPrivacyBtn" onclick="openPrivacyPolicy()">📄 Gizlilik Sözleşmesi</button>
-                <button type="button" class="danger-btn" id="cancelSubscriptionBtn" onclick="cancelFamilySubscription()">🛑 Abonelik İptal</button>
-                <button type="button" class="danger-btn" id="deleteAccountBtn" onclick="deleteFamilyAccount()">🗑️ Hesabı Sil</button>
+                <button type="button" id="saveAccountBtn" onclick="saveFamilyAccount()">Kaydet</button>
+                <button type="button" class="secondary-btn" id="openTermsBtn" onclick="openTermsOfUse()">Kullanım Koşulları</button>
+                <button type="button" class="secondary-btn" id="openPrivacyBtn" onclick="openPrivacyPolicy()">Gizlilik Sözleşmesi</button>
+                <button type="button" class="danger-btn" id="cancelSubscriptionBtn" onclick="cancelFamilySubscription()">Abonelik İptal</button>
+                <button type="button" class="danger-btn" id="deleteAccountBtn" onclick="deleteFamilyAccount()">Hesabı Sil</button>
             </div>
         </div>
 
         <!-- APP REVIEW: ACİL SMS TEST DAVRANIŞI -->
         <div class="card">
-            <h3 id="emergencyTestTitle">🚨 Acil Durum SMS Testi</h3>
+            <h3 id="emergencyTestTitle">Acil Durum SMS Testi</h3>
             <div id="emergencyTestInfo" class="info-box">
                 App Review sırasında yapılan test tetiklemelerinde bu sürüm güvenli modda çalışır.
                 Gerçek SMS gönderimi yerine uygulama içi/simüle kayıt üretilir.
             </div>
             <div class="inline-actions">
-                <button type="button" id="emergencyTestBtn" onclick="runEmergencySmsTest()">🧪 SMS Testini Çalıştır</button>
+                <button type="button" id="emergencyTestBtn" onclick="runEmergencySmsTest()">SMS Testini Çalıştır</button>
             </div>
             <div id="emergencyTestResult" class="muted-note"></div>
         </div>
@@ -636,10 +636,10 @@
                 emergencySmsFailed: 'SMS testi çalıştırılamadı, yerel simülasyon gösterildi.',
                 noMedsToday: 'Bugün için ilaç bulunmuyor',
                 noNotifications: 'Bildirim yok',
-                medsTimes: '⏰ Saatler',
-                notes: '📝',
-                medTaken: '✓ Alındı',
-                medPending: '⏳ Bekleniyor',
+                medsTimes: 'Saatler',
+                notes: 'Not',
+                medTaken: 'Alındı',
+                medPending: 'Bekleniyor',
                 notifTitle: 'Bildirim',
                 fallDetected: 'Düşme Algılandı',
                 familyAlert: 'Aile Uyarısı',
@@ -662,14 +662,14 @@
                 apiBaseLabel: 'API Address',
                 apiBaseSave: 'Save',
                 apiBaseClear: 'Reset',
-                agePrefix: '👤 Age:',
-                phonePrefix: '📞 Phone:',
-                elderlyStatus: 'Good ✓',
+                agePrefix: 'Age:',
+                phonePrefix: 'Phone:',
+                elderlyStatus: 'Good',
                 logoutBtn: 'Log Out',
                 backHomeBtnDash: '← Back to Home',
-                medicationsTitle: '💊 Today\'s Medications',
-                notificationsTitle: '🔔 Recent Notifications',
-                accountTitle: '👤 Family Account',
+                medicationsTitle: 'Today\'s Medications',
+                notificationsTitle: 'Recent Notifications',
+                accountTitle: 'Family Account',
                 accountNameLabel: 'Full Name',
                 accountEmailLabel: 'Email',
                 accountPhoneLabel: 'Phone',
@@ -677,14 +677,14 @@
                 accountEmailPlaceholder: 'example@email.com',
                 accountPhonePlaceholder: '+1 xxx xxx xxxx',
                 subscriptionStatusLabel: 'Subscription Status:',
-                saveAccountBtn: '💾 Save',
-                openTermsBtn: '📘 Terms of Use',
-                openPrivacyBtn: '📄 Privacy Policy',
-                cancelSubscriptionBtn: '🛑 Cancel Subscription',
-                deleteAccountBtn: '🗑️ Delete Account',
-                emergencyTestTitle: '🚨 Emergency SMS Test',
+                saveAccountBtn: 'Save',
+                openTermsBtn: 'Terms of Use',
+                openPrivacyBtn: 'Privacy Policy',
+                cancelSubscriptionBtn: 'Cancel Subscription',
+                deleteAccountBtn: 'Delete Account',
+                emergencyTestTitle: 'Emergency SMS Test',
                 emergencyTestInfo: 'In App Review tests, this build runs in safe mode. Instead of real SMS dispatch, an in-app/simulated record is created.',
-                emergencyTestBtn: '🧪 Run SMS Test',
+                emergencyTestBtn: 'Run SMS Test',
                 medsLoading: 'Loading medications...',
                 notifsLoading: 'Loading notifications...',
                 loginFailed: 'Login failed. Please check your email and password.',
@@ -698,10 +698,10 @@
                 emergencySmsFailed: 'SMS test failed, local simulation shown.',
                 noMedsToday: 'No medications for today',
                 noNotifications: 'No notifications',
-                medsTimes: '⏰ Times',
-                notes: '📝',
-                medTaken: '✓ Taken',
-                medPending: '⏳ Pending',
+                medsTimes: 'Times',
+                notes: 'Notes',
+                medTaken: 'Taken',
+                medPending: 'Pending',
                 notifTitle: 'Notification',
                 fallDetected: 'Fall Detected',
                 familyAlert: 'Family Alert',
@@ -1178,7 +1178,7 @@
                     const safeNotes = med.notes ? (window.SafeGuardianProd?.escapeHtml || (v => v))(med.notes) : '';
                     return `
                         <div class="medication-item">
-                            <div class="medication-name">💊 ${safeName}</div>
+                            <div class="medication-name">${safeName}</div>
                             <div class="medication-time">${t('medsTimes')}: ${(med.scheduleTimes || []).join(', ')}</div>
                             ${safeNotes ? `<div class="medication-time">${t('notes')} ${safeNotes}</div>` : ''}
                             <span class="medication-status ${isTaken ? 'taken' : 'pending'}">
