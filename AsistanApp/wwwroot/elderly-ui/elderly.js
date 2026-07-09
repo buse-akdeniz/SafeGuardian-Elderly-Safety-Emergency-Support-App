@@ -79,7 +79,8 @@ function clearLocalTestData() {
 function applyProductionUi() {
     window.SafeGuardianProd?.hideDevOnlyUi?.();
     const testHint = document.getElementById('testHint');
-    if (testHint && isProductionApp()) {
+    if (testHint && (isProductionApp() || !shouldShowDemoHint())) {
+        testHint.hidden = true;
         testHint.style.display = 'none';
     }
 }
@@ -152,7 +153,7 @@ const TRANSLATIONS = {
         simpleBannerText: 'Basit mod açık: Ek özellikler gizlendi.',
         apiSaved: 'Kaydedildi', apiSavedMsg: 'API adresi güncellendi',
         apiReset: 'Sıfırlandı', apiResetMsg: 'API adresi temizlendi',
-        demoHint: 'Destek için: support@vitaguard.app',
+        supportHint: 'Yardım: support@vitaguard.app',
         relationSelect: 'Seçin...',
         relationChild: 'Çocuk', relationGrandchild: 'Torun', relationSpouse: 'Eş',
         relationSibling: 'Kardeş', relationOther: 'Diğer',
@@ -188,8 +189,8 @@ const TRANSLATIONS = {
         purchaseSuccess: 'Satın alma başarılı',
         purchaseSuccessMsg: 'Aile paketi aktif edildi.',
         purchaseNotAvailable: 'Satın alma hazır değil',
-        subscriptionComingSoonTitle: 'Abonelik yakında',
-        subscriptionComingSoonMsg: 'Uygulama içi abonelik 1.1 sürümünde açılacak. 12 saat tam erişim için reklam izleyebilir veya demo hesapla giriş yapabilirsiniz.',
+        subscriptionComingSoonTitle: 'Aile Paketi',
+        subscriptionComingSoonMsg: 'Aile paketi satın almak için iOS uygulamasını kullanın veya 12 saat tam erişim için reklam izleyin.',
         purchaseNotAvailableMsg: 'Satın alma şu anda başlatılamadı. Lütfen internet bağlantınızı ve App Store hesabınızı kontrol edip tekrar deneyin.',
         purchaseProductUnavailableMsg: 'Ürün App Store Connect Sandbox ortamında bulunamadı. Lütfen ürün kimliğini ve sözleşmeleri kontrol edin.',
         purchaseTechnicalErrorMsg: 'Satın alma sırasında bir hata oluştu. Lütfen tekrar deneyin veya Satın Almaları Geri Yükle seçeneğini kullanın.',
@@ -334,7 +335,7 @@ const TRANSLATIONS = {
         watchAdTrialActive: 'ÜCRETSİZ DENEME AKTİF',
         watchAdRewardActive: 'REKLAM ÖDÜLÜ AKTİF',
         entitlementTrialEnded: 'Ücretsiz deneme bitti. Abone olun veya reklam izleyin.',
-        entitlementComingSoon: 'Uygulama içi abonelik v1.1 ile gelecek. Reklam izleyerek 12 saat tam erişim alın.',
+        entitlementComingSoon: 'Aile paketi için iOS uygulamasını kullanın veya reklam izleyerek 12 saat tam erişim alın.',
         editProfileNamePrompt: 'Ad soyadınız:',
         editProfileEmailPrompt: 'E-posta adresiniz:',
         editProfilePhonePrompt: 'Telefon numaranız:',
@@ -398,7 +399,7 @@ const TRANSLATIONS = {
         simpleBannerText: 'Simple mode on: Extra features hidden.',
         apiSaved: 'Saved', apiSavedMsg: 'API address updated',
         apiReset: 'Reset', apiResetMsg: 'API address cleared',
-        demoHint: 'For support: support@vitaguard.app',
+        supportHint: 'Support: support@vitaguard.app',
         relationSelect: 'Select...',
         relationChild: 'Child', relationGrandchild: 'Grandchild', relationSpouse: 'Spouse',
         relationSibling: 'Sibling', relationOther: 'Other',
@@ -435,8 +436,8 @@ const TRANSLATIONS = {
         purchaseSuccess: 'Purchase successful',
         purchaseSuccessMsg: 'Family plan is now active.',
         purchaseNotAvailable: 'Purchase unavailable',
-        subscriptionComingSoonTitle: 'Subscription coming soon',
-        subscriptionComingSoonMsg: 'In-app subscription will be available in version 1.1. Watch an ad for 12-hour access or sign in with the demo account.',
+        subscriptionComingSoonTitle: 'Family Plan',
+        subscriptionComingSoonMsg: 'Use the iOS app to purchase the Family Plan, or watch an ad for 12-hour full access.',
         purchaseNotAvailableMsg: 'Purchase could not be started right now. Please check your internet connection and App Store account, then try again.',
         purchaseProductUnavailableMsg: 'The product was not found in App Store Connect Sandbox. Please verify product identifiers and agreements.',
         purchaseTechnicalErrorMsg: 'A purchase error occurred. Please try again or use Restore Purchases.',
@@ -581,7 +582,7 @@ const TRANSLATIONS = {
         watchAdTrialActive: 'FREE TRIAL ACTIVE',
         watchAdRewardActive: 'AD REWARD ACTIVE',
         entitlementTrialEnded: 'Free trial ended. Subscribe or watch an ad for 12-hour access.',
-        entitlementComingSoon: 'In-app subscription launches in v1.1. Watch an ad for 12-hour full access.',
+        entitlementComingSoon: 'Use the iOS app for the Family Plan, or watch an ad for 12-hour full access.',
         editProfileNamePrompt: 'Your full name:',
         editProfileEmailPrompt: 'Your email:',
         editProfilePhonePrompt: 'Your phone number:',
@@ -1802,7 +1803,7 @@ function applyStoreKitPurchaseUiVisibility() {
     if (manageBtn) manageBtn.style.display = enabled ? '' : 'none';
 
     if (!enabled && priceEl) {
-        priceEl.textContent = currentLang === 'en' ? 'Coming in v1.1' : 'v1.1 ile gelecek';
+        priceEl.textContent = getLocalizedSubscriptionPrice() || (currentLang === 'en' ? 'Family Plan' : 'Aile Paketi');
     }
 }
 
@@ -2962,6 +2963,7 @@ function goToPremium() {
 }
 
 function shouldShowDemoHint() {
+    if (isProductionApp()) return false;
     const params = new URLSearchParams(window.location.search || '');
     return params.get('demo') === '1' || localStorage.getItem('showDemoHint') === 'true';
 }

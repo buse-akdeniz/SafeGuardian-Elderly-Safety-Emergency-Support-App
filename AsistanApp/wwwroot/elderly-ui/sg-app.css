@@ -72,19 +72,44 @@ body.sg-on-inner .screen.active {
 }
 
 .sg-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sg-brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+
+.sg-brand-text {
   font-size: 17px;
   font-weight: 800;
   letter-spacing: 0.04em;
   color: var(--sg-text);
   white-space: nowrap;
+  min-width: 0;
 }
 
-.sg-brand small {
+.sg-brand-text small {
   display: block;
   font-size: 11px;
   font-weight: 600;
   color: var(--sg-muted);
   letter-spacing: 0.12em;
+}
+
+.sg-login-logo {
+  width: 96px;
+  height: 96px;
+  border-radius: 22px;
+  margin: 0 auto 16px;
+  display: block;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
 }
 
 .sg-header-actions {

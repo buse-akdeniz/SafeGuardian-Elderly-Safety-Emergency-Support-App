@@ -6,14 +6,19 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>SafeGuardian AI</title>
-    <link rel="stylesheet" href="elderly.css?v=20260706v9">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+    <link rel="apple-touch-icon" href="assets/logo-192.png">
+    <link rel="stylesheet" href="elderly.css?v=20260709v10">
     <link rel="stylesheet" href="mood-theme.css">
-    <link rel="stylesheet" href="sg-app.css?v=20260706v9">
-    <link rel="stylesheet" href="sg-icons.css?v=20260706v9">
+    <link rel="stylesheet" href="sg-app.css?v=20260709v10">
+    <link rel="stylesheet" href="sg-icons.css?v=20260709v10">
 </head>
 <body>
     <header class="sg-app-header is-hidden" id="sgAppHeader">
-        <div class="sg-brand">SafeGuardian<small>AI</small></div>
+        <div class="sg-brand">
+            <img class="sg-brand-mark" src="assets/logo-96.png" width="36" height="36" alt="" aria-hidden="true">
+            <span class="sg-brand-text">SafeGuardian<small>AI</small></span>
+        </div>
         <div class="sg-header-actions">
             <button type="button" class="sg-icon-btn" id="sgAccountBtn" onclick="showScreen('profileScreen')" data-i18n="accountBtn">HESAP</button>
             <button type="button" class="sg-icon-btn sg-icon-btn--accent" id="sgSettingsBtn" onclick="if(window.SGShell){SGShell.openSettings();}else if(typeof toggleA11yMenu==='function'){toggleA11yMenu(event);}" data-i18n="settingsBtn">AYARLAR</button>
@@ -211,6 +216,7 @@
     <div id="loginScreen" class="screen active">
         <div class="sg-login-wrap">
             <div class="sg-login-hero">
+                <img class="sg-login-logo" src="assets/logo-192.png" width="96" height="96" alt="SafeGuardian AI">
                 <h1>SafeGuardian AI</h1>
                 <p data-i18n="loginSub">Güvenli giriş yapın</p>
             </div>
@@ -253,7 +259,7 @@
                 Face ID ile Giriş
             </button>
 
-            <p class="hint-text" id="testHint" data-i18n="demoHint" style="display:block;">Destek: support@vitaguard.app</p>
+            <p class="hint-text" id="testHint" data-i18n="supportHint" hidden>Destek: support@vitaguard.app</p>
 
             <p class="legal-footer">
                 <a href="#" onclick="openPrivacyPolicy(); return false;" data-i18n="legalPrivacyLink">Gizlilik</a>
@@ -545,10 +551,10 @@
     </script>
     <script src="config.js?v=20260505"></script>
     <script src="../js/production.js?v=20260704"></script>
-    <script src="../js/native-fetch.js?v=20260706v9"></script>
+    <script src="../js/native-fetch.js?v=20260709v10"></script>
     <script src="../js/admob.js?v=20260506"></script>
-    <script src="elderly.js?v=20260706v9"></script>
-    <script src="sg-shell.js?v=20260706v9"></script>
+    <script src="elderly.js?v=20260709v10"></script>
+    <script src="sg-shell.js?v=20260709v10"></script>
     <script src="voice-assistant.js?v=20260505"></script>
 </body>
 </html>
