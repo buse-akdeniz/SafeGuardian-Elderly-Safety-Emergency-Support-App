@@ -306,6 +306,157 @@ public class CompatibilityController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// RevenueCat server-to-server webhook.
+    /// Dashboard URL: https://…/api/subscription/revenuecat-webhook
+    /// Authorization header must match RevenueCat:WebhookAuthKey (or REVENUECAT_WEBHOOK_AUTH_KEY).
+    /// </summary>
+    [HttpPost("subscription/revenuecat-webhook")]
+    public async Task<IResult> RevenueCatWebhook(
+        [FromServices] IConfiguration config,
+        [FromServices] ILogger<CompatibilityController> logger)
+    {
+        var authHeader = Request.Headers.Authorization.ToString();
+        var expectedKey = config["RevenueCat:WebhookAuthKey"]
+            ?? Environment.GetEnvironmentVariable("REVENUECAT_WEBHOOK_AUTH_KEY")
+            ?? string.Empty;
+
+        // Always require Authorization. If key is configured, it must match exactly.
+        if (string.IsNullOrWhiteSpace(authHeader))
+        {
+            logger.LogWarning("RevenueCat webhook: missing Authorization header from {IP}",
+                HttpContext.Connection.RemoteIpAddress);
+            return Results.Json(new { success = false, message = "Unauthorized" }, statusCode: 401);
+        }
+
+        if (!string.IsNullOrEmpty(expectedKey)
+            && !string.Equals(authHeader, expectedKey, StringComparison.Ordinal)
+            && !string.Equals(authHeader, $"Bearer {expectedKey}", StringComparison.Ordinal))
+        {
+            logger.LogWarning("RevenueCat webhook: invalid Authorization from {IP}",
+                HttpContext.Connection.RemoteIpAddress);
+            return Results.Json(new { success = false, message = "Unauthorized" }, statusCode: 401);
+        }
+
+        using var doc = await JsonDocument.ParseAsync(Request.Body);
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("event", out var ev))
+        {
+            return Results.Json(new { success = true, ignored = true, reason = "no_event" });
+        }
+
+        var eventType = ev.TryGetProperty("type", out var typeEl) ? typeEl.GetString() ?? "" : "";
+        if (string.Equals(eventType, "TEST", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(eventType, "TRANSFER", StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogInformation("RevenueCat webhook: acknowledged {EventType}", eventType);
+            return Results.Json(new { success = true, eventType });
+        }
+
+        var appUserId = ev.TryGetProperty("app_user_id", out var uidEl) ? uidEl.GetString() ?? "" : "";
+        var productId = ev.TryGetProperty("product_id", out var pidEl) ? pidEl.GetString() ?? "" : "";
+        var expiresAtMs = ev.TryGetProperty("expiration_at_ms", out var expEl) && expEl.ValueKind == JsonValueKind.Number
+            ? expEl.GetInt64()
+            : 0L;
+
+        if (!TryResolveRevenueCatUserId(appUserId, out var userId))
+        {
+            logger.LogWarning("RevenueCat webhook: could not map app_user_id={AppUserId} event={EventType}",
+                appUserId, eventType);
+            // Still 200 so RevenueCat does not retry forever for unmapped users.
+            return Results.Json(new { success = true, mapped = false, eventType, appUserId });
+        }
+
+        var now = DateTime.UtcNow;
+        var expiresAt = expiresAtMs > 0
+            ? DateTimeOffset.FromUnixTimeMilliseconds(expiresAtMs).UtcDateTime
+            : now.AddMonths(1);
+
+        var existing = SubscriptionByUser.GetOrAdd(userId, _ => new SubscriptionItem
+        {
+            Plan = "standard",
+            IsActive = false,
+            ExpiresAt = now,
+            StartedAt = now,
+            TrialEndsAt = now.AddDays(7),
+            AdUnlockUntil = now
+        });
+
+        switch (eventType)
+        {
+            case "INITIAL_PURCHASE":
+            case "RENEWAL":
+            case "UNCANCELLATION":
+            case "PRODUCT_CHANGE":
+            case "NON_RENEWING_PURCHASE":
+            {
+                var plan = ResolvePlanFromProductId(productId);
+                SaveSubscription(userId, new SubscriptionItem
+                {
+                    Plan = plan,
+                    IsActive = true,
+                    ExpiresAt = expiresAt,
+                    StartedAt = existing.StartedAt == default ? now : existing.StartedAt,
+                    TrialEndsAt = existing.TrialEndsAt == default ? now.AddDays(7) : existing.TrialEndsAt,
+                    AdUnlockUntil = existing.AdUnlockUntil,
+                    LastAppleTransactionId = existing.LastAppleTransactionId
+                });
+                logger.LogInformation("RevenueCat webhook: activated user={UserId} plan={Plan} product={Product} expires={Expires}",
+                    userId, plan, productId, expiresAt);
+                break;
+            }
+            case "CANCELLATION":
+            case "EXPIRATION":
+            {
+                SaveSubscription(userId, new SubscriptionItem
+                {
+                    Plan = existing.Plan,
+                    IsActive = false,
+                    ExpiresAt = eventType == "EXPIRATION" ? now : existing.ExpiresAt,
+                    StartedAt = existing.StartedAt,
+                    TrialEndsAt = existing.TrialEndsAt,
+                    AdUnlockUntil = existing.AdUnlockUntil,
+                    LastAppleTransactionId = existing.LastAppleTransactionId
+                });
+                logger.LogInformation("RevenueCat webhook: {EventType} user={UserId}", eventType, userId);
+                break;
+            }
+            case "BILLING_ISSUE":
+                logger.LogWarning("RevenueCat webhook: billing issue user={UserId}", userId);
+                break;
+            default:
+                logger.LogInformation("RevenueCat webhook: ignored event={EventType} user={UserId}", eventType, userId);
+                break;
+        }
+
+        return Results.Json(new { success = true, eventType, userId, productId });
+    }
+
+    private static bool TryResolveRevenueCatUserId(string appUserId, out int userId)
+    {
+        userId = 0;
+        if (string.IsNullOrWhiteSpace(appUserId)) return false;
+        if (int.TryParse(appUserId, out userId) && userId > 0) return true;
+
+        // Common patterns: "elderly:123", "user_123", "$RCAnonymousID:..."
+        var digits = new string(appUserId.Where(char.IsDigit).ToArray());
+        if (int.TryParse(digits, out userId) && userId > 0 && !appUserId.StartsWith("$RC", StringComparison.Ordinal))
+            return true;
+
+        return false;
+    }
+
+    private static string ResolvePlanFromProductId(string productId)
+    {
+        if (string.IsNullOrWhiteSpace(productId)) return "premium";
+        if (AppleFamilyPlanProductIds.Contains(productId)
+            || productId.Contains("family", StringComparison.OrdinalIgnoreCase))
+            return "premium";
+        if (productId.Contains("premium", StringComparison.OrdinalIgnoreCase))
+            return "premium";
+        return "premium";
+    }
+
     [HttpPost("subscription/apple/confirm")]
     public async Task<IResult> ConfirmAppleSubscriptionPurchase()
     {
