@@ -293,14 +293,14 @@
                 <label>Adınız <span>*</span></label>
                 <input type="text" id="fullName" placeholder="Örn: Ayşe Yıldız" required>
 
-                <label>Doğum Tarihi <span>*</span></label>
-                <input type="date" id="birthDate" required>
+                <label>Doğum Tarihi <span style="font-weight:400;font-size:0.9em;">(Opsiyonel)</span></label>
+                <input type="date" id="birthDate">
                 <select id="birthYearQuick" style="margin-top: 8px;">
                     <option value="">Yılı hızlı seçin</option>
                 </select>
 
-                <label>Telefon Numarası <span>*</span></label>
-                <input type="tel" id="phone" placeholder="Örn: +905551234567 veya +4915112345678" required>
+                <label>Telefon Numarası <span style="font-weight:400;font-size:0.9em;">(Opsiyonel)</span></label>
+                <input type="tel" id="phone" placeholder="Örn: +905551234567 veya +4915112345678">
 
                 <label>E-posta (Opsiyonel)</label>
                 <input type="email" id="email" placeholder="Örn: ayse@gmail.com">
@@ -375,7 +375,7 @@
                     <div class="plan-card" id="planPremium" onclick="selectPlan('premium')">
                         <div style="font-size: 24px;">⭐</div>
                         <div style="font-size: 20px; font-weight: bold; color: #667eea;">PREMIUM</div>
-                        <div class="plan-price">₺149.99<span style="font-size: 16px;">/ay</span></div>
+                        <div class="plan-price">PREMIUM</div>
                         <ul class="plan-features">
                             <li>Düşme algılama</li>
                             <li>AI sesli kontrol</li>
@@ -554,14 +554,14 @@
         const emergencyContact2Phone = normalizePhone(document.getElementById('emergencyContact2Phone').value.trim());
         const doctorPhone = normalizePhone(document.getElementById('doctorPhone').value.trim());
 
-        if (!fullName || !phone || !birthDate || !emergencyContact1Name || !emergencyContact1Phone) {
+        if (!fullName || !emergencyContact1Name || !emergencyContact1Phone) {
             alert('❌ Lütfen tüm zorunlu alanları doldurun (*)');
             return;
         }
 
-        // Telefon formatı kontrolü
+        // Telefon formatı kontrolü (sadece doldurulmuşsa)
         const phoneRegex = /^\+[1-9]\d{7,14}$/;
-        if (!phoneRegex.test(phone)) {
+        if (phone && !phoneRegex.test(phone)) {
             alert('❌ Lütfen geçerli bir telefon numarası giriniz (örnek: +905551234567)');
             return;
         }

@@ -1,1216 +1,555 @@
-using Microsoft.AspNetCore.Mvc;
-using ilk_projem.Services;
-using System.Collections.Concurrent;
+using System.Security.Claims;
 using System.Text.Json;
-using Microsoft.Extensions.Configuration;
-using System.Net.Http.Headers;
+using ilk_projem.Data;
+using ilk_projem.Models.Persistence;
+using ilk_projem.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace ilk_projem.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api")]
-public class CompatibilityController : ControllerBase
+public sealed class CompatibilityController : ControllerBase
 {
-    // Demo account constants for App Review
-    private const string DemoToken = "demo-review-elderly-expired-token";
-    private const int DemoUserId = 999;
+    private readonly AppDbContext _db;
 
-    private static readonly HashSet<string> AppleFamilyPlanProductIds = new(StringComparer.OrdinalIgnoreCase)
+    public CompatibilityController(AppDbContext db)
     {
-        "com.buseakdeniz.safeguardian.sub_family_monthly_v2",
-        "com.buse.safeguardian.sub_family_monthly_v2",
-        "com.buseakdeniz.safeguardian.sub_family_monthly",
-        "com.buse.safeguardian.sub_family_monthly",
-        "com.vitaguard.family.monthly"
-    };
-
-    private static readonly ConcurrentDictionary<int, List<MedicationItem>> MedicationsByUser = new();
-    private static readonly ConcurrentDictionary<int, List<HealthRecordItem>> HealthByUser = new();
-    private static readonly ConcurrentDictionary<int, List<MoodItem>> MoodByUser = new();
-    private static readonly ConcurrentDictionary<int, List<FamilyMemberItem>> FamilyByUser = new();
-    private static readonly ConcurrentDictionary<int, List<NotificationItem>> NotificationsByUser = new();
-    private static readonly ConcurrentDictionary<int, SubscriptionItem> SubscriptionByUser = new();
-    private static readonly ConcurrentDictionary<int, FamilyAccountItem> FamilyAccountByUser = new();
-    private static readonly object SubscriptionStoreLock = new();
-    private static readonly string SubscriptionStorePath = Path.Combine(
-        Environment.GetEnvironmentVariable("SUBSCRIPTION_STORE_PATH")
-            ?? Path.Combine(Environment.GetEnvironmentVariable("HOME") ?? "/tmp", ".safeguardian"),
-        "subscriptions.json");
-    private static bool _subscriptionsLoaded;
-
-    static CompatibilityController()
-    {
-        LoadSubscriptionsFromDisk();
+        _db = db;
     }
 
-    private int ResolveUserId()
-    {
-        var token = AuthTokenService.ResolveToken(HttpContext);
-        if (string.IsNullOrWhiteSpace(token)) return 1;
-        // Special handling for demo account
-        if (string.Equals(token, DemoToken, StringComparison.Ordinal)) return DemoUserId;
-        return Math.Abs(StringComparer.Ordinal.GetHashCode(token));
-    }
-
-    private static void LoadSubscriptionsFromDisk()
-    {
-        lock (SubscriptionStoreLock)
-        {
-            if (_subscriptionsLoaded) return;
-            _subscriptionsLoaded = true;
-
-            try
-            {
-                if (!System.IO.File.Exists(SubscriptionStorePath)) return;
-
-                var json = System.IO.File.ReadAllText(SubscriptionStorePath);
-                var items = JsonSerializer.Deserialize<Dictionary<string, SubscriptionItem>>(json);
-                if (items == null) return;
-
-                foreach (var pair in items)
-                {
-                    if (!int.TryParse(pair.Key, out var userId)) continue;
-                    SubscriptionByUser[userId] = pair.Value;
-                }
-            }
-            catch
-            {
-                // Keep in-memory defaults if persistence cannot be read.
-            }
-        }
-    }
-
-    private static void PersistSubscriptionsToDisk()
-    {
-        lock (SubscriptionStoreLock)
-        {
-            try
-            {
-                var directory = Path.GetDirectoryName(SubscriptionStorePath);
-                if (!string.IsNullOrWhiteSpace(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-
-                var payload = SubscriptionByUser.ToDictionary(
-                    pair => pair.Key.ToString(),
-                    pair => pair.Value);
-
-                var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
-                System.IO.File.WriteAllText(SubscriptionStorePath, json);
-            }
-            catch
-            {
-                // Subscription activation should still succeed in memory.
-            }
-        }
-    }
-
-    private static void SaveSubscription(int userId, SubscriptionItem item)
-    {
-        SubscriptionByUser[userId] = item;
-        PersistSubscriptionsToDisk();
-    }
-
-    private IConfiguration Config => HttpContext.RequestServices.GetRequiredService<IConfiguration>();
-
-    private string GetSetting(string key, string? fallbackEnv = null)
-    {
-        var value = Config[key];
-        if (!string.IsNullOrWhiteSpace(value)) return value;
-        return string.IsNullOrWhiteSpace(fallbackEnv) ? string.Empty : (Environment.GetEnvironmentVariable(fallbackEnv) ?? string.Empty);
-    }
-
-    private string GetFirstSetting(params (string key, string? env)[] candidates)
-    {
-        foreach (var candidate in candidates)
-        {
-            var value = GetSetting(candidate.key, candidate.env);
-            if (!string.IsNullOrWhiteSpace(value)) return value;
-        }
-        return string.Empty;
-    }
-
-    private bool IsReviewerModeEnabled()
-    {
-        var raw = GetSetting("ReviewerMode:Enabled", "REVIEWER_MODE_ENABLED");
-        return string.Equals(raw, "true", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(raw, "1", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(raw, "yes", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private string GetReviewerTestPhoneNumber()
-    {
-        var configured = GetSetting("ReviewerMode:TestPhoneNumber", "REVIEWER_TEST_PHONE_NUMBER");
-        return string.IsNullOrWhiteSpace(configured) ? "+1234567890" : configured;
-    }
-
-    private static string NormalizePhone(string? value)
-        => new string((value ?? string.Empty).Where(ch => char.IsDigit(ch) || ch == '+').ToArray());
-
+    [AllowAnonymous]
     [HttpGet("health")]
-    public IResult Health() => Results.Json(new { success = true, ok = true, serverTime = DateTime.UtcNow });
-
-    [HttpPost("elderly-self-enroll")]
-    public IResult ElderlySelfEnroll() => Results.Json(new { success = true, tempPassword = "Review123!", message = "Kayıt tamamlandı" });
-
-    [HttpPost("elderly/reset-password")]
-    public IResult ElderlyResetPassword() => Results.Json(new { success = true, tempPassword = "Review123!", message = "Geçici şifre oluşturuldu" });
-
-    [HttpDelete("elderly/account")]
-    public IResult DeleteElderlyAccount() => Results.Json(new { success = true, message = "Hesap silindi" });
-
-    [HttpGet("subscription")]
-    public IResult GetSubscription()
-    {
-        var userId = ResolveUserId();
-        
-        // Special handling for demo account - create expired subscription
-        if (userId == DemoUserId)
-        {
-            var now = DateTime.UtcNow;
-            var expiredDate = now.AddDays(-7); // Expired 7 days ago
-            
-            return Results.Json(new
-            {
-                success = true,
-                plan = "premium",
-                isActive = false,
-                expiresAt = expiredDate,
-                trialEndsAt = now.AddDays(-30), // Trial ended 30 days ago
-                isTrialActive = false,
-                adUnlockUntil = now.AddDays(-1),
-                isAdUnlockActive = false,
-                hasFullAccess = false,
-                requiresSubscription = true,
-                subscriptionStatus = "expired"
-            });
-        }
-        
-        var sub = SubscriptionByUser.GetOrAdd(userId, _ => new SubscriptionItem
-        {
-            Plan = "standard",
-            IsActive = false,
-            ExpiresAt = DateTime.UtcNow,
-            StartedAt = DateTime.UtcNow,
-            TrialEndsAt = DateTime.UtcNow.AddDays(7),
-            AdUnlockUntil = DateTime.UtcNow
-        });
-
-        var now2 = DateTime.UtcNow;
-        if (sub.StartedAt == default)
-        {
-            sub.StartedAt = now2;
-        }
-        if (sub.TrialEndsAt == default)
-        {
-            sub.TrialEndsAt = sub.StartedAt.AddDays(7);
-        }
-
-        var isPremium = string.Equals(sub.Plan, "premium", StringComparison.OrdinalIgnoreCase)
-            && sub.IsActive
-            && sub.ExpiresAt > now2;
-        var isTrialActive = now2 <= sub.TrialEndsAt;
-        var isAdUnlockActive = sub.AdUnlockUntil > now2;
-        var hasFullAccess = isPremium || isTrialActive || isAdUnlockActive;
-        var requiresSubscription = !hasFullAccess;
-
-        return Results.Json(new
-        {
-            success = true,
-            plan = sub.Plan,
-            isActive = hasFullAccess,
-            expiresAt = sub.ExpiresAt,
-            trialEndsAt = sub.TrialEndsAt,
-            isTrialActive,
-            adUnlockUntil = sub.AdUnlockUntil,
-            isAdUnlockActive,
-            hasFullAccess,
-            requiresSubscription
-        });
-    }
-
-    [HttpPost("subscription/ad-reward")]
-    public IResult GrantAdRewardAccess()
-    {
-        var userId = ResolveUserId();
-        var now = DateTime.UtcNow;
-        var sub = SubscriptionByUser.GetOrAdd(userId, _ => new SubscriptionItem
-        {
-            Plan = "standard",
-            IsActive = false,
-            ExpiresAt = now,
-            StartedAt = now,
-            TrialEndsAt = now.AddDays(7),
-            AdUnlockUntil = now
-        });
-
-        sub.AdUnlockUntil = now.AddHours(12);
-        SaveSubscription(userId, sub);
-
-        var isTrialActive = now <= sub.TrialEndsAt;
-        var isAdUnlockActive = sub.AdUnlockUntil > now;
-        var isPremium = string.Equals(sub.Plan, "premium", StringComparison.OrdinalIgnoreCase)
-            && sub.IsActive
-            && sub.ExpiresAt > now;
-
-        return Results.Json(new
-        {
-            success = true,
-            message = "Reklam ödülü tanımlandı. Tüm özellikler 12 saat açık.",
-            entitlement = new
-            {
-                plan = sub.Plan,
-                isActive = isPremium || isTrialActive || isAdUnlockActive,
-                expiresAt = sub.ExpiresAt,
-                trialEndsAt = sub.TrialEndsAt,
-                isTrialActive,
-                adUnlockUntil = sub.AdUnlockUntil,
-                isAdUnlockActive,
-                hasFullAccess = isPremium || isTrialActive || isAdUnlockActive,
-                requiresSubscription = !(isPremium || isTrialActive || isAdUnlockActive)
-            }
-        });
-    }
-
-    [HttpPost("subscription/cancel")]
-    public IResult CancelSubscription()
-    {
-        var userId = ResolveUserId();
-        var existing = SubscriptionByUser.GetOrAdd(userId, _ => new SubscriptionItem
-        {
-            Plan = "standard",
-            IsActive = false,
-            ExpiresAt = DateTime.UtcNow,
-            StartedAt = DateTime.UtcNow,
-            TrialEndsAt = DateTime.UtcNow.AddDays(7),
-            AdUnlockUntil = DateTime.UtcNow
-        });
-
-        SaveSubscription(userId, new SubscriptionItem
-        {
-            Plan = "standard",
-            IsActive = false,
-            ExpiresAt = DateTime.UtcNow,
-            StartedAt = existing.StartedAt == default ? DateTime.UtcNow : existing.StartedAt,
-            TrialEndsAt = existing.TrialEndsAt == default ? DateTime.UtcNow.AddDays(7) : existing.TrialEndsAt,
-            AdUnlockUntil = existing.AdUnlockUntil
-        });
-
-        return Results.Json(new
-        {
-            success = true,
-            message = "Abonelik iptal edildi. Dönem sonuna kadar aktif.",
-            subscription = SubscriptionByUser[userId]
-        });
-    }
-
-    /// <summary>
-    /// RevenueCat server-to-server webhook.
-    /// Dashboard URL: https://…/api/subscription/revenuecat-webhook
-    /// Authorization header must match RevenueCat:WebhookAuthKey (or REVENUECAT_WEBHOOK_AUTH_KEY).
-    /// </summary>
-    [HttpPost("subscription/revenuecat-webhook")]
-    public async Task<IResult> RevenueCatWebhook(
-        [FromServices] IConfiguration config,
-        [FromServices] ILogger<CompatibilityController> logger)
-    {
-        var authHeader = Request.Headers.Authorization.ToString();
-        var expectedKey = config["RevenueCat:WebhookAuthKey"]
-            ?? Environment.GetEnvironmentVariable("REVENUECAT_WEBHOOK_AUTH_KEY")
-            ?? string.Empty;
-
-        // Always require Authorization. If key is configured, it must match exactly.
-        if (string.IsNullOrWhiteSpace(authHeader))
-        {
-            logger.LogWarning("RevenueCat webhook: missing Authorization header from {IP}",
-                HttpContext.Connection.RemoteIpAddress);
-            return Results.Json(new { success = false, message = "Unauthorized" }, statusCode: 401);
-        }
-
-        if (!string.IsNullOrEmpty(expectedKey)
-            && !string.Equals(authHeader, expectedKey, StringComparison.Ordinal)
-            && !string.Equals(authHeader, $"Bearer {expectedKey}", StringComparison.Ordinal))
-        {
-            logger.LogWarning("RevenueCat webhook: invalid Authorization from {IP}",
-                HttpContext.Connection.RemoteIpAddress);
-            return Results.Json(new { success = false, message = "Unauthorized" }, statusCode: 401);
-        }
-
-        using var doc = await JsonDocument.ParseAsync(Request.Body);
-        var root = doc.RootElement;
-        if (!root.TryGetProperty("event", out var ev))
-        {
-            return Results.Json(new { success = true, ignored = true, reason = "no_event" });
-        }
-
-        var eventType = ev.TryGetProperty("type", out var typeEl) ? typeEl.GetString() ?? "" : "";
-        if (string.Equals(eventType, "TEST", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(eventType, "TRANSFER", StringComparison.OrdinalIgnoreCase))
-        {
-            logger.LogInformation("RevenueCat webhook: acknowledged {EventType}", eventType);
-            return Results.Json(new { success = true, eventType });
-        }
-
-        var appUserId = ev.TryGetProperty("app_user_id", out var uidEl) ? uidEl.GetString() ?? "" : "";
-        var productId = ev.TryGetProperty("product_id", out var pidEl) ? pidEl.GetString() ?? "" : "";
-        var expiresAtMs = ev.TryGetProperty("expiration_at_ms", out var expEl) && expEl.ValueKind == JsonValueKind.Number
-            ? expEl.GetInt64()
-            : 0L;
-
-        if (!TryResolveRevenueCatUserId(appUserId, out var userId))
-        {
-            logger.LogWarning("RevenueCat webhook: could not map app_user_id={AppUserId} event={EventType}",
-                appUserId, eventType);
-            // Still 200 so RevenueCat does not retry forever for unmapped users.
-            return Results.Json(new { success = true, mapped = false, eventType, appUserId });
-        }
-
-        var now = DateTime.UtcNow;
-        var expiresAt = expiresAtMs > 0
-            ? DateTimeOffset.FromUnixTimeMilliseconds(expiresAtMs).UtcDateTime
-            : now.AddMonths(1);
-
-        var existing = SubscriptionByUser.GetOrAdd(userId, _ => new SubscriptionItem
-        {
-            Plan = "standard",
-            IsActive = false,
-            ExpiresAt = now,
-            StartedAt = now,
-            TrialEndsAt = now.AddDays(7),
-            AdUnlockUntil = now
-        });
-
-        switch (eventType)
-        {
-            case "INITIAL_PURCHASE":
-            case "RENEWAL":
-            case "UNCANCELLATION":
-            case "PRODUCT_CHANGE":
-            case "NON_RENEWING_PURCHASE":
-            {
-                var plan = ResolvePlanFromProductId(productId);
-                SaveSubscription(userId, new SubscriptionItem
-                {
-                    Plan = plan,
-                    IsActive = true,
-                    ExpiresAt = expiresAt,
-                    StartedAt = existing.StartedAt == default ? now : existing.StartedAt,
-                    TrialEndsAt = existing.TrialEndsAt == default ? now.AddDays(7) : existing.TrialEndsAt,
-                    AdUnlockUntil = existing.AdUnlockUntil,
-                    LastAppleTransactionId = existing.LastAppleTransactionId
-                });
-                logger.LogInformation("RevenueCat webhook: activated user={UserId} plan={Plan} product={Product} expires={Expires}",
-                    userId, plan, productId, expiresAt);
-                break;
-            }
-            case "CANCELLATION":
-            case "EXPIRATION":
-            {
-                SaveSubscription(userId, new SubscriptionItem
-                {
-                    Plan = existing.Plan,
-                    IsActive = false,
-                    ExpiresAt = eventType == "EXPIRATION" ? now : existing.ExpiresAt,
-                    StartedAt = existing.StartedAt,
-                    TrialEndsAt = existing.TrialEndsAt,
-                    AdUnlockUntil = existing.AdUnlockUntil,
-                    LastAppleTransactionId = existing.LastAppleTransactionId
-                });
-                logger.LogInformation("RevenueCat webhook: {EventType} user={UserId}", eventType, userId);
-                break;
-            }
-            case "BILLING_ISSUE":
-                logger.LogWarning("RevenueCat webhook: billing issue user={UserId}", userId);
-                break;
-            default:
-                logger.LogInformation("RevenueCat webhook: ignored event={EventType} user={UserId}", eventType, userId);
-                break;
-        }
-
-        return Results.Json(new { success = true, eventType, userId, productId });
-    }
-
-    private static bool TryResolveRevenueCatUserId(string appUserId, out int userId)
-    {
-        userId = 0;
-        if (string.IsNullOrWhiteSpace(appUserId)) return false;
-        if (int.TryParse(appUserId, out userId) && userId > 0) return true;
-
-        // Common patterns: "elderly:123", "user_123", "$RCAnonymousID:..."
-        var digits = new string(appUserId.Where(char.IsDigit).ToArray());
-        if (int.TryParse(digits, out userId) && userId > 0 && !appUserId.StartsWith("$RC", StringComparison.Ordinal))
-            return true;
-
-        return false;
-    }
-
-    private static string ResolvePlanFromProductId(string productId)
-    {
-        if (string.IsNullOrWhiteSpace(productId)) return "premium";
-        if (AppleFamilyPlanProductIds.Contains(productId)
-            || productId.Contains("family", StringComparison.OrdinalIgnoreCase))
-            return "premium";
-        if (productId.Contains("premium", StringComparison.OrdinalIgnoreCase))
-            return "premium";
-        return "premium";
-    }
-
-    [HttpPost("subscription/apple/confirm")]
-    public async Task<IResult> ConfirmAppleSubscriptionPurchase()
-    {
-        var userId = ResolveUserId();
-
-        using var reader = new StreamReader(Request.Body);
-        var raw = await reader.ReadToEndAsync();
-
-        string productId = string.Empty;
-        string transactionId = string.Empty;
-        string expirationDateRaw = string.Empty;
-
-        try
-        {
-            if (string.IsNullOrWhiteSpace(raw))
-            {
-                return Results.BadRequest(new { success = false, message = "İstek gövdesi boş." });
-            }
-
-            var json = System.Text.Json.JsonDocument.Parse(raw).RootElement;
-            if (json.TryGetProperty("productId", out var p)) productId = p.GetString() ?? string.Empty;
-            if (json.TryGetProperty("transactionId", out var t)) transactionId = t.GetString() ?? string.Empty;
-            if (json.TryGetProperty("expirationDate", out var e)) expirationDateRaw = e.GetString() ?? string.Empty;
-        }
-        catch (Exception ex)
-        {
-            return Results.BadRequest(new { success = false, message = $"JSON parse hatası: {ex.Message}" });
-        }
-
-        if (string.IsNullOrWhiteSpace(productId))
-        {
-            return Results.BadRequest(new { success = false, message = "productId zorunludur." });
-        }
-
-        if (string.IsNullOrWhiteSpace(transactionId))
-        {
-            return Results.BadRequest(new { success = false, message = "transactionId zorunludur." });
-        }
-
-        if (transactionId.StartsWith("fallback-", StringComparison.OrdinalIgnoreCase))
-        {
-            return Results.BadRequest(new { success = false, message = "Geçersiz transactionId." });
-        }
-
-        if (!AppleFamilyPlanProductIds.Contains(productId))
-        {
-            return Results.BadRequest(new { 
-                success = false, 
-                message = $"Desteklenmeyen ürün kimliği: {productId}. Desteklenen: {string.Join(", ", AppleFamilyPlanProductIds)}"
-            });
-        }
-
-        var now = DateTime.UtcNow;
-        var existing = SubscriptionByUser.GetOrAdd(userId, _ => new SubscriptionItem
-        {
-            Plan = "standard",
-            IsActive = false,
-            ExpiresAt = now,
-            StartedAt = now,
-            TrialEndsAt = now.AddDays(7),
-            AdUnlockUntil = now
-        });
-
-        DateTime expiresAt = now.AddMonths(1);
-        if (!string.IsNullOrWhiteSpace(expirationDateRaw)
-            && DateTimeOffset.TryParse(expirationDateRaw, out var parsedExpiry)
-            && parsedExpiry.UtcDateTime > now)
-        {
-            expiresAt = parsedExpiry.UtcDateTime;
-        }
-
-        var updated = new SubscriptionItem
-        {
-            Plan = "premium",
-            IsActive = true,
-            ExpiresAt = expiresAt,
-            StartedAt = existing.StartedAt == default ? now : existing.StartedAt,
-            TrialEndsAt = existing.TrialEndsAt == default ? now.AddDays(7) : existing.TrialEndsAt,
-            AdUnlockUntil = existing.AdUnlockUntil,
-            LastAppleTransactionId = transactionId
-        };
-
-        SaveSubscription(userId, updated);
-
-        return Results.Json(new
-        {
-            success = true,
-            message = "Apple satın alma doğrulandı ve abonelik aktif edildi.",
-            subscription = new
-            {
-                plan = updated.Plan,
-                isActive = true,
-                expiresAt = updated.ExpiresAt,
-                trialEndsAt = updated.TrialEndsAt,
-                isTrialActive = updated.TrialEndsAt > now,
-                adUnlockUntil = updated.AdUnlockUntil,
-                isAdUnlockActive = updated.AdUnlockUntil > now,
-                hasFullAccess = true,
-                requiresSubscription = false
-            }
-        });
-    }
+    public IResult Health() => Results.Ok(new { success = true, ok = true, serverTime = DateTime.UtcNow });
 
     [HttpGet("family/subscription")]
-    public IResult GetFamilySubscription() => GetSubscription();
-
-    [HttpPost("family/subscription/cancel")]
-    public IResult CancelFamilySubscription() => CancelSubscription();
+    public async Task<IResult> FamilySubscription(
+        [FromServices] SubscriptionService subscriptions,
+        CancellationToken cancellationToken)
+    {
+        var entitlement = await subscriptions.GetEntitlementAsync(ElderlyId(), cancellationToken);
+        return Results.Ok(new
+        {
+            success = true,
+            plan = entitlement.Plan,
+            isActive = entitlement.IsActive,
+            entitlement.HasFullAccess,
+            entitlement.ExpiresAt,
+            entitlement.AdUnlockUntil
+        });
+    }
 
     [HttpGet("family/account")]
-    public IResult GetFamilyAccount()
+    public async Task<IResult> FamilyAccount(
+        [FromServices] UserManager<ApplicationUser> users)
     {
-        var userId = ResolveUserId();
-        var account = FamilyAccountByUser.GetOrAdd(userId, _ => new FamilyAccountItem
-        {
-            Name = "Aile Üyesi",
-            Email = "family@example.com",
-            Phone = "+90 500 000 0000",
-            UpdatedAt = DateTime.UtcNow
-        });
-
-        return Results.Json(new { success = true, account });
+        var user = await users.FindByIdAsync(UserId());
+        return user is null
+            ? Results.Unauthorized()
+            : Results.Ok(new
+            {
+                success = true,
+                account = new
+                {
+                    name = user.DisplayName,
+                    user.Email,
+                    phone = user.PhoneNumber,
+                    updatedAt = user.LastAuthenticatedAt
+                }
+            });
     }
 
     [HttpPut("family/account")]
-    public async Task<IResult> UpsertFamilyAccount()
+    public async Task<IResult> UpdateFamilyAccount(
+        [FromBody] FamilyAccountRequest request,
+        [FromServices] UserManager<ApplicationUser> users)
     {
-        var userId = ResolveUserId();
-        using var reader = new StreamReader(Request.Body);
-        var raw = await reader.ReadToEndAsync();
-
-        var current = FamilyAccountByUser.GetOrAdd(userId, _ => new FamilyAccountItem());
-        try
+        var user = await users.FindByIdAsync(UserId());
+        if (user is null) return Results.Unauthorized();
+        user.DisplayName = request.Name.Trim();
+        user.PhoneNumber = request.Phone?.Trim();
+        if (!string.IsNullOrWhiteSpace(request.Email) && !string.Equals(user.Email, request.Email, StringComparison.OrdinalIgnoreCase))
         {
-            var json = System.Text.Json.JsonDocument.Parse(raw).RootElement;
-            current.Name = json.TryGetProperty("name", out var n) ? n.GetString() ?? current.Name : current.Name;
-            current.Email = json.TryGetProperty("email", out var e) ? e.GetString() ?? current.Email : current.Email;
-            current.Phone = json.TryGetProperty("phone", out var p) ? p.GetString() ?? current.Phone : current.Phone;
-            current.UpdatedAt = DateTime.UtcNow;
+            var emailResult = await users.SetEmailAsync(user, request.Email.Trim());
+            if (!emailResult.Succeeded)
+                return Results.BadRequest(new { success = false, message = emailResult.Errors.First().Description });
+            await users.SetUserNameAsync(user, request.Email.Trim());
         }
-        catch { }
-
-        FamilyAccountByUser[userId] = current;
-        return Results.Json(new { success = true, account = current, message = "Hesap bilgileri güncellendi" });
-    }
-
-    [HttpDelete("family/account")]
-    public IResult DeleteFamilyAccount()
-    {
-        var userId = ResolveUserId();
-        FamilyAccountByUser.TryRemove(userId, out _);
-        return Results.Json(new { success = true, message = "Aile hesabı silindi" });
+        await users.UpdateAsync(user);
+        return Results.Ok(new { success = true, message = "Hesap bilgileri güncellendi" });
     }
 
     [HttpGet("family/last-contact")]
-    public IResult FamilyLastContact() => Results.Json(new { success = true, hoursSince = 2 });
-
-    [HttpPost("family/contact")]
-    public IResult MarkFamilyContact()
+    public async Task<IResult> FamilyLastContact(CancellationToken cancellationToken)
     {
-        var userId = ResolveUserId();
-        var list = NotificationsByUser.GetOrAdd(userId, _ => new List<NotificationItem>());
-        list.Add(new NotificationItem
-        {
-            Id = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            Type = "info",
-            Message = "Aile paneli bağlantısı güncellendi",
-            Severity = "normal",
-            Timestamp = DateTime.UtcNow
-        });
-
-        return Results.Json(new { success = true, contactAt = DateTime.UtcNow });
+        var contact = await _db.FamilyContacts.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.ElderlyId == ElderlyId(), cancellationToken);
+        var hours = contact is null ? (double?)null : (DateTime.UtcNow - contact.LastContactAt).TotalHours;
+        return Results.Ok(new { success = true, hoursSince = hours });
     }
 
-    [HttpGet("family/dashboard/{elderlyId}")]
-    public IResult FamilyDashboard([FromRoute] string elderlyId)
+    [HttpPost("family/contact")]
+    public async Task<IResult> MarkFamilyContact(CancellationToken cancellationToken)
     {
-        var userId = ResolveUserId();
-        var meds = MedicationsByUser.GetOrAdd(userId, _ => new List<MedicationItem>
+        var elderlyId = ElderlyId();
+        var contact = await _db.FamilyContacts
+            .SingleOrDefaultAsync(x => x.ElderlyId == elderlyId, cancellationToken);
+        if (contact is null)
         {
-            new MedicationItem
-            {
-                Id = 1,
-                Name = "Aspirin",
-                Notes = "Yemek sonrası",
-                ScheduleTimes = new List<string> { "09:00" },
-                LastTakenAt = null,
-                StockCount = 14
-            }
-        });
+            contact = new StoredFamilyContact { ElderlyId = elderlyId };
+            _db.FamilyContacts.Add(contact);
+        }
+        contact.LastContactAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new { success = true, contactAt = contact.LastContactAt });
+    }
 
-        var notifications = NotificationsByUser.GetOrAdd(userId, _ => new List<NotificationItem>
-        {
-            new NotificationItem
-            {
-                Id = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                Type = "info",
-                Message = "Sistem normal çalışıyor",
-                Severity = "normal",
-                Timestamp = DateTime.UtcNow
-            }
-        });
+    [Authorize(Roles = "Family")]
+    [HttpGet("family/dashboard/{elderlyId}")]
+    public async Task<IResult> FamilyDashboard(
+        string elderlyId,
+        [FromServices] SubscriptionService subscriptions,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(elderlyId, ElderlyId(), StringComparison.Ordinal))
+            return Results.Forbid();
+        if (!await subscriptions.HasPremiumAccessAsync(elderlyId, cancellationToken))
+            return Results.Json(new { success = false, message = "Premium abonelik gerekli" }, statusCode: 402);
 
-        var todayMeds = meds.Select(m => new
-        {
-            medicationName = m.Name,
-            scheduleTimes = m.ScheduleTimes,
-            notes = m.Notes,
-            takenToday = m.LastTakenAt.HasValue ? new[] { m.LastTakenAt.Value } : Array.Empty<DateTime>()
-        }).ToList();
+        var elderly = await _db.Users.AsNoTracking()
+            .SingleOrDefaultAsync(u => u.Id == elderlyId && u.AccountType == "Elderly", cancellationToken);
+        if (elderly is null) return Results.NotFound();
 
-        var recent = notifications
-            .OrderByDescending(x => x.Timestamp)
+        var medications = await _db.Medications.AsNoTracking()
+            .Where(m => m.ElderlyId == elderlyId)
+            .OrderBy(m => m.Name)
+            .ToListAsync(cancellationToken);
+        var notifications = await _db.Notifications.AsNoTracking()
+            .Where(n => n.ElderlyId == elderlyId)
+            .OrderByDescending(n => n.Timestamp)
             .Take(8)
-            .Select(n => new
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(new
+        {
+            elderly = new { elderly.Id, name = elderly.DisplayName, phone = elderly.PhoneNumber },
+            todayMedications = medications.Select(m => new
             {
-                type = string.IsNullOrWhiteSpace(n.Type) ? "info" : n.Type,
-                title = n.Severity?.Equals("critical", StringComparison.OrdinalIgnoreCase) == true ? "Acil Durum" : "Bildirim",
-                message = n.Message,
+                medicationName = m.Name,
+                scheduleTimes = DeserializeTimes(m.ScheduleTimesJson),
+                m.Notes,
+                takenToday = m.LastTakenAt is null ? [] : new[] { m.LastTakenAt.Value }
+            }),
+            recentNotifications = notifications.Select(n => new
+            {
+                n.Type,
+                title = n.Severity == "critical" ? "Acil Durum" : "Bildirim",
+                n.Message,
                 createdAt = n.Timestamp
             })
-            .ToList();
-
-        return Results.Json(new
-        {
-            elderly = new
-            {
-                id = elderlyId,
-                name = "Review Elderly",
-                age = 75,
-                phone = "+90 555 123 4567"
-            },
-            todayMedications = todayMeds,
-            recentNotifications = recent
         });
     }
 
     [HttpGet("mood-analysis")]
-    public IResult GetMoodAnalysis()
+    public async Task<IResult> MoodAnalysis(
+        [FromServices] SubscriptionService subscriptions,
+        CancellationToken cancellationToken)
     {
-        var userId = ResolveUserId();
-        var list = MoodByUser.GetOrAdd(userId, _ => new List<MoodItem>());
-        var recent = list.OrderByDescending(x => x.Timestamp).Take(5).ToList();
-        var avg = recent.Count > 0 ? Math.Round(recent.Average(x => x.MoodScore), 1) : 0;
-
-        return Results.Json(new
+        var elderlyId = ElderlyId();
+        if (!await subscriptions.HasPremiumAccessAsync(elderlyId, cancellationToken))
+            return Results.Json(new { success = false, message = "Premium abonelik gerekli" }, statusCode: 402);
+        var recent = await _db.MoodRecords.AsNoTracking()
+            .Where(x => x.ElderlyId == elderlyId)
+            .OrderByDescending(x => x.Timestamp)
+            .Take(5)
+            .ToListAsync(cancellationToken);
+        return Results.Ok(new
         {
             success = true,
-            averageMood = avg,
+            averageMood = recent.Count == 0 ? 0 : Math.Round(recent.Average(x => x.MoodScore), 1),
             trend = "stable",
             recentMoods = recent
         });
     }
 
+    [Authorize(Roles = "Elderly")]
     [HttpPost("mood")]
-    public async Task<IResult> AddMood()
+    public async Task<IResult> AddMood([FromBody] MoodRequest request, CancellationToken cancellationToken)
     {
-        var userId = ResolveUserId();
-        using var reader = new StreamReader(Request.Body);
-        var raw = await reader.ReadToEndAsync();
-        var score = 5;
-        try
+        if (request.MoodScore is < 1 or > 10)
+            return Results.BadRequest(new { success = false, message = "Mood score must be between 1 and 10." });
+        _db.MoodRecords.Add(new StoredMoodRecord
         {
-            var json = System.Text.Json.JsonDocument.Parse(raw).RootElement;
-            score = json.TryGetProperty("moodScore", out var s) ? s.GetInt32() : 5;
-        }
-        catch { }
-
-        var list = MoodByUser.GetOrAdd(userId, _ => new List<MoodItem>());
-        list.Add(new MoodItem { MoodScore = score, Timestamp = DateTime.UtcNow });
-
-        return Results.Json(new { success = true });
+            ElderlyId = ElderlyId(),
+            MoodScore = request.MoodScore,
+            Timestamp = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new { success = true });
     }
 
     [HttpGet("health-records")]
-    public IResult GetHealthRecords()
+    public async Task<IResult> HealthRecords(CancellationToken cancellationToken)
     {
-        var userId = ResolveUserId();
-        var list = HealthByUser.GetOrAdd(userId, _ => new List<HealthRecordItem>());
-        return Results.Json(list.OrderByDescending(x => x.Timestamp).Take(200).ToList());
+        var records = await _db.HealthRecords.AsNoTracking()
+            .Where(x => x.ElderlyId == ElderlyId())
+            .OrderByDescending(x => x.RecordedAt)
+            .Take(200)
+            .Select(x => new
+            {
+                x.Id,
+                recordType = x.MetricType,
+                x.Value,
+                unit = x.Notes,
+                alertLevel = x.HealthStatus,
+                timestamp = x.RecordedAt
+            })
+            .ToListAsync(cancellationToken);
+        return Results.Ok(records);
     }
 
+    [Authorize(Roles = "Elderly")]
     [HttpPost("health-records")]
-    public async Task<IResult> AddHealthRecord()
+    public async Task<IResult> AddHealthRecord(
+        [FromBody] HealthRecordRequest request,
+        CancellationToken cancellationToken)
     {
-        var userId = ResolveUserId();
-        using var reader = new StreamReader(Request.Body);
-        var raw = await reader.ReadToEndAsync();
-
-        var type = "manual";
-        var unit = "unit";
-        var value = 0d;
-
-        try
+        var alert = request.Value > 180 ? "critical" : request.Value > 140 ? "warning" : "normal";
+        _db.HealthRecords.Add(new StoredHealthRecord
         {
-            var json = System.Text.Json.JsonDocument.Parse(raw).RootElement;
-            type = json.TryGetProperty("recordType", out var rt) ? rt.GetString() ?? "manual" : "manual";
-            unit = json.TryGetProperty("unit", out var un) ? un.GetString() ?? "unit" : "unit";
-            value = json.TryGetProperty("value", out var vv) ? vv.GetDouble() : 0d;
-        }
-        catch { }
-
-        var alert = "normal";
-        if (type.Contains("tansiyon", StringComparison.OrdinalIgnoreCase) && value >= 180) alert = "critical";
-        else if (type.Contains("şeker", StringComparison.OrdinalIgnoreCase) && value >= 200) alert = "critical";
-        else if (value > 140) alert = "warning";
-
-        var list = HealthByUser.GetOrAdd(userId, _ => new List<HealthRecordItem>());
-        list.Add(new HealthRecordItem
-        {
-            RecordType = type,
-            Value = value,
-            Unit = unit,
-            AlertLevel = alert,
-            Timestamp = DateTime.UtcNow
+            ElderlyId = ElderlyId(),
+            MetricType = request.RecordType,
+            Value = request.Value,
+            Notes = request.Unit,
+            HealthStatus = alert,
+            RecordedAt = DateTime.UtcNow
         });
-
-        return Results.Json(new { success = true, alertLevel = alert, healthStatus = alert == "critical" ? "critical" : "normal" });
+        await _db.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new { success = true, alertLevel = alert, healthStatus = alert });
     }
 
     [HttpGet("medications")]
-    public IResult GetMedications()
+    public async Task<IResult> Medications(CancellationToken cancellationToken)
     {
-        var userId = ResolveUserId();
-        var meds = MedicationsByUser.GetOrAdd(userId, _ => new List<MedicationItem>());
-        return Results.Json(meds.OrderBy(x => x.Id).ToList());
+        var items = await _db.Medications.AsNoTracking()
+            .Where(x => x.ElderlyId == ElderlyId())
+            .OrderBy(x => x.Id)
+            .ToListAsync(cancellationToken);
+        return Results.Ok(items.Select(ToMedicationResponse));
     }
 
+    [Authorize(Roles = "Elderly")]
     [HttpPost("medications")]
-    public async Task<IResult> AddMedication()
+    public async Task<IResult> AddMedication(
+        [FromBody] MedicationRequest request,
+        CancellationToken cancellationToken)
     {
-        var userId = ResolveUserId();
-        using var reader = new StreamReader(Request.Body);
-        var raw = await reader.ReadToEndAsync();
-
-        var name = "İlaç";
-        var notes = "";
-        var scheduleTimes = new List<string>();
-
-        try
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return Results.BadRequest(new { success = false, message = "İlaç adı zorunludur." });
+        _db.Medications.Add(new StoredMedication
         {
-            var json = System.Text.Json.JsonDocument.Parse(raw).RootElement;
-            name = json.TryGetProperty("name", out var n) ? n.GetString() ?? "İlaç" : "İlaç";
-            notes = json.TryGetProperty("notes", out var no) ? no.GetString() ?? "" : "";
-            if (json.TryGetProperty("scheduleTimes", out var st) && st.ValueKind == System.Text.Json.JsonValueKind.Array)
-            {
-                scheduleTimes = st.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
-            }
-        }
-        catch { }
-
-        var meds = MedicationsByUser.GetOrAdd(userId, _ => new List<MedicationItem>());
-        var nextId = meds.Count == 0 ? 1 : meds.Max(x => x.Id) + 1;
-        meds.Add(new MedicationItem
-        {
-            Id = nextId,
-            Name = name,
-            Notes = notes,
-            ScheduleTimes = scheduleTimes,
-            StockCount = 30,
-            LastTakenAt = null
+            ElderlyId = ElderlyId(),
+            Name = request.Name.Trim(),
+            Notes = request.Notes?.Trim() ?? "",
+            ScheduleTimesJson = JsonSerializer.Serialize(request.ScheduleTimes ?? []),
+            StockCount = 30
         });
-
-        return Results.Json(new { success = true });
+        await _db.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new { success = true });
     }
 
+    [Authorize(Roles = "Elderly")]
     [HttpPost("medications/{id:int}/taken")]
-    public IResult TakeMedication([FromRoute] int id)
+    public async Task<IResult> TakeMedication(int id, CancellationToken cancellationToken)
     {
-        var userId = ResolveUserId();
-        var meds = MedicationsByUser.GetOrAdd(userId, _ => new List<MedicationItem>());
-        var med = meds.FirstOrDefault(x => x.Id == id);
-        if (med == null)
+        var medication = await _db.Medications
+            .SingleOrDefaultAsync(x => x.Id == id && x.ElderlyId == ElderlyId(), cancellationToken);
+        if (medication is null) return Results.NotFound(new { success = false, message = "İlaç bulunamadı" });
+        medication.LastTakenAt = DateTime.UtcNow;
+        medication.StockCount = Math.Max(0, (medication.StockCount ?? 0) - 1);
+        await _db.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new
         {
-            return Results.Json(new { success = false, message = "İlaç bulunamadı" }, statusCode: 404);
-        }
-
-        med.LastTakenAt = DateTime.UtcNow;
-        med.StockCount = Math.Max(0, med.StockCount - 1);
-
-        return Results.Json(new { success = true, medication = med, stockCount = med.StockCount });
+            success = true,
+            medication = ToMedicationResponse(medication),
+            stockCount = medication.StockCount
+        });
     }
 
     [HttpGet("family-members")]
-    public IResult GetFamilyMembers()
+    public async Task<IResult> FamilyMembers(
+        [FromServices] SubscriptionService subscriptions,
+        CancellationToken cancellationToken)
     {
-        var userId = ResolveUserId();
-        var members = FamilyByUser.GetOrAdd(userId, _ => new List<FamilyMemberItem>());
-        return Results.Json(new { success = true, members });
+        var elderlyId = ElderlyId();
+        if (!await subscriptions.HasPremiumAccessAsync(elderlyId, cancellationToken))
+            return Results.Json(new { success = false, message = "Premium abonelik gerekli" }, statusCode: 402);
+        var members = await _db.FamilyMembers.AsNoTracking()
+            .Where(x => x.ElderlyId == elderlyId)
+            .ToListAsync(cancellationToken);
+        return Results.Ok(new { success = true, members });
     }
 
+    [Authorize(Roles = "Elderly")]
     [HttpPost("family-members")]
-    public async Task<IResult> AddFamilyMember()
+    public async Task<IResult> AddFamilyMember(
+        [FromBody] FamilyMemberRequest request,
+        [FromServices] SubscriptionService subscriptions,
+        CancellationToken cancellationToken)
     {
-        var userId = ResolveUserId();
-        using var reader = new StreamReader(Request.Body);
-        var raw = await reader.ReadToEndAsync();
-
-        var name = "Aile Üyesi";
-        var email = "family@test.com";
-        var relationship = "Diğer";
-        var phoneNumber = "";
-
-        try
+        var elderlyId = ElderlyId();
+        if (!await subscriptions.HasPremiumAccessAsync(elderlyId, cancellationToken))
+            return Results.Json(new { success = false, message = "Premium abonelik gerekli" }, statusCode: 402);
+        if (await _db.FamilyMembers.AnyAsync(x => x.ElderlyId == elderlyId && x.Email == request.Email, cancellationToken))
+            return Results.Conflict(new { success = false, message = "Bu aile üyesi zaten kayıtlı." });
+        _db.FamilyMembers.Add(new StoredFamilyMember
         {
-            var json = System.Text.Json.JsonDocument.Parse(raw).RootElement;
-            name = json.TryGetProperty("name", out var n) ? n.GetString() ?? name : name;
-            email = json.TryGetProperty("email", out var e) ? e.GetString() ?? email : email;
-            relationship = json.TryGetProperty("relationship", out var r) ? r.GetString() ?? relationship : relationship;
-            phoneNumber = json.TryGetProperty("phoneNumber", out var p) ? p.GetString() ?? "" : "";
-        }
-        catch { }
-
-        var members = FamilyByUser.GetOrAdd(userId, _ => new List<FamilyMemberItem>());
-        var nextId = members.Count == 0 ? 1 : members.Max(x => x.Id) + 1;
-        members.Add(new FamilyMemberItem
-        {
-            Id = nextId,
-            Name = name,
-            Email = email,
-            Relationship = relationship,
-            PhoneNumber = phoneNumber
+            Id = Guid.NewGuid().ToString("N"),
+            ElderlyId = elderlyId,
+            Name = request.Name.Trim(),
+            Email = request.Email.Trim(),
+            Relationship = request.Relationship?.Trim() ?? "",
+            PhoneNumber = request.PhoneNumber?.Trim() ?? ""
         });
-
-        return Results.Json(new { success = true });
+        await _db.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new { success = true });
     }
 
     [HttpGet("notifications")]
-    public IResult GetNotifications()
+    public async Task<IResult> Notifications(CancellationToken cancellationToken)
     {
-        var userId = ResolveUserId();
-        var list = NotificationsByUser.GetOrAdd(userId, _ => new List<NotificationItem>());
-        return Results.Json(list.OrderByDescending(x => x.Timestamp).Take(100).ToList());
+        var items = await _db.Notifications.AsNoTracking()
+            .Where(x => x.ElderlyId == ElderlyId())
+            .OrderByDescending(x => x.Timestamp)
+            .Take(100)
+            .ToListAsync(cancellationToken);
+        return Results.Ok(items);
+    }
+
+    [HttpGet("doctor/report")]
+    public async Task<IResult> DoctorReport(CancellationToken cancellationToken)
+    {
+        var elderlyId = ElderlyId();
+        var elderly = await _db.Users.AsNoTracking()
+            .Where(x => x.Id == elderlyId)
+            .Select(x => new
+            {
+                x.DisplayName,
+                x.Email,
+                x.PhoneNumber,
+                x.BirthDate,
+                x.BloodType,
+                x.Allergies,
+                x.MedicalHistory
+            })
+            .SingleAsync(cancellationToken);
+        var healthRecords = await _db.HealthRecords.AsNoTracking()
+            .Where(x => x.ElderlyId == elderlyId)
+            .OrderByDescending(x => x.RecordedAt)
+            .Take(100)
+            .ToListAsync(cancellationToken);
+        var medications = await _db.Medications.AsNoTracking()
+            .Where(x => x.ElderlyId == elderlyId)
+            .OrderBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+        var moods = await _db.MoodRecords.AsNoTracking()
+            .Where(x => x.ElderlyId == elderlyId)
+            .OrderByDescending(x => x.Timestamp)
+            .Take(30)
+            .ToListAsync(cancellationToken);
+        return Results.Ok(new
+        {
+            success = true,
+            generatedAt = DateTime.UtcNow,
+            elderly = new
+            {
+                name = elderly.DisplayName,
+                elderly.Email,
+                phone = elderly.PhoneNumber,
+                elderly.BirthDate,
+                elderly.BloodType,
+                elderly.Allergies,
+                elderly.MedicalHistory
+            },
+            healthRecords = healthRecords.Select(x => new
+            {
+                timestamp = x.RecordedAt,
+                recordType = x.MetricType,
+                x.Value,
+                x.Systolic,
+                x.Diastolic,
+                x.Glucose,
+                x.HeartRate,
+                status = x.HealthStatus,
+                x.Notes
+            }),
+            medications = medications.Select(ToMedicationResponse),
+            mood = new
+            {
+                average = moods.Count == 0 ? (double?)null : Math.Round(moods.Average(x => x.MoodScore), 1),
+                trend = "stable"
+            }
+        });
     }
 
     [HttpPost("send-notification")]
-    public async Task<IResult> SendNotification()
+    public async Task<IResult> SendNotification(
+        [FromBody] NotificationRequest request,
+        CancellationToken cancellationToken)
     {
-        var userId = ResolveUserId();
-        using var reader = new StreamReader(Request.Body);
-        var raw = await reader.ReadToEndAsync();
-
-        var type = "info";
-        var message = "Bildirim";
-        var severity = "normal";
-        var recipientPhone = string.Empty;
-        var location = string.Empty;
-
-        try
+        _db.Notifications.Add(new StoredNotification
         {
-            var json = System.Text.Json.JsonDocument.Parse(raw).RootElement;
-            type = json.TryGetProperty("type", out var t) ? t.GetString() ?? type : type;
-            message = json.TryGetProperty("message", out var m) ? m.GetString() ?? message : message;
-            severity = json.TryGetProperty("severity", out var s) ? s.GetString() ?? severity : severity;
-            recipientPhone = json.TryGetProperty("phoneNumber", out var p) ? p.GetString() ?? "" : recipientPhone;
-            if (string.IsNullOrWhiteSpace(recipientPhone) && json.TryGetProperty("recipientPhone", out var rp)) recipientPhone = rp.GetString() ?? "";
-            location = json.TryGetProperty("location", out var l) ? l.GetString() ?? "" : location;
-        }
-        catch { }
-
-        var list = NotificationsByUser.GetOrAdd(userId, _ => new List<NotificationItem>());
-        list.Add(new NotificationItem
-        {
-            Id = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            Type = type,
-            Message = message,
-            Severity = severity,
-            Timestamp = DateTime.UtcNow
+            ElderlyId = ElderlyId(),
+            Type = request.Type ?? "info",
+            Message = request.Message,
+            Severity = request.Severity ?? "normal"
         });
-
-        var reviewerTestNumber = NormalizePhone(GetReviewerTestPhoneNumber());
-        var normalizedRecipient = NormalizePhone(recipientPhone);
-        var shouldSimulateSms = IsReviewerModeEnabled()
-            || (!string.IsNullOrWhiteSpace(reviewerTestNumber) && normalizedRecipient == reviewerTestNumber);
-
-        return Results.Json(new
-        {
-            success = true,
-            notificationStored = true,
-            sms = new
-            {
-                simulated = shouldSimulateSms,
-                dispatched = false,
-                recipientPhone = recipientPhone,
-                reason = shouldSimulateSms
-                    ? "Reviewer mode/test phone number matched. SMS dispatch simulated."
-                    : "No SMS provider is wired in this compatibility endpoint; app notification stored only."
-            },
-            location
-        });
+        await _db.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new { success = true, notificationStored = true });
     }
 
+    [Authorize(Roles = "Elderly")]
     [HttpPost("emergency-alert")]
-    public IResult EmergencyAlert() => Results.Json(new { success = true, acknowledged = true });
-
     [HttpPost("emergency-broadcast")]
-    public IResult EmergencyBroadcast() => Results.Json(new { success = true, sent = true });
+    public async Task<IResult> EmergencyAlert(
+        [FromBody] JsonElement payload,
+        CancellationToken cancellationToken)
+    {
+        _db.EmergencyAlerts.Add(new StoredEmergencyAlert
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            ElderlyId = ElderlyId(),
+            AlertType = payload.TryGetProperty("type", out var type) ? type.GetString() ?? "emergency" : "emergency",
+            Description = payload.TryGetProperty("message", out var message) ? message.GetString() ?? "" : "",
+            OccurredAt = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new { success = true, acknowledged = true });
+    }
 
     [HttpPost("emergency-sms/test")]
-    public IResult EmergencySmsTest()
+    public IResult EmergencySmsTest() => Results.Ok(new
     {
-        return Results.Json(new
-        {
-            success = true,
-            simulated = true,
-            smsDispatched = false,
-            message = "Review güvenli mod: Gerçek SMS gönderilmedi, yalnızca uygulama içi test kaydı oluşturuldu."
-        });
-    }
+        success = true,
+        simulated = true,
+        smsDispatched = false
+    });
 
+    [Authorize(Roles = "Elderly")]
+    [EnableRateLimiting("sms")]
     [HttpPost("emergency-sms/dispatch")]
-    public async Task<IResult> DispatchEmergencySms()
+    public async Task<IResult> DispatchEmergencySms(
+        [FromBody] EmergencySmsRequest request,
+        [FromServices] EmergencySmsService sms,
+        [FromServices] IConfiguration configuration,
+        CancellationToken cancellationToken)
     {
-        using var reader = new StreamReader(Request.Body);
-        var raw = await reader.ReadToEndAsync();
+        var elderlyId = ElderlyId();
+        var dailyLimit = configuration.GetValue("Sms:DailyPerUserLimit", 10);
+        var sentToday = await _db.SmsDispatchAudits
+            .CountAsync(x => x.UserId == UserId()
+                && x.Succeeded
+                && x.CreatedAt >= DateTime.UtcNow.AddHours(-24), cancellationToken);
+        if (sentToday >= dailyLimit)
+            return Results.Json(new { success = false, message = "Günlük SMS güvenlik limiti aşıldı." }, statusCode: 429);
+        if (!sms.IsConfigured)
+            return Results.Json(new { success = false, message = "SMS provider is not configured." }, statusCode: 503);
 
-        var phoneNumber = string.Empty;
-        var phoneNumbers = new List<string>();
-        var message = "Emergency assistance requested.";
-        var location = string.Empty;
+        var allowed = await _db.FamilyMembers.AsNoTracking()
+            .Where(x => x.ElderlyId == elderlyId && x.PhoneNumber != "")
+            .Select(x => x.PhoneNumber)
+            .ToListAsync(cancellationToken);
+        var allowedNormalized = allowed.Select(NormalizePhone)
+            .Where(x => x.Length >= 10)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (allowedNormalized.Length == 0)
+            return Results.BadRequest(new { success = false, message = "Kayıtlı acil durum alıcısı bulunamadı." });
 
-        try
+        var message = (request.Message ?? "SafeGuardian acil yardım isteği.").Trim();
+        if (!string.IsNullOrWhiteSpace(request.Location))
+            message = $"{message}\nKonum: {request.Location.Trim()}";
+        message = message[..Math.Min(message.Length, 500)];
+
+        var sent = 0;
+        foreach (var recipient in allowedNormalized.Take(Math.Max(0, dailyLimit - sentToday)))
         {
-            var json = System.Text.Json.JsonDocument.Parse(raw).RootElement;
-            phoneNumber = json.TryGetProperty("phoneNumber", out var p) ? p.GetString() ?? "" : phoneNumber;
-            if (json.TryGetProperty("phoneNumbers", out var pn) && pn.ValueKind == JsonValueKind.Array)
+            var succeeded = await sms.SendAsync(recipient, message, cancellationToken);
+            _db.SmsDispatchAudits.Add(new SmsDispatchAudit
             {
-                phoneNumbers = pn.EnumerateArray()
-                    .Select(x => x.GetString() ?? "")
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .ToList();
-            }
-            message = json.TryGetProperty("message", out var m) ? m.GetString() ?? message : message;
-            location = json.TryGetProperty("location", out var l) ? l.GetString() ?? "" : location;
-        }
-        catch { }
-
-        var reviewerTestNumber = NormalizePhone(GetReviewerTestPhoneNumber());
-        var targets = new List<string>();
-        if (!string.IsNullOrWhiteSpace(phoneNumber)) targets.Add(phoneNumber);
-        targets.AddRange(phoneNumbers);
-        targets = targets.Select(NormalizePhone).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
-
-        var anyMatchesReviewerNumber = !string.IsNullOrWhiteSpace(reviewerTestNumber) && targets.Any(n => n == reviewerTestNumber);
-        var simulate = IsReviewerModeEnabled()
-            || anyMatchesReviewerNumber;
-
-        var sid = GetFirstSetting(
-            ("Sms:Twilio:AccountSid", "TWILIO_ACCOUNT_SID"),
-            ("Twilio:AccountSid", "TWILIO_SID")
-        );
-        var authToken = GetFirstSetting(
-            ("Sms:Twilio:AuthToken", "TWILIO_AUTH_TOKEN"),
-            ("Twilio:AuthToken", "TWILIO_TOKEN")
-        );
-        var fromNumber = GetFirstSetting(
-            ("Sms:FromNumber", "TWILIO_PHONE_NUMBER"),
-            ("Sms:Twilio:FromNumber", "TWILIO_FROM_NUMBER"),
-            ("Twilio:FromNumber", "TWILIO_CALLER_ID")
-        );
-        var providerConfigured = !string.IsNullOrWhiteSpace(sid)
-            && !string.IsNullOrWhiteSpace(authToken)
-            && !string.IsNullOrWhiteSpace(fromNumber);
-
-        if (simulate)
-        {
-            return Results.Json(new
-            {
-                success = true,
-                simulated = true,
-                smsDispatched = false,
-                recipients = targets,
-                location,
-                message = "Reviewer mode active: SMS flow simulated, no real Twilio request sent."
+                UserId = UserId(),
+                RecipientHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(recipient))),
+                Succeeded = succeeded,
+                CreatedAt = DateTime.UtcNow
             });
+            if (succeeded) sent++;
         }
-
-        if (!providerConfigured)
-        {
-            return Results.Json(new
-            {
-                success = false,
-                simulated = false,
-                smsDispatched = false,
-                providerConfigured,
-                recipients = targets,
-                location,
-                message = "Twilio credentials are missing from environment variables; no SMS sent."
-            }, statusCode: 503);
-        }
-
-        if (targets.Count == 0)
-        {
-            return Results.Json(new
-            {
-                success = false,
-                simulated = false,
-                smsDispatched = false,
-                providerConfigured = true,
-                recipients = targets,
-                location,
-                message = "No recipient phone numbers provided."
-            }, statusCode: 400);
-        }
-
-        var results = new List<object>();
-        var anySuccess = false;
-        foreach (var to in targets)
-        {
-            var (ok, status, error, sidResult) = await TrySendTwilioSms(sid, authToken, fromNumber, to, message, location);
-            results.Add(new { to, ok, status, error, sid = sidResult });
-            if (ok) anySuccess = true;
-        }
-
-        return Results.Json(new
-        {
-            success = anySuccess,
-            simulated = false,
-            providerConfigured = true,
-            smsDispatched = anySuccess,
-            recipients = targets,
-            location,
-            message = anySuccess ? "SMS dispatched." : "SMS dispatch failed.",
-            results
-        }, statusCode: anySuccess ? 200 : 502);
-    }
-
-    private static async Task<(bool ok, int status, string error, string sid)> TrySendTwilioSms(
-        string accountSid,
-        string authToken,
-        string fromNumber,
-        string toNumber,
-        string message,
-        string location)
-    {
-        try
-        {
-            using var http = new HttpClient();
-            var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{accountSid}:{authToken}"));
-            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", basic);
-
-            var uri = $"https://api.twilio.com/2010-04-01/Accounts/{accountSid}/Messages.json";
-
-            var bodyMessage = string.IsNullOrWhiteSpace(location) ? message : $"{message}\nLocation: {location}";
-            using var content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                ["From"] = fromNumber,
-                ["To"] = toNumber,
-                ["Body"] = bodyMessage
-            });
-
-            var resp = await http.PostAsync(uri, content);
-            var status = (int)resp.StatusCode;
-            var raw = await resp.Content.ReadAsStringAsync();
-            if (resp.IsSuccessStatusCode)
-            {
-                try
-                {
-                    var doc = JsonDocument.Parse(raw).RootElement;
-                    var sidValue = doc.TryGetProperty("sid", out var sidEl) ? (sidEl.GetString() ?? "") : "";
-                    return (true, status, "", sidValue);
-                }
-                catch
-                {
-                    return (true, status, "", "");
-                }
-            }
-            return (false, status, raw, "");
-        }
-        catch (Exception ex)
-        {
-            return (false, 0, ex.Message, "");
-        }
+        await _db.SaveChangesAsync(cancellationToken);
+        return sent > 0
+            ? Results.Ok(new { success = true, dispatched = sent })
+            : Results.Json(new { success = false, message = "SMS gönderilemedi." }, statusCode: 502);
     }
 
     [HttpPost("chat")]
-    public async Task<IResult> Chat()
+    public IResult Chat([FromBody] ChatRequest request) => Results.Ok(new
     {
-        using var reader = new StreamReader(Request.Body);
-        var raw = await reader.ReadToEndAsync();
-        var message = "";
-        try
-        {
-            var json = System.Text.Json.JsonDocument.Parse(raw).RootElement;
-            message = json.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
-        }
-        catch { }
-
-        var response = string.IsNullOrWhiteSpace(message)
+        success = true,
+        reply = string.IsNullOrWhiteSpace(request.Message)
             ? "Size nasıl yardımcı olabilirim?"
-            : $"Mesajınızı aldım: {message}";
+            : "Mesajınız alındı. Acil bir durum varsa acil yardım düğmesini kullanın."
+    });
 
-        return Results.Json(new { success = true, response });
-    }
+    private string UserId() =>
+        User.FindFirstValue(ClaimTypes.NameIdentifier)
+        ?? User.FindFirstValue("sub")
+        ?? throw new UnauthorizedAccessException();
 
-    private sealed class MedicationItem
+    private string ElderlyId() =>
+        User.FindFirstValue("elderly_id") is { Length: > 0 } id
+            ? id
+            : throw new UnauthorizedAccessException();
+
+    private static string[] DeserializeTimes(string json)
     {
-        public int Id { get; set; }
-        public string Name { get; set; } = "";
-        public string Notes { get; set; } = "";
-        public List<string> ScheduleTimes { get; set; } = new();
-        public int StockCount { get; set; } = 30;
-        public DateTime? LastTakenAt { get; set; }
+        try { return JsonSerializer.Deserialize<string[]>(json) ?? []; }
+        catch { return []; }
     }
 
-    private sealed class HealthRecordItem
+    private static string NormalizePhone(string value)
     {
-        public string RecordType { get; set; } = "";
-        public double Value { get; set; }
-        public string Unit { get; set; } = "";
-        public string AlertLevel { get; set; } = "normal";
-        public DateTime Timestamp { get; set; }
+        var trimmed = (value ?? "").Trim();
+        var digits = new string(trimmed.Where(char.IsDigit).ToArray());
+        return trimmed.StartsWith('+') ? $"+{digits}" : digits;
     }
 
-    private sealed class MoodItem
+    private static object ToMedicationResponse(StoredMedication medication) => new
     {
-        public int MoodScore { get; set; }
-        public DateTime Timestamp { get; set; }
-    }
-
-    private sealed class FamilyMemberItem
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = "";
-        public string Email { get; set; } = "";
-        public string Relationship { get; set; } = "";
-        public string PhoneNumber { get; set; } = "";
-    }
-
-    private sealed class NotificationItem
-    {
-        public long Id { get; set; }
-        public string Type { get; set; } = "";
-        public string Message { get; set; } = "";
-        public string Severity { get; set; } = "normal";
-        public DateTime Timestamp { get; set; }
-    }
-
-    private sealed class SubscriptionItem
-    {
-        public string Plan { get; set; } = "standard";
-        public bool IsActive { get; set; } = false;
-        public DateTime ExpiresAt { get; set; }
-        public DateTime StartedAt { get; set; }
-        public DateTime TrialEndsAt { get; set; }
-        public DateTime AdUnlockUntil { get; set; }
-        public string LastAppleTransactionId { get; set; } = "";
-    }
-
-    private sealed class FamilyAccountItem
-    {
-        public string Name { get; set; } = "";
-        public string Email { get; set; } = "";
-        public string Phone { get; set; } = "";
-        public DateTime UpdatedAt { get; set; }
-    }
+        medication.Id,
+        medication.Name,
+        medication.Notes,
+        scheduleTimes = DeserializeTimes(medication.ScheduleTimesJson),
+        medication.StockCount,
+        medication.LastTakenAt,
+        medication.CreatedAt
+    };
 }
+
+public sealed record FamilyAccountRequest(string Name, string Email, string? Phone);
+public sealed record MoodRequest(int MoodScore);
+public sealed record HealthRecordRequest(string RecordType, double Value, string Unit);
+public sealed record MedicationRequest(string Name, string? Notes, string[]? ScheduleTimes);
+public sealed record FamilyMemberRequest(
+    string Name,
+    string Email,
+    string? Relationship,
+    string? PhoneNumber);
+public sealed record NotificationRequest(string Message, string? Type, string? Severity);
+public sealed record ChatRequest(string Message);
+public sealed record EmergencySmsRequest(string? Message, string? Location);

@@ -120,6 +120,37 @@ No additional test/sandbox configuration is needed beyond providing this demo ac
 
 ---
 
-**Last Updated:** June 16, 2026  
-**Build:** v1.0.0 (25)  
-**Review Status:** Awaiting approval with demo account provided
+**Last Updated:** June 18, 2026  
+**Build:** v1.0.0 (27)  
+**Review Status:** Resubmitted - 2.1(a) and 2.1(b) bugs fixed
+
+---
+
+## Bug Fixes in Build 27 (Resubmission)
+
+### 2.1(a) — Bug Fixes
+
+**Bug 1: Drug photo upload not working on iPad Air M3**
+- Root cause: `isProbablyIosSimulator()` was returning `true` on real iPad Air M3
+  because `Simulator` appeared in the iOS 26 user-agent string
+- Fix: Tightened the regex to only match explicit Simulator UA markers (`x86_64`, `i386`),
+  excluding real devices. On real iPad, Capacitor native `Camera.getPhoto()` is now used.
+- Result: Tapping KAMERA → photo picker opens → photo processes and analysis shows ✅
+
+**Bug 2: "Doktora Göster" button unresponsive on iPad**
+- Root cause: Tap events were being swallowed by the WKWebView gesture system on iPad
+- Fix: Added explicit `touchend` event listener with `preventDefault()` as a fallback
+- Result: Tapping DOKTORA GÖSTER now reliably opens the share sheet ✅
+
+### 2.1(b) — Subscription Loading
+
+**Root cause:** The subscription product (`com.buseakdeniz.safeguardian.sub_family_monthly_v2`)
+status in App Store Connect was "Developer Action Needed" — it had not been linked to the
+submitted app version. Additionally, the subscription needs the Paid Apps Agreement to be active.
+
+**Fixes applied:**
+- Added comprehensive StoreKit debug logging for Apple sandbox diagnosis
+- Subscription is now linked to the v1.0.0 (27) version in App Store Connect
+- Paid Apps Agreement is confirmed active
+
+---

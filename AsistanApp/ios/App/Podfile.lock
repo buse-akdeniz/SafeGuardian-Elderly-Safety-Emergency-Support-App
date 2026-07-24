@@ -1,4 +1,6 @@
 PODS:
+  - AparajitaCapacitorBiometricAuth (8.0.2):
+    - Capacitor
   - Capacitor (6.2.1):
     - CapacitorCordova
   - CapacitorCamera (6.1.3):
@@ -14,21 +16,33 @@ PODS:
   - Google-Mobile-Ads-SDK (11.3.0):
     - GoogleUserMessagingPlatform (>= 1.1)
   - GoogleUserMessagingPlatform (3.1.0)
+  - PurchasesHybridCommon (13.26.0):
+    - RevenueCat (= 5.20.0)
+  - RevenueCat (5.20.0)
+  - RevenuecatPurchasesCapacitor (9.2.2):
+    - Capacitor
+    - PurchasesHybridCommon (= 13.26.0)
 
 DEPENDENCIES:
+  - "AparajitaCapacitorBiometricAuth (from `../../node_modules/@aparajita/capacitor-biometric-auth`)"
   - "Capacitor (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorCamera (from `../../node_modules/@capacitor/camera`)"
   - "CapacitorCommunityAdmob (from `../../node_modules/@capacitor-community/admob`)"
   - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorGeolocation (from `../../node_modules/@capacitor/geolocation`)"
   - "CapacitorPreferences (from `../../node_modules/@capacitor/preferences`)"
+  - "RevenuecatPurchasesCapacitor (from `../../node_modules/@revenuecat/purchases-capacitor`)"
 
 SPEC REPOS:
   trunk:
     - Google-Mobile-Ads-SDK
     - GoogleUserMessagingPlatform
+    - PurchasesHybridCommon
+    - RevenueCat
 
 EXTERNAL SOURCES:
+  AparajitaCapacitorBiometricAuth:
+    :path: "../../node_modules/@aparajita/capacitor-biometric-auth"
   Capacitor:
     :path: "../../node_modules/@capacitor/ios"
   CapacitorCamera:
@@ -41,8 +55,11 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor/geolocation"
   CapacitorPreferences:
     :path: "../../node_modules/@capacitor/preferences"
+  RevenuecatPurchasesCapacitor:
+    :path: "../../node_modules/@revenuecat/purchases-capacitor"
 
 SPEC CHECKSUMS:
+  AparajitaCapacitorBiometricAuth: c058563fe00160e12b022341e11b3181357ea93a
   Capacitor: c95400d761e376be9da6be5a05f226c0e865cebf
   CapacitorCamera: 5ba135b0cb55a788758139fa2404d726bf60f0f3
   CapacitorCommunityAdmob: 5bcc77d91f71e39a6fdd0dea5de71ea6c241996e
@@ -51,7 +68,10 @@ SPEC CHECKSUMS:
   CapacitorPreferences: 5848e0691b36b4bb4acc98e481ab56d451578d30
   Google-Mobile-Ads-SDK: 301a16c461c331ba34ff4dab40a22ab7c147af61
   GoogleUserMessagingPlatform: befe603da6501006420c206222acd449bba45a9c
+  PurchasesHybridCommon: fa166fc8b385cf80f581f923c91d8ccffe5dd7f8
+  RevenueCat: e47ff90dfd271fde155a4befe48e8fc02e8281e4
+  RevenuecatPurchasesCapacitor: 6727a4dc1455bdf2374259420719ce5dfbe957fa
 
-PODFILE CHECKSUM: 10afadc6133eb71bd63e1f1760eeef7973d1ae4b
+PODFILE CHECKSUM: bd29818518334d0cb1aaf88f8b2e6cbc082aa9a0
 
 COCOAPODS: 1.16.2

@@ -1341,33 +1341,39 @@ body.ad-banner-visible .voice-indicator {
 }
 
 /* ===========================
-   iPAD OPTİMİZASYONU (Guideline 4)
-   iPad Air 11-inch: 820pt wide, 1180pt tall
+   iPAD — full-bleed layout (App Store screenshots + usability)
    ========================== */
-@media only screen and (min-width: 768px) and (max-width: 1366px) and (-webkit-min-device-pixel-ratio: 1) {
+@media only screen and (min-width: 768px) {
 
-    /* Screen container: centered column with comfortable margins */
-    .screen {
-        max-width: 720px;
-        margin: 0 auto;
-        padding: 24px 32px;
+    html, body {
+        width: 100%;
+        height: 100%;
     }
 
-    /* Top bar sizing */
+    .screen {
+        max-width: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 24px 40px !important;
+        box-sizing: border-box;
+    }
+
     .top-bar {
-        padding: 16px 32px;
+        padding: 16px 40px;
         min-height: 72px;
+        width: 100%;
+        max-width: none;
     }
 
     .top-bar h1 {
         font-size: 38px;
     }
 
-    /* Form layout: wider, more comfortable */
     .form-container {
-        max-width: 640px;
+        max-width: 720px;
+        width: 100%;
         margin: 0 auto;
-        padding: 28px 32px;
+        padding: 32px 40px;
         border-radius: 20px;
     }
 
@@ -1388,7 +1394,6 @@ body.ad-banner-visible .voice-indicator {
         min-height: 64px;
     }
 
-    /* Giant buttons more comfortable on iPad */
     .btn-giant {
         min-height: 88px;
         font-size: 26px;
@@ -1402,47 +1407,50 @@ body.ad-banner-visible .voice-indicator {
         min-height: 52px;
     }
 
-    /* Main area centered */
     .main-area {
-        max-width: 720px;
-        margin: 0 auto;
-        padding: 28px 32px;
-        gap: 20px;
+        max-width: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 28px 40px !important;
+        gap: 24px;
     }
 
-    /* Three-button grid: 2 columns on iPad */
+    .home-grid,
     .three-button-layout {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 20px;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+        width: 100%;
+        max-width: none;
     }
 
     .btn-mega {
-        height: 180px;
-        font-size: 30px;
-        border-radius: 20px;
+        height: 200px;
+        font-size: 32px;
+        border-radius: 24px;
+        width: 100%;
     }
 
     .btn-icon {
-        font-size: 72px;
+        font-size: 76px;
     }
 
     .btn-text {
-        font-size: 28px;
-    }
-
-    /* Emergency button full width */
-    .emergency-main {
-        min-height: 96px;
         font-size: 30px;
     }
 
-    /* Mood buttons row */
+    .emergency-main {
+        min-height: 96px;
+        font-size: 30px;
+        width: 100%;
+    }
+
     .mood-quick-buttons {
         display: flex;
         flex-direction: row;
         gap: 16px;
-        justify-content: center;
+        justify-content: stretch;
+        width: 100%;
     }
 
     .mood-quick-btn {
@@ -1451,7 +1459,6 @@ body.ad-banner-visible .voice-indicator {
         font-size: 22px;
     }
 
-    /* Profile / cards */
     .medication-card {
         padding: 20px;
         border-radius: 16px;
@@ -1463,13 +1470,11 @@ body.ad-banner-visible .voice-indicator {
         min-width: 140px;
     }
 
-    /* Voice guidance */
     .voice-guidance {
         font-size: 26px;
         padding: 18px;
     }
 
-    /* Accessibility menu */
     .a11y-controls {
         bottom: 28px;
         right: 28px;
@@ -1480,9 +1485,8 @@ body.ad-banner-visible .voice-indicator {
         padding: 20px;
     }
 
-    /* Modal */
     .modal-content {
-        max-width: 560px;
+        max-width: 640px;
         padding: 36px;
         border-radius: 20px;
     }
@@ -1493,5 +1497,30 @@ body.ad-banner-visible .voice-indicator {
 
     .modal-content p {
         font-size: 22px;
+    }
+
+    #loginScreen {
+        align-items: stretch !important;
+        justify-content: center !important;
+        padding: 40px !important;
+    }
+
+    #loginScreen .form-container,
+    .sg-login-wrap {
+        max-width: 640px !important;
+        width: 100% !important;
+    }
+}
+
+@media only screen and (min-width: 1024px) {
+    .home-grid,
+    .three-button-layout {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .form-container,
+    #loginScreen .form-container,
+    .sg-login-wrap {
+        max-width: 720px !important;
     }
 }

@@ -19,7 +19,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>33</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
@@ -43,6 +43,8 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSFaceIDUsageDescription</key>
+	<string>SafeGuardian, hızlı ve güvenli giriş için Face ID kullanır.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>SafeGuardian AI, ilaç tanıma ve güvenlik taraması için kameranızı kullanır.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

@@ -1,6 +1,7 @@
-using AsistanApp.Services;
-using ilk_projem.Services;
-using ilk_projem.Models;
+using System.Security.Claims;
+using ilk_projem.Data;
+using ilk_projem.Models.Persistence;
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
 namespace ilk_projem.Controllers;
@@ -9,16 +10,12 @@ public static class StateController
 {
     public static IEndpointRouteBuilder MapStateEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/user-state", async (HttpContext ctx, HealthDataService svc) =>
+        app.MapGet("/api/user-state", async (HttpContext ctx, AppDbContext db) =>
         {
-            var token = AuthTokenService.ResolveToken(ctx);
-            var elderly = await svc.GetElderlySession(token);
-            if (elderly == null)
-            {
-                return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
-            }
-
-            var state = await svc.GetUserState((int)elderly.Id);
+            var elderlyId = ctx.User.FindFirstValue("elderly_id")!;
+            var state = await db.UserStates.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.ElderlyId == elderlyId)
+                ?? new StoredUserState { ElderlyId = elderlyId };
             return Results.Json(new
             {
                 currentContext = state.CurrentContext,
@@ -27,34 +24,32 @@ public static class StateController
                 isAssistantActive = state.IsAssistantActive,
                 updatedAt = state.UpdatedAt
             });
-        });
+        }).RequireAuthorization();
 
-        app.MapPost("/api/user-state", async (HttpContext ctx, HealthDataService svc) =>
+        app.MapPost("/api/user-state", async (HttpContext ctx, AppDbContext db) =>
         {
             try
             {
                 var json = await JsonDocument.ParseAsync(ctx.Request.Body);
-                var token = AuthTokenService.ResolveToken(ctx, json.RootElement);
-                var elderly = await svc.GetElderlySession(token);
-                if (elderly == null)
-                {
-                    return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
-                }
+                var elderlyId = ctx.User.FindFirstValue("elderly_id")!;
 
                 var currentContext = json.RootElement.TryGetProperty("currentContext", out var c) ? c.GetString() ?? "home" : "home";
                 var activeTaskId = json.RootElement.TryGetProperty("activeTaskId", out var a) ? a.GetString() ?? "" : "";
                 var screenPriority = json.RootElement.TryGetProperty("screenPriority", out var p) ? p.GetString() ?? "normal" : "normal";
                 var isAssistantActive = json.RootElement.TryGetProperty("isAssistantActive", out var ia) ? ia.GetBoolean() : true;
 
-                await svc.SetUserState((int)elderly.Id, new UserState
+                var state = await db.UserStates.SingleOrDefaultAsync(x => x.ElderlyId == elderlyId);
+                if (state is null)
                 {
-                    ElderlyId = elderly.Id,
-                    CurrentContext = currentContext,
-                    ActiveTaskId = activeTaskId,
-                    ScreenPriority = screenPriority,
-                    IsAssistantActive = isAssistantActive,
-                    UpdatedAt = DateTime.Now
-                });
+                    state = new StoredUserState { ElderlyId = elderlyId };
+                    db.UserStates.Add(state);
+                }
+                state.CurrentContext = currentContext;
+                state.ActiveTaskId = activeTaskId;
+                state.ScreenPriority = screenPriority;
+                state.IsAssistantActive = isAssistantActive;
+                state.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
 
                 return Results.Json(new { success = true });
             }
@@ -62,7 +57,7 @@ public static class StateController
             {
                 return Results.Json(new { success = false, message = "İşlem başarısız" }, statusCode: 500);
             }
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("Elderly"));
 
         return app;
     }

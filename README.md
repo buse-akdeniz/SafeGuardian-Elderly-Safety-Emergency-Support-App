@@ -1,4 +1,4 @@
-# 👵 VitaGuard: Elderly Care Assistant (Yaşlı Bakım Asistanı)
+# SafeGuardianAI: Elderly Care Assistant
 [![Platform](https://img.shields.io/badge/.NET-10-512BD4)](#)
 [![Framework](https://img.shields.io/badge/ASP.NET%20Core-Web%20API-5C2D91)](#)
 [![Realtime](https://img.shields.io/badge/SignalR-Enabled-00A3E0)](#)

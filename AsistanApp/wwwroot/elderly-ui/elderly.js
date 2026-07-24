@@ -13,7 +13,6 @@ const DEFAULT_API_BASE = (
 const FALLBACK_API_BASE = (window.API_FALLBACK_BASE?.trim?.() || RAILWAY_API_BASE);
 const IOS_SIMULATOR_API_BASE = FALLBACK_API_BASE;
 const DEMO_OFFLINE_TOKEN = 'demo-offline-token';
-const DEMO_REVIEW_TOKEN = 'demo-review-elderly-expired-token';
 const PRODUCT_LOAD_TIMEOUT_MS = 12000;
 const PURCHASE_TIMEOUT_MS = 90000;
 let isFamilyPurchaseInProgress = false;
@@ -180,8 +179,9 @@ const TRANSLATIONS = {
         subscriptionPrivacyBtn: 'GİZLİLİK POLİTİKASI',
         subscriptionTermsBtn: 'KULLANIM KOŞULLARI (EULA)',
         subscriptionDisclosureTitle: 'ABONELİK DETAYLARI',
-        subscriptionMonthlyLine: 'Safeguardian Premium Monthly — 1 month —',
+        subscriptionMonthlyLine: 'SafeGuardian Premium Aylık — 1 ay —',
         subscriptionYearlyLine: '',
+        subscriptionPriceNote: 'Fiyat ve para birimi App Store ülkenize göre gösterilir ve ödeme Apple hesabınızdan alınır.',
         privacyPolicyLinkLabel: 'Gizlilik Politikası',
         termsOfUseLinkLabel: 'Kullanım Koşulları',
         purchaseStarted: 'Satın alma başlatıldı',
@@ -426,11 +426,12 @@ const TRANSLATIONS = {
         subscriptionPrivacyBtn: 'PRIVACY POLICY',
         subscriptionTermsBtn: 'TERMS OF USE (EULA)',
         subscriptionDisclosureTitle: 'SUBSCRIPTION DETAILS',
-        subscriptionMonthlyLine: 'Safeguardian Premium Monthly — 1 month —',
+        subscriptionMonthlyLine: 'SafeGuardian Premium Monthly — 1 month —',
         subscriptionYearlyLine: '',
         privacyPolicyLinkLabel: 'Privacy Policy',
         termsOfUseLinkLabel: 'Terms of Use (EULA)',
         subscriptionPriceLoading: 'Loading App Store price',
+        subscriptionPriceNote: 'Price and currency are shown for your App Store country and charged to your Apple account.',
         purchaseStarted: 'Purchase started',
         purchaseStartedMsg: 'Opening Apple secure payment sheet.',
         purchaseSuccess: 'Purchase successful',
@@ -802,16 +803,13 @@ const GeolocationPlugin = window.Capacitor?.Plugins?.Geolocation;
 // Must match App Store Connect product ID exactly (SG Premium Family Access V2).
 const FAMILY_PLAN_PRODUCT_ID = 'com.buseakdeniz.safeguardian.sub_family_monthly_v2';
 const FAMILY_PLAN_PRODUCT_ID_CANDIDATES = [
-    FAMILY_PLAN_PRODUCT_ID,
-    'com.buse.safeguardian.sub_family_monthly_v2',
-    'com.buseakdeniz.safeguardian.sub_family_monthly',
-    'com.buse.safeguardian.sub_family_monthly'
+    FAMILY_PLAN_PRODUCT_ID
 ];
 const ALL_FAMILY_PLAN_PRODUCT_IDS = Array.from(new Set(FAMILY_PLAN_PRODUCT_ID_CANDIDATES));
 // App Review requires the full purchase/renewal flow to be accessible (Guideline 2.1).
 const STOREKIT_PURCHASES_ENABLED = (() => {
     try {
-        return window.Capacitor?.getPlatform?.() === 'ios';
+        return window.SafeGuardianRevenueCat?.isNativeSupported?.() === true;
     } catch {
         return false;
     }
@@ -844,10 +842,6 @@ const PUBLIC_SCREENS = new Set(['loginScreen', 'registerScreen', 'helpScreen', '
 
 function isDemoOfflineToken(value) {
     return String(value || '').trim() === DEMO_OFFLINE_TOKEN;
-}
-
-function isDemoReviewToken(value) {
-    return String(value || '').trim() === DEMO_REVIEW_TOKEN;
 }
 
 function withTimeout(promise, ms, label = 'operation') {
@@ -923,6 +917,9 @@ async function setStoredToken(value) {
 async function removeStoredToken() {
     authTokenCache = null;
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('tokenExpiresAt');
+    sessionStorage.removeItem('refreshToken');
     clearOfflineDemoMode();
     if (!PreferencesPlugin) return;
     try {
@@ -946,9 +943,9 @@ async function validateStoredSessionToken(token) {
     const timeoutId = controller ? setTimeout(() => controller.abort(), 2200) : null;
 
     try {
-        const response = await fetch(`${API_BASE}/api/subscription?token=${encodeURIComponent(value)}`, {
+        const response = await fetch(`${API_BASE}/api/me`, {
             method: 'GET',
-            headers: { 'Accept': 'application/json' },
+            headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${value}` },
             signal: controller?.signal
         });
 
@@ -1030,6 +1027,36 @@ function forceCloseLoadingAndRecover() {
     }
 }
 
+let tokenRefreshPromise = null;
+async function refreshAccessToken() {
+    if (tokenRefreshPromise) return tokenRefreshPromise;
+    const refreshToken = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
+    if (!refreshToken) return null;
+
+    tokenRefreshPromise = (async () => {
+        try {
+            const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken })
+            });
+            if (!response.ok) return null;
+            const data = await response.json();
+            if (!data?.token || !data?.refreshToken) return null;
+            await setStoredToken(data.token);
+            if (localStorage.getItem('refreshToken')) localStorage.setItem('refreshToken', data.refreshToken);
+            else sessionStorage.setItem('refreshToken', data.refreshToken);
+            if (data.expiresAt) localStorage.setItem('tokenExpiresAt', data.expiresAt);
+            return data.token;
+        } catch {
+            return null;
+        } finally {
+            tokenRefreshPromise = null;
+        }
+    })();
+    return tokenRefreshPromise;
+}
+
 async function safeFetch(url, options, fetchOpts = {}) {
     let finalUrl = url;
     let extractedToken = null;
@@ -1100,6 +1127,16 @@ async function safeFetch(url, options, fetchOpts = {}) {
             if (timeoutId) clearTimeout(timeoutId);
 
             if (response.status === 401) {
+                if (!fetchOpts.skipRefresh) {
+                    const refreshed = await refreshAccessToken();
+                    if (refreshed) {
+                        headers.set('Authorization', `Bearer ${refreshed}`);
+                        requestOptionsBase.headers = headers;
+                        fetchOpts = { ...fetchOpts, skipRefresh: true };
+                        i -= 1;
+                        continue;
+                    }
+                }
                 handleAuthExpired();
                 return null;
             }
@@ -1493,7 +1530,7 @@ function getPublicWebBaseUrl() {
 }
 
 function buildDoctorReportUrl(token) {
-    return `${getPublicWebBaseUrl()}/doctor-report.html?token=${encodeURIComponent(token)}`;
+    return `${getPublicWebBaseUrl()}/doctor-report.html#token=${encodeURIComponent(token)}`;
 }
 
 function openExternalUrl(url) {
@@ -1749,9 +1786,6 @@ async function purchaseFamilyPlanWithRecovery(store, initialProductId) {
     throw lastError || new Error('PURCHASE_FAILED');
 }
 
-const TR_SUBSCRIPTION_PRICE = '149,99 ₺';
-const EN_SUBSCRIPTION_PRICE_FALLBACK = '$3.99';
-
 function stripDisplayEmoji(value) {
     return String(value || '')
         .replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/gu, '')
@@ -1759,35 +1793,14 @@ function stripDisplayEmoji(value) {
         .trim();
 }
 
-function isTurkishLocalePreferred() {
-    if (currentLang === 'tr') return true;
-    const saved = String(localStorage.getItem('appLang') || '').toLowerCase();
-    if (saved.startsWith('tr')) return true;
-    const langs = Array.isArray(navigator.languages) && navigator.languages.length
-        ? navigator.languages
-        : [navigator.language || ''];
-    return langs.some((lang) => String(lang || '').toLowerCase().startsWith('tr'));
-}
-
 function getLocalizedSubscriptionPrice() {
-    if (isTurkishLocalePreferred()) {
-        return TR_SUBSCRIPTION_PRICE;
-    }
-    const storePrice = subscriptionProductCache?.displayPrice;
-    return storePrice || EN_SUBSCRIPTION_PRICE_FALLBACK;
+    return subscriptionProductCache?.displayPrice || '';
 }
 
 function updateSubscriptionDisclosurePrices() {
     const monthlyPriceEl = document.getElementById('subscriptionMonthlyPrice');
     if (!monthlyPriceEl) return;
-
-    const localizedPrice = getLocalizedSubscriptionPrice();
-    if (subscriptionProductCache?.displayPrice || subscriptionProductLoadAttempted) {
-        monthlyPriceEl.textContent = localizedPrice;
-        return;
-    }
-
-    monthlyPriceEl.textContent = t('subscriptionPriceLoading');
+    monthlyPriceEl.textContent = getLocalizedSubscriptionPrice() || t('subscriptionPriceLoading');
 }
 
 function applyStoreKitPurchaseUiVisibility() {
@@ -2544,17 +2557,19 @@ function showHelp() {
     showScreen('helpScreen');
 }
 
-function logout() {
-    removeStoredToken();
-    clearOfflineDemoMode();
-    const localDataKeys = [
-        'userId', 'userName', 'rememberMe', 'userPlan', 'trialEndsAt',
-        'adUnlockUntil', 'subscriptionEnd', 'localMedications', 'localMoodRecords',
-        'localHealthRecords', 'localFamilyMembers'
-    ];
-    for (const key of localDataKeys) {
-        localStorage.removeItem(key);
+async function logout() {
+    const refreshToken = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
+    if (refreshToken) {
+        await safeFetch(`${API_BASE}/api/auth/logout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken })
+        }, { silent: true, skipRefresh: true }).catch(() => null);
     }
+    window.SafeGuardianRevenueCat?.logOut?.().catch((error) => {
+        console.warn('[RevenueCat] Logout failed:', error);
+    });
+    await clearPrivateLocalData();
     subscriptionCache = null;
     showScreen('loginScreen');
     updateBiometricLoginButton();
@@ -2689,27 +2704,32 @@ async function watchAdFor12HourAccess() {
         return;
     }
 
-    const response = await safeFetch(`${API_BASE}/api/subscription/ad-reward?token=${token}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}'
-    });
+    // AdMob grants the reward through the signed server-side verification
+    // callback. Poll the authoritative subscription endpoint while it arrives.
+    let verifiedEntitlement = null;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+        const response = await safeFetch(`${API_BASE}/api/subscription?token=${token}`, {
+            method: 'GET'
+        }, { silent: true });
+        const data = response?.ok ? await safeReadJson(response, null) : null;
+        if (data?.isAdUnlockActive && data?.hasFullAccess) {
+            verifiedEntitlement = data;
+            break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
 
-    if (!response || !response.ok) {
+    if (!verifiedEntitlement) {
         notifyI18n('adRewardUpdateFailedTitle', 'adRewardUpdateFailedMsg', 'error');
         return;
     }
 
-    const data = await safeReadJson(response, null);
-    if (data?.entitlement) {
-        subscriptionCache = data.entitlement;
-        applyEntitlementFromSubscription(data.entitlement);
-    } else {
-        await fetchEntitlementState(true);
-    }
+    subscriptionCache = verifiedEntitlement;
+    applyEntitlementFromSubscription(verifiedEntitlement);
 
     updateProfileScreen();
     updateSubscriptionScreen();
+    window.SafeGuardianAds?.updateByElderlyScreen?.('subscriptionScreen');
     notifyI18n('adUnlockSuccessTitle', 'adUnlockSuccessMsg', 'success');
 
     const pending = sessionStorage.getItem('pendingFeatureAfterUnlock');
@@ -2872,6 +2892,228 @@ async function restorePurchases() {
     showNotification(t('restoreSuccess'), t('restoreSuccessMsg'));
 }
 
+// =================== REVENUECAT PURCHASES ===================
+// These declarations intentionally replace the legacy StoreKit bridge functions
+// above while preserving the existing UI entry points.
+function applyRevenueCatCustomerInfo(customerInfo) {
+    const revenueCat = window.SafeGuardianRevenueCat;
+    const entitlement = revenueCat?.entitlementFrom?.(customerInfo);
+    if (!entitlement?.isActive) {
+        localStorage.setItem('userPlan', 'standard');
+        localStorage.removeItem('subscriptionEnd');
+        subscriptionCache = {
+            plan: 'free',
+            isActive: false,
+            hasFullAccess: false,
+            requiresSubscription: true
+        };
+        return false;
+    }
+
+    const expiresAt = entitlement.expirationDate
+        ? new Date(entitlement.expirationDate)
+        : null;
+    localStorage.setItem('userPlan', 'premium');
+    if (expiresAt && !Number.isNaN(expiresAt.getTime())) {
+        localStorage.setItem('subscriptionEnd', expiresAt.toISOString());
+    } else {
+        localStorage.removeItem('subscriptionEnd');
+    }
+    subscriptionCache = {
+        plan: 'premium',
+        isActive: true,
+        expiresAt: entitlement.expirationDate || null,
+        willRenew: entitlement.willRenew === true,
+        productId: entitlement.productIdentifier,
+        hasFullAccess: true,
+        requiresSubscription: false
+    };
+    return true;
+}
+
+async function identifyRevenueCatUser() {
+    const userId = String(localStorage.getItem('userId') || '').trim();
+    if (!userId || userId === 'demo-user') return false;
+    try {
+        await window.SafeGuardianRevenueCat?.identify?.(userId);
+        const customerInfo = await window.SafeGuardianRevenueCat?.refreshCustomerInfo?.();
+        if (customerInfo) applyRevenueCatCustomerInfo(customerInfo);
+        return true;
+    } catch (error) {
+        console.warn('[RevenueCat] User identification failed:', error);
+        return false;
+    }
+}
+
+async function loadStoreProduct() {
+    subscriptionProductLoadAttempted = true;
+    try {
+        await identifyRevenueCatUser();
+        const selectedPackage = await window.SafeGuardianRevenueCat?.loadOffering?.();
+        subscriptionProductCache = selectedPackage?.product
+            ? {
+                id: selectedPackage.product.identifier,
+                displayPrice: selectedPackage.product.priceString,
+                title: selectedPackage.product.title,
+                package: selectedPackage
+            }
+            : null;
+        selectedFamilyPlanProductId = subscriptionProductCache?.id || FAMILY_PLAN_PRODUCT_ID;
+        updateSubscriptionDisclosurePrices();
+        return subscriptionProductCache;
+    } catch (error) {
+        console.warn('[RevenueCat] Offering load failed:', error);
+        subscriptionProductCache = null;
+        updateSubscriptionDisclosurePrices();
+        return null;
+    }
+}
+
+function getLocalizedSubscriptionPrice() {
+    return window.SafeGuardianRevenueCat?.localizedPrice?.()
+        || subscriptionProductCache?.displayPrice
+        || '';
+}
+
+function updateSubscriptionDisclosurePrices() {
+    const monthlyPriceEl = document.getElementById('subscriptionMonthlyPrice');
+    if (!monthlyPriceEl) return;
+    const price = getLocalizedSubscriptionPrice();
+    monthlyPriceEl.textContent = price || t('subscriptionPriceLoading');
+}
+
+async function syncAppleEntitlementsFromStore() {
+    try {
+        await identifyRevenueCatUser();
+        const customerInfo = await window.SafeGuardianRevenueCat?.refreshCustomerInfo?.();
+        if (!customerInfo) return null;
+        return applyRevenueCatCustomerInfo(customerInfo) ? customerInfo : null;
+    } catch (error) {
+        console.warn('[RevenueCat] Entitlement refresh failed:', error);
+        return null;
+    }
+}
+
+async function startFamilyPackagePurchase(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    if (isFamilyPurchaseInProgress) return;
+
+    const token = await requireAuthTokenAsync();
+    if (!token) return;
+    if (!STOREKIT_PURCHASES_ENABLED) {
+        showNotification(t('purchaseNotAvailable'), t('purchaseNotAvailableMsg'), 'error');
+        return;
+    }
+
+    const buyBtn = document.getElementById('buyFamilyPackageButton');
+    isFamilyPurchaseInProgress = true;
+    if (buyBtn) {
+        buyBtn.disabled = true;
+        buyBtn.setAttribute('aria-busy', 'true');
+    }
+
+    try {
+        await identifyRevenueCatUser();
+        const product = await loadStoreProduct();
+        if (!product) throw new Error('REVENUECAT_PACKAGE_NOT_FOUND');
+
+        showNotification(t('purchaseStarted'), t('purchaseStartedMsg'));
+        const result = await window.SafeGuardianRevenueCat.purchase();
+        if (!result?.hasPremium) throw new Error('PREMIUM_ENTITLEMENT_NOT_GRANTED');
+
+        applyRevenueCatCustomerInfo(result.customerInfo);
+        await new Promise(resolve => setTimeout(resolve, 900));
+        await fetchEntitlementState(true).catch(() => { });
+        updateProfileScreen();
+        updateSubscriptionScreen();
+        window.SafeGuardianAds?.updateByElderlyScreen?.('subscriptionScreen');
+        showNotification(t('purchaseSuccess'), t('purchaseSuccessMsg'));
+    } catch (error) {
+        if (error?.userCancelled || error?.code === '1') return;
+        console.warn('[RevenueCat] Purchase failed:', error);
+        const detail = currentLang === 'en'
+            ? 'The App Store purchase could not be completed. Check the subscription configuration and try again.'
+            : 'App Store satın alma işlemi tamamlanamadı. Abonelik yapılandırmasını kontrol edip tekrar deneyin.';
+        showNotification(t('purchaseNotAvailable'), detail, 'error');
+    } finally {
+        isFamilyPurchaseInProgress = false;
+        if (buyBtn) {
+            buyBtn.disabled = false;
+            buyBtn.removeAttribute('aria-busy');
+        }
+    }
+}
+
+async function restorePurchases() {
+    const token = await requireAuthTokenAsync();
+    if (!token) return;
+    if (!STOREKIT_PURCHASES_ENABLED) {
+        showNotification(t('purchaseNotAvailable'), t('purchaseNotAvailableMsg'), 'error');
+        return;
+    }
+
+    try {
+        await identifyRevenueCatUser();
+        const result = await window.SafeGuardianRevenueCat.restore();
+        const restored = Boolean(result?.hasPremium)
+            && applyRevenueCatCustomerInfo(result.customerInfo);
+
+        await new Promise(resolve => setTimeout(resolve, 900));
+        await fetchEntitlementState(true).catch(() => { });
+        updateProfileScreen();
+        updateSubscriptionScreen();
+        window.SafeGuardianAds?.updateByElderlyScreen?.('subscriptionScreen');
+
+        if (!restored) {
+            showNotification(
+                t('restoreFailed'),
+                currentLang === 'en'
+                    ? 'No active Premium subscription was found for this App Store account.'
+                    : 'Bu App Store hesabında aktif Premium abonelik bulunamadı.',
+                'error'
+            );
+            return;
+        }
+        showNotification(t('restoreSuccess'), t('restoreSuccessMsg'));
+    } catch (error) {
+        console.warn('[RevenueCat] Restore failed:', error);
+        showNotification(t('restoreFailed'), t('restoreFailedMsg'), 'error');
+    }
+}
+
+window.addEventListener('safeguardian:customer-info', (event) => {
+    applyRevenueCatCustomerInfo(event.detail?.customerInfo);
+    updateProfileScreen();
+    updateSubscriptionScreen();
+});
+
+async function clearPrivateLocalData() {
+    await removeStoredToken();
+    const keys = [
+        'userId', 'userName', 'userEmail', 'userPhone', 'userPlan',
+        'subscriptionEnd', 'rememberMe', 'rememberedEmail', 'registrationDate',
+        'localMedications', 'localMoodRecords', 'localHealthRecords',
+        'localFamilyMembers', 'adUnlockUntil', 'trialEndsAt'
+    ];
+    keys.forEach(key => localStorage.removeItem(key));
+    sessionStorage.clear();
+    if (window.indexedDB) {
+        try { indexedDB.deleteDatabase('SafeGuardianOffline'); } catch { }
+    }
+    if (navigator.serviceWorker?.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_PRIVATE_DATA' });
+    }
+    if (window.caches) {
+        try {
+            const names = await caches.keys();
+            await Promise.all(names.filter(name => name.startsWith('safeguardian-')).map(name => caches.delete(name)));
+        } catch { }
+    }
+}
+
 async function deleteAccountFlow() {
     const token = await requireAuthTokenAsync();
     if (!token) return;
@@ -2907,47 +3149,18 @@ async function deleteAccountFlow() {
         body: JSON.stringify({ password })
     });
     if (!response) {
-        await removeStoredToken();
-        localStorage.removeItem('userId');
-        localStorage.removeItem('userName');
-        localStorage.removeItem('userEmail');
-        localStorage.removeItem('userPhone');
-        localStorage.removeItem('userPlan');
-        localStorage.removeItem('subscriptionEnd');
-        localStorage.removeItem('rememberMe');
-        subscriptionCache = null;
-        showNotification(t('deleteAccountSuccess'), t('deleteAccountSuccessMsg'));
-        showScreen('loginScreen');
+        showNotification(t('deleteAccountFailed'), t('connError'), 'error');
         return;
     }
 
     const payload = await safeReadJson(response, {});
     if (!response.ok || !payload?.success) {
-        if (response.status === 404) {
-            await removeStoredToken();
-            localStorage.removeItem('userId');
-            localStorage.removeItem('userName');
-            localStorage.removeItem('userEmail');
-            localStorage.removeItem('userPhone');
-            localStorage.removeItem('userPlan');
-            localStorage.removeItem('subscriptionEnd');
-            localStorage.removeItem('rememberMe');
-            subscriptionCache = null;
-            showNotification(t('deleteAccountSuccess'), t('deleteAccountSuccessMsg'));
-            showScreen('loginScreen');
-            return;
-        }
         showNotification(t('deleteAccountFailed'), payload?.message || t('deleteAccountFailedMsg'), 'error');
         return;
     }
 
-    await removeStoredToken();
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('userPlan');
-    localStorage.removeItem('subscriptionEnd');
-    localStorage.removeItem('rememberMe');
+    await window.SafeGuardianRevenueCat?.logOut?.().catch(() => { });
+    await clearPrivateLocalData();
     subscriptionCache = null;
 
     showNotification(t('deleteAccountSuccess'), t('deleteAccountSuccessMsg'));
@@ -3415,7 +3628,7 @@ window.addEventListener('load', async () => {
         showScreen('homeScreen');
         updateGreeting();
     }
-    if (IS_CAPACITOR_IOS && token && !isDemoOfflineToken(token)) {
+    if (STOREKIT_PURCHASES_ENABLED && token && !isDemoOfflineToken(token)) {
         syncAppleEntitlementsFromStore()
             .then(() => {
                 updateProfileScreen();
@@ -3601,12 +3814,17 @@ async function completeLoginSession(data, email, remember) {
     const offlineBanner = document.getElementById('offlineBanner');
     if (offlineBanner) offlineBanner.style.display = 'none';
     await setStoredToken(data.token);
+    if (data.refreshToken) {
+        if (remember) localStorage.setItem('refreshToken', data.refreshToken);
+        else sessionStorage.setItem('refreshToken', data.refreshToken);
+    }
+    if (data.expiresAt) localStorage.setItem('tokenExpiresAt', data.expiresAt);
     localStorage.setItem('userId', data.userId || '');
     localStorage.setItem('userName', data.name || email);
     localStorage.setItem('rememberMe', remember ? 'true' : 'false');
     if (remember) localStorage.setItem('rememberedEmail', email);
     subscriptionCache = null;
-    const syncEntitlements = IS_CAPACITOR_IOS
+    const syncEntitlements = STOREKIT_PURCHASES_ENABLED
         ? syncAppleEntitlementsFromStore().catch(() => null)
         : Promise.resolve(null);
     syncEntitlements
@@ -3772,19 +3990,14 @@ async function handleForgotPassword() {
         }
 
         if (response.ok) {
-            let tempPassword = null;
             let message = t('forgotSuccessMsg');
             try {
                 const data = await response.json();
-                tempPassword = data?.tempPassword || null;
                 if (data?.message) message = data.message;
             } catch {
                 // JSON değilse geç
             }
             showNotification(t('forgotSuccessTitle'), message, 'success');
-            if (tempPassword) {
-                notifyI18n('tempPasswordTitle', 'tempPasswordMsg', 'success', { password: tempPassword });
-            }
         } else {
             let errorMessage = t('forgotFailedMsg');
             try {
@@ -3872,7 +4085,13 @@ async function handleRegister(e) {
     const fullName = document.getElementById('regFullName').value.trim();
     const phone = document.getElementById('regPhone').value.trim();
     const email = document.getElementById('regEmail').value.trim();
+    const password = document.getElementById('regPassword').value;
+    const passwordConfirm = document.getElementById('regPasswordConfirm').value;
     const birthDate = document.getElementById('regBirthDate').value;
+    if (password !== passwordConfirm) {
+        showNotification(t('errorTitle'), currentLang === 'en' ? 'Passwords do not match.' : 'Şifreler eşleşmiyor.', 'error');
+        return;
+    }
 
     try {
         const response = await safeFetch(`${API_BASE}/api/elderly-self-enroll`, {
@@ -3883,6 +4102,7 @@ async function handleRegister(e) {
                 fullName,
                 phone,
                 email,
+                password,
                 birthDate,
                 plan: 'standard'
             })
@@ -3894,14 +4114,14 @@ async function handleRegister(e) {
         }
 
         if (response.ok) {
-            let tempPassword = null;
             let token = null;
             let userId = null;
             let name = fullName;
             try {
                 const data = await response.json();
-                tempPassword = data?.tempPassword || null;
                 token = data?.token || null;
+                if (data?.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+                if (data?.expiresAt) localStorage.setItem('tokenExpiresAt', data.expiresAt);
                 userId = data?.userId || null;
                 name = data?.name || fullName;
             } catch {
@@ -3917,15 +4137,9 @@ async function handleRegister(e) {
                 showScreen('homeScreen');
                 updateGreeting();
                 showNotification(t('successTitle'), t('welcomeMsg'), 'success');
-                if (tempPassword) {
-                    notifyI18n('tempPasswordTitle', 'tempPasswordMsg', 'success', { password: tempPassword });
-                }
                 return;
             }
             notifyI18n('regCompleteTitle', 'regCompleteMsg', 'success');
-            if (tempPassword) {
-                notifyI18n('tempPasswordTitle', 'tempPasswordMsg', 'success', { password: tempPassword });
-            }
             showScreen('loginScreen');
         } else {
             let errorMessage = t('regFailedMsg');

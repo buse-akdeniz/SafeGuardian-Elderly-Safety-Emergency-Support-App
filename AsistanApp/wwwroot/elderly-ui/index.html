@@ -8,10 +8,10 @@
     <title>SafeGuardian AI</title>
     <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
     <link rel="apple-touch-icon" href="assets/logo-192.png">
-    <link rel="stylesheet" href="elderly.css?v=20260709v10">
+    <link rel="stylesheet" href="elderly.css?v=20260717v11">
     <link rel="stylesheet" href="mood-theme.css">
-    <link rel="stylesheet" href="sg-app.css?v=20260709v10">
-    <link rel="stylesheet" href="sg-icons.css?v=20260709v10">
+    <link rel="stylesheet" href="sg-app.css?v=20260717v11">
+    <link rel="stylesheet" href="sg-icons.css?v=20260717v11">
 </head>
 <body>
     <header class="sg-app-header is-hidden" id="sgAppHeader">
@@ -43,6 +43,14 @@
             <div class="input-group">
                 <label for="regEmail" data-i18n="emailLabel">E-POSTA</label>
                 <input type="email" id="regEmail" data-i18n-placeholder="emailPlaceholder" placeholder="" required>
+            </div>
+            <div class="input-group">
+                <label for="regPassword">ŞİFRE / PASSWORD</label>
+                <input type="password" id="regPassword" minlength="10" autocomplete="new-password" required>
+            </div>
+            <div class="input-group">
+                <label for="regPasswordConfirm">ŞİFRE TEKRAR / CONFIRM PASSWORD</label>
+                <input type="password" id="regPasswordConfirm" minlength="10" autocomplete="new-password" required>
             </div>
             <div class="input-group">
                 <label for="regBirthDate" data-i18n="birthDateLabel">DOĞUM TARİHİ <span style="font-size:0.75em;font-weight:400;">(İsteğe bağlı)</span></label>
@@ -421,9 +429,12 @@
                 <div class="sg-sub-block">
                     <div class="sg-sub-block-label" data-i18n="subscriptionDisclosureTitle">ABONELİK DETAYLARI</div>
                     <div class="sg-sub-legal">
-                        <span data-i18n="subscriptionMonthlyLine">Safeguardian Premium Monthly — 1 month —</span>
-                        <span id="subscriptionMonthlyPrice" class="sg-field-value">[fiyat]</span>
+                        <span data-i18n="subscriptionMonthlyLine">SafeGuardian Premium Aylık — 1 ay —</span>
+                        <span id="subscriptionMonthlyPrice" class="sg-field-value">App Store fiyatı yükleniyor…</span>
                     </div>
+                    <p class="sg-sub-legal" data-i18n="subscriptionPriceNote">
+                        Fiyat ve para birimi App Store ülkenize göre gösterilir ve ödeme Apple hesabınızdan alınır.
+                    </p>
                     <div class="sg-sub-links">
                         <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyPolicyLinkLabel">Gizlilik Politikası</a>
                         <a href="/terms-of-use.html" target="_blank" rel="noopener noreferrer" data-i18n="termsOfUseLinkLabel">Kullanım Koşulları</a>
@@ -549,11 +560,12 @@
             } catch {}
         })();
     </script>
-    <script src="config.js?v=20260505"></script>
+    <script src="config.js?v=20260718v12"></script>
     <script src="../js/production.js?v=20260704"></script>
     <script src="../js/native-fetch.js?v=20260709v10"></script>
-    <script src="../js/admob.js?v=20260506"></script>
-    <script src="elderly.js?v=20260709v10"></script>
+    <script src="../js/revenuecat.js?v=20260718v12"></script>
+    <script src="../js/admob.js?v=20260717v11"></script>
+    <script src="elderly.js?v=20260718v12"></script>
     <script src="sg-shell.js?v=20260709v10"></script>
     <script src="voice-assistant.js?v=20260505"></script>
 </body>

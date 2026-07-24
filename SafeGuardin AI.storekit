@@ -1,0 +1,84 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "98996271",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6763596703",
+    "_askToBuyEnabled" : false,
+    "_billingGracePeriodEnabled" : false,
+    "_billingIssuesEnabled" : false,
+    "_developerTeamID" : "59B898F8N6",
+    "_disableDialogs" : false,
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 801307989.97356403,
+    "_locale" : "en_US",
+    "_renewalBillingIssuesEnabled" : false,
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ],
+    "_timeRate" : 0
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "22059424",
+      "localizations" : [
+
+      ],
+      "name" : "SafeGuardian AI Premium",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "3.99",
+          "familyShareable" : false,
+          "groupNumber" : 3,
+          "internalID" : "6769396176",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Family tracking and emergency SOS support features.",
+              "displayName" : "Family Protection Plan",
+              "locale" : "en_US"
+            },
+            {
+              "description" : "Aile takibi ve acil SOS destek özellikleri.",
+              "displayName" : "Aile Koruma Planı",
+              "locale" : "tr"
+            }
+          ],
+          "productID" : "com.buseakdeniz.safeguardian.sub_family_monthly_v2",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "SG Premium Family Access V2",
+          "subscriptionGroupID" : "22059424",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

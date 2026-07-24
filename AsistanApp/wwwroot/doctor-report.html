@@ -54,7 +54,7 @@
   </div>
 
   <script>
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const token = params.get('token');
     const errorEl = document.getElementById('error');
     const contentEl = document.getElementById('content');
@@ -68,7 +68,10 @@
 
     async function loadReport() {
       try {
-        const response = await fetch(`/api/doctor/report?token=${encodeURIComponent(token)}`);
+        history.replaceState(null, '', window.location.pathname);
+        const response = await fetch('/api/doctor/report', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         const data = await response.json();
         if (!response.ok || !data?.success) {
           throw new Error(data?.message || 'Rapor yüklenemedi');

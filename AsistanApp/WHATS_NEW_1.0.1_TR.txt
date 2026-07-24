@@ -1,0 +1,7 @@
+Güvenlik ve hesap güncellemesi.
+
+• Daha güvenli giriş (gerçek hesap sistemi)
+• App Review demo hesabı düzeltildi
+• Abonelik / satın alma akışı iyileştirildi
+• Hesap silme ve veri dışa aktarma eklendi
+• Performans ve kararlılık iyileştirmeleri

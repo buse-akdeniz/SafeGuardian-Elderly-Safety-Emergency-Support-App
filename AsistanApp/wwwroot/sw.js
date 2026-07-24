@@ -33,6 +33,18 @@ const OFFLINE_QUEUE_ENDPOINTS = [
     '/api/complete-task'
 ];
 
+self.addEventListener('message', event => {
+    if (event.data?.type !== 'CLEAR_PRIVATE_DATA') return;
+    event.waitUntil(Promise.all([
+        new Promise(resolve => {
+            const request = indexedDB.deleteDatabase(DB_NAME);
+            request.onsuccess = request.onerror = request.onblocked = () => resolve();
+        }),
+        caches.keys().then(names =>
+            Promise.all(names.filter(name => name.startsWith('safeguardian-')).map(name => caches.delete(name))))
+    ]));
+});
+
 // Initialize IndexedDB
 function initDB() {
     return new Promise((resolve, reject) => {

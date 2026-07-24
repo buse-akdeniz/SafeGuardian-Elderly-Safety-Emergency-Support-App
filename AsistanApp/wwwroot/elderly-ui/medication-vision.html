@@ -1187,10 +1187,13 @@
             if (!token || !lastCapturedImage) return false;
             try {
                 const response = await fetchWithTimeout(
-                    `${API_BASE}/api/send-notification?token=${encodeURIComponent(token)}`,
+                    `${API_BASE}/api/send-notification`,
                     {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
                         body: JSON.stringify({
                             type: 'medication_photo',
                             message: getPageLang() === 'en' ? 'Medication photo captured' : 'İlaç fotoğrafı çekildi',

@@ -1,0 +1,7 @@
+Security and account reliability update.
+
+• More secure login with real user accounts
+• Fixed App Review demo account sign-in
+• Improved subscription / purchase flow
+• Account deletion and privacy data export
+• Stability and performance improvements

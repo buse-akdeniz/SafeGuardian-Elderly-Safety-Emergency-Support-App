@@ -917,6 +917,35 @@
             setItem: (key, value, remember) => (remember ? localStorage : sessionStorage).setItem(key, value),
             removeItem: (key) => { sessionStorage.removeItem(key); localStorage.removeItem(key); }
         };
+        let familyRefreshPromise = null;
+        async function refreshFamilyAccessToken() {
+            if (familyRefreshPromise) return familyRefreshPromise;
+            const refreshToken = storage.getItem('familyRefreshToken');
+            if (!refreshToken) return null;
+            familyRefreshPromise = fetch(`${ACTIVE_API_BASE}/auth/refresh`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken })
+            }).then(async response => {
+                if (!response.ok) return null;
+                const data = await response.json();
+                familyToken = data.token;
+                const remember = localStorage.getItem('familyToken') !== null;
+                storage.setItem('familyToken', data.token, remember);
+                storage.setItem('familyRefreshToken', data.refreshToken, remember);
+                return data.token;
+            }).catch(() => null).finally(() => { familyRefreshPromise = null; });
+            return familyRefreshPromise;
+        }
+        async function familyFetch(path, options = {}, retried = false) {
+            const headers = new Headers(options.headers || {});
+            if (familyToken) headers.set('Authorization', `Bearer ${familyToken}`);
+            const response = await fetch(`${ACTIVE_API_BASE}${path}`, { ...options, headers });
+            if (response.status === 401 && !retried && await refreshFamilyAccessToken()) {
+                return familyFetch(path, options, true);
+            }
+            return response;
+        }
 
         const apiBaseInput = document.getElementById('apiBaseInput');
         const apiBaseSave = document.getElementById('apiBaseSave');
@@ -1006,6 +1035,7 @@
                     elderlyId = data.caringFor;
 
                     storage.setItem('familyToken', familyToken, remember);
+                    if (data.refreshToken) storage.setItem('familyRefreshToken', data.refreshToken, remember);
                     storage.setItem('elderlyId', elderlyId, remember);
                     storage.setItem('familyMemberName', data.memberName || '', remember);
                     storage.setItem('familyMemberEmail', data.recipient || email, remember);
@@ -1103,7 +1133,7 @@
         async function markFamilyContact() {
             if (!familyToken) return;
             try {
-                await fetch(`${ACTIVE_API_BASE}/family/contact?token=${familyToken}`, { method: 'POST' });
+                await familyFetch('/family/contact', { method: 'POST' });
             } catch (error) {
                 console.warn('Aile iletişim kaydı başarısız:', error);
             }
@@ -1119,7 +1149,7 @@
 
         async function loadDashboard() {
             try {
-                const response = await fetch(`${ACTIVE_API_BASE}/family/dashboard/${elderlyId}?token=${familyToken}`);
+                const response = await familyFetch(`/family/dashboard/${encodeURIComponent(elderlyId)}`);
                 
                 if (response.ok) {
                     const data = await response.json();
@@ -1299,8 +1329,8 @@
 
             try {
                 const [accountRes, subRes] = await Promise.all([
-                    fetch(`${ACTIVE_API_BASE}/family/account?token=${familyToken}`),
-                    fetch(`${ACTIVE_API_BASE}/subscription?token=${familyToken}`)
+                    familyFetch('/family/account'),
+                    familyFetch('/subscription')
                 ]);
 
                 let serverAccount = local;
@@ -1332,7 +1362,7 @@
             };
 
             try {
-                const response = await fetch(`${ACTIVE_API_BASE}/family/account?token=${familyToken}`, {
+                const response = await familyFetch('/family/account', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -1380,14 +1410,14 @@
             }
 
             try {
-                let response = await fetch(`${ACTIVE_API_BASE}/subscription/cancel?token=${familyToken}`, {
+                let response = await familyFetch('/subscription/cancel', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: '{}'
                 });
 
                 if (!response.ok) {
-                    response = await fetch(`${ACTIVE_API_BASE}/family/subscription/cancel?token=${familyToken}`, {
+                    response = await familyFetch('/family/subscription/cancel', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: '{}'
@@ -1411,17 +1441,21 @@
             if (!confirm(t('accountDeleteConfirm'))) return;
 
             try {
-                const response = await fetch(`${ACTIVE_API_BASE}/family/account?token=${familyToken}`, {
+                const password = prompt(t('accountDeletePassword') || 'Şifrenizi girin / Enter your password');
+                if (!password) return;
+                const response = await familyFetch('/family/account', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: '{}'
+                    body: JSON.stringify({ password })
                 });
 
                 if (!response.ok) {
                     throw new Error('delete failed');
                 }
             } catch (error) {
-                console.warn('Sunucu hesap silme başarısız, yerel oturum sonlandırılıyor:', error);
+                console.warn('Sunucu hesap silme başarısız:', error);
+                alert(t('accountDeleteFailed') || 'Hesap silinemedi. Lütfen tekrar deneyin.');
+                return;
             }
 
             localStorage.removeItem(accountStorageKey());
@@ -1441,7 +1475,7 @@
             if (!familyToken) return;
 
             try {
-                const response = await fetch(`${ACTIVE_API_BASE}/emergency-sms/test?token=${familyToken}`, {
+                const response = await familyFetch('/emergency-sms/test', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ elderlyId })
@@ -1473,6 +1507,7 @@
                 realtimeConnection = null;
             }
             storage.removeItem('familyToken');
+            storage.removeItem('familyRefreshToken');
             storage.removeItem('elderlyId');
             if (window.SafeGuardianAds?.updateByFamilyView) {
                 window.SafeGuardianAds.updateByFamilyView('login');

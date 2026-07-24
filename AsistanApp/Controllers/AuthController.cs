@@ -1,6 +1,10 @@
-using AsistanApp.Services;using Microsoft.AspNetCore.Mvc;
-using System.Text.Json;
+using System.Security.Claims;
+using AsistanApp.Services;
+using ilk_projem.Models.Persistence;
 using ilk_projem.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 
 namespace ilk_projem.Controllers;
 
@@ -8,72 +12,178 @@ namespace ilk_projem.Controllers;
 [Route("api")]
 public class AuthController : ControllerBase
 {
-    // Demo account for App Review - expired subscription
-    private const string DemoEmail = "review.elderly@safeguardian.app";
-    private const string DemoPassword = "Review123!";
-    private const string DemoToken = "demo-review-elderly-expired-token";
-
+    [AllowAnonymous]
     [HttpPost("elderly/login")]
-    public async Task<IResult> ElderlyLogin([FromServices] HealthDataService svc)
+    public async Task<IResult> ElderlyLogin(
+        [FromBody] LoginRequest request,
+        [FromServices] AuthService auth,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+            return Results.BadRequest(new { success = false, message = "E-posta ve şifre zorunludur" });
+
+        var result = await auth.LoginAsync(
+            request.Email,
+            request.Password,
+            ClientIp(),
+            "Elderly",
+            cancellationToken);
+        return result is null
+            ? Results.Json(new { success = false, message = "Geçersiz kimlik bilgileri" }, statusCode: 401)
+            : AuthResponse(result.Value.User, result.Value.Tokens);
+    }
+
+    [AllowAnonymous]
+    [HttpPost("elderly-self-enroll")]
+    public async Task<IResult> RegisterElderly(
+        [FromBody] ElderlyRegistrationRequest request,
+        [FromServices] AuthService auth,
+        [FromServices] UserManager<ApplicationUser> users,
+        CancellationToken cancellationToken)
     {
         try
         {
-            using var reader = new StreamReader(Request.Body);
-            var body = await reader.ReadToEndAsync();
-            
-            if (string.IsNullOrWhiteSpace(body))
-                return Results.Json(new { success = false, message = "İstek gövdesi boş" }, statusCode: 400);
-            
-            var json = JsonDocument.Parse(body).RootElement;
+            var result = await auth.RegisterAsync(
+                request.Email,
+                request.Password,
+                request.FullName,
+                "Elderly",
+                null,
+                ClientIp(),
+                cancellationToken);
+            result.User.PhoneNumber = request.Phone?.Trim();
+            result.User.BirthDate = request.BirthDate?.Trim() ?? "";
+            await users.UpdateAsync(result.User);
+            return AuthResponse(result.User, result.Tokens);
+        }
+        catch (IdentityValidationException ex)
+        {
+            return Results.BadRequest(new { success = false, message = ex.Errors.FirstOrDefault(), errors = ex.Errors });
+        }
+    }
 
-            var email = json.TryGetProperty("email", out var e) ? e.GetString() ?? "" : "";
-            var password = json.TryGetProperty("password", out var p) ? p.GetString() ?? "" : "";
+    [AllowAnonymous]
+    [HttpPost("auth/refresh")]
+    public async Task<IResult> Refresh(
+        [FromBody] RefreshRequest request,
+        [FromServices] AuthService auth,
+        CancellationToken cancellationToken)
+    {
+        var result = await auth.RefreshAsync(request.RefreshToken, ClientIp(), cancellationToken);
+        return result is null
+            ? Results.Json(new { success = false, message = "Oturum yenilenemedi" }, statusCode: 401)
+            : AuthResponse(result.Value.User, result.Value.Tokens);
+    }
 
-            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
-                return Results.Json(new { success = false, message = "E-posta ve şifre zorunludur" }, statusCode: 400);
-
-            // Check for demo account
-            if (string.Equals(email, DemoEmail, StringComparison.OrdinalIgnoreCase) && password == DemoPassword)
+    [AllowAnonymous]
+    [HttpPost("elderly/reset-password")]
+    public async Task<IResult> RequestPasswordReset(
+        [FromBody] PasswordResetRequest request,
+        [FromServices] UserManager<ApplicationUser> users,
+        [FromServices] AccountEmailService emailService,
+        [FromServices] ILogger<AuthController> logger)
+    {
+        var user = await users.FindByEmailAsync(request.Email.Trim());
+        if (user is not null)
+        {
+            try
             {
-                return Results.Json(new
-                {
-                    success = true,
-                    token = DemoToken,
-                    userId = 999,
-                    name = "Test User"
-                });
+                var token = await users.GeneratePasswordResetTokenAsync(user);
+                await emailService.SendPasswordResetAsync(user.Email!, token, HttpContext.RequestAborted);
             }
-
-            var result = await svc.AuthenticateElderly(email, password);
-            if (!result.HasValue)
+            catch (Exception ex)
             {
-                return Results.Json(new { success = false, message = "Geçersiz kimlik bilgileri" }, statusCode: 401);
+                logger.LogError(ex, "Password reset email could not be sent.");
             }
+        }
+        return Results.Ok(new
+        {
+            success = true,
+            message = "Hesap varsa şifre yenileme bağlantısı e-posta adresine gönderildi."
+        });
+    }
 
-            return Results.Json(new
+    [AllowAnonymous]
+    [HttpPost("elderly/reset-password/confirm")]
+    public async Task<IResult> ConfirmPasswordReset(
+        [FromBody] PasswordResetConfirmRequest request,
+        [FromServices] UserManager<ApplicationUser> users,
+        [FromServices] AuthService auth)
+    {
+        var user = await users.FindByEmailAsync(request.Email.Trim());
+        if (user is null)
+            return Results.BadRequest(new { success = false, message = "Geçersiz veya süresi dolmuş bağlantı." });
+
+        var result = await users.ResetPasswordAsync(user, request.Token, request.NewPassword);
+        if (!result.Succeeded)
+            return Results.BadRequest(new
+            {
+                success = false,
+                message = "Geçersiz veya süresi dolmuş bağlantı.",
+                errors = result.Errors.Select(e => e.Description)
+            });
+
+        await auth.RevokeAllAsync(user.Id, HttpContext.RequestAborted);
+        return Results.Ok(new { success = true, message = "Şifre güncellendi." });
+    }
+
+    [Authorize]
+    [HttpPost("auth/logout")]
+    public async Task<IResult> Logout(
+        [FromBody] RefreshRequest request,
+        [FromServices] AuthService auth,
+        CancellationToken cancellationToken)
+    {
+        await auth.RevokeAsync(request.RefreshToken, cancellationToken);
+        return Results.Ok(new { success = true });
+    }
+
+    [Authorize]
+    [HttpGet("me")]
+    public async Task<IResult> Me([FromServices] UserManager<ApplicationUser> users)
+    {
+        var user = await users.FindByIdAsync(User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub")
+            ?? "");
+        return user is null
+            ? Results.Unauthorized()
+            : Results.Json(new
             {
                 success = true,
-                token = result.Value.Token,
-                userId = result.Value.User.Id,
-                name = result.Value.User.Name
+                user = new
+                {
+                    user.Id,
+                    name = user.DisplayName,
+                    user.Email,
+                    user.AccountType,
+                    elderlyId = user.AccountType == "Elderly" ? user.Id : user.ElderlyOwnerId
+                }
             });
-        }
-        catch (Exception ex)
-        {
-            return Results.Json(new { success = false, message = "İstek işlenirken hata oluştu: " + ex.Message }, statusCode: 500);
-        }
     }
 
-    [HttpGet("me")]
-    public async Task<IResult> Me([FromServices] HealthDataService svc)
-    {
-        var token = AuthTokenService.ResolveToken(HttpContext);
-        var elderly = await svc.GetElderlySession(token);
-        if (elderly == null)
-        {
-            return Results.Json(new { success = false, message = "Oturum bulunamadı" }, statusCode: 401);
-        }
+    private string ClientIp() => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-        return Results.Json(new { success = true, user = new { elderly.Id, elderly.Name, elderly.Email } });
-    }
+    private static IResult AuthResponse(ApplicationUser user, AuthTokens tokens) =>
+        Results.Json(new
+        {
+            success = true,
+            token = tokens.AccessToken,
+            refreshToken = tokens.RefreshToken,
+            expiresAt = tokens.ExpiresAt,
+            userId = user.Id,
+            name = user.DisplayName,
+            accountType = user.AccountType,
+            caringFor = user.AccountType == "Family" ? user.ElderlyOwnerId : null
+        });
 }
+
+public sealed record LoginRequest(string Email, string Password);
+public sealed record RefreshRequest(string RefreshToken);
+public sealed record PasswordResetRequest(string Email);
+public sealed record PasswordResetConfirmRequest(string Email, string Token, string NewPassword);
+public sealed record ElderlyRegistrationRequest(
+    string FullName,
+    string Email,
+    string Password,
+    string? Phone,
+    string? BirthDate);

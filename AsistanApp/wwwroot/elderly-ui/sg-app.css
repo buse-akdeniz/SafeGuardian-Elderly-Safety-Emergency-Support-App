@@ -49,6 +49,29 @@ body.sg-on-inner .screen.active {
   width: 100%;
 }
 
+@media (min-width: 768px) {
+  .main-area {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 28px 40px !important;
+  }
+
+  .sg-login-wrap {
+    max-width: 640px;
+  }
+
+  #loginScreen {
+    padding: calc(var(--sg-safe-top) + 32px) 40px 40px !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .sg-login-wrap {
+    max-width: 720px;
+  }
+}
+
 /* ——— Global header ——— */
 .sg-app-header {
   position: fixed;
